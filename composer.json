@@ -1,0 +1,21 @@
+{
+    "name": "akirk/memex",
+    "description": "Memex - a world-class note-taking platform for WordPress (bi-directional links, backlinks, daily notes, Obsidian/Notion/Evernote import).",
+    "type": "wordpress-plugin",
+    "license": "GPL-2.0-or-later",
+    "require": {
+        "php": ">=7.4",
+        "akirk/wp-app": "^1.0",
+        "erusev/parsedown": "^1.7"
+    },
+    "autoload": {
+        "psr-4": {
+            "Memex\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Alex Kirk"
+        }
+    ]
+}
