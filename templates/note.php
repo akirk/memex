@@ -11,6 +11,28 @@ use Memex\WikiLinks;
 if ( ! defined( 'ABSPATH' ) ) {
 	exit; }
 
+if ( ! function_exists( 'memex_snippet_around' ) ) {
+	function memex_snippet_around( string $haystack, string $needle, int $pad = 50 ): string {
+		$text = wp_strip_all_tags( $haystack );
+		$text = preg_replace( '/\[\[([^\]\|]+?)(?:\|([^\]]+?))?\]\]/', '$1', $text );
+		$pos  = mb_stripos( $text, $needle, 0, 'UTF-8' );
+		if ( false === $pos ) {
+			return wp_trim_words( $text, 20, '…' );
+		}
+		$len   = mb_strlen( $text, 'UTF-8' );
+		$start = max( 0, $pos - $pad );
+		$end   = min( $len, $pos + mb_strlen( $needle, 'UTF-8' ) + $pad );
+		$snip  = mb_substr( $text, $start, $end - $start, 'UTF-8' );
+		if ( $start > 0 ) {
+			$snip = '…' . ltrim( $snip );
+		}
+		if ( $end < $len ) {
+			$snip = rtrim( $snip ) . '…';
+		}
+		return $snip;
+	}
+}
+
 $slug = wp_app_get_route_var( 'slug' );
 $post = null;
 
@@ -178,24 +200,4 @@ $import_src   = (string) get_post_meta( $post->ID, CPT::META_IMPORT_SOURCE, true
 </article>
 
 <?php
-if ( ! function_exists( 'memex_snippet_around' ) ) {
-	function memex_snippet_around( string $haystack, string $needle, int $pad = 50 ): string {
-		$text = wp_strip_all_tags( $haystack );
-		$text = preg_replace( '/\[\[([^\]\|]+?)(?:\|([^\]]+?))?\]\]/', '$1', $text );
-		$pos  = stripos( $text, $needle );
-		if ( false === $pos ) {
-			return wp_trim_words( $text, 20, '…' );
-		}
-		$start = max( 0, $pos - $pad );
-		$end   = min( strlen( $text ), $pos + strlen( $needle ) + $pad );
-		$snip  = substr( $text, $start, $end - $start );
-		if ( $start > 0 ) {
-			$snip = '…' . ltrim( $snip );
-		}
-		if ( $end < strlen( $text ) ) {
-			$snip = rtrim( $snip ) . '…';
-		}
-		return $snip;
-	}
-}
 include __DIR__ . '/_footer.php';
