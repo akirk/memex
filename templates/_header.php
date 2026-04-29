@@ -34,6 +34,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 			<nav class="memex-nav">
 				<a href="<?php echo esc_url( home_url( '/memex/' ) ); ?>"><?php esc_html_e( 'All notes', 'memex' ); ?></a>
 				<a href="<?php echo esc_url( home_url( '/memex/daily' ) ); ?>"><?php esc_html_e( 'Today', 'memex' ); ?></a>
+				<a href="<?php echo esc_url( home_url( '/memex/reminders' ) ); ?>"><?php esc_html_e( 'Reminders', 'memex' ); ?></a>
 				<a href="<?php echo esc_url( home_url( '/memex/search' ) ); ?>"><?php esc_html_e( 'Search', 'memex' ); ?></a>
 				<a href="<?php echo esc_url( home_url( '/memex/graph' ) ); ?>"><?php esc_html_e( 'Graph', 'memex' ); ?></a>
 				<a href="<?php echo esc_url( home_url( '/memex/orphans' ) ); ?>"><?php esc_html_e( 'Orphans', 'memex' ); ?></a>

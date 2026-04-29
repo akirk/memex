@@ -533,6 +533,173 @@ body.memex {
 	pointer-events: none;
 }
 
+/* Reminders */
+
+.memex-reminder-form {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.5rem;
+	margin: 1rem 0 1.5rem;
+	padding: 1rem;
+	background: var(--memex-surface);
+	border: 1px solid var(--memex-border);
+	border-radius: 6px;
+}
+
+.memex-reminder-form input[type="text"],
+.memex-reminder-form input[type="datetime-local"] {
+	padding: 0.5rem 0.75rem;
+	border: 1px solid var(--memex-border);
+	border-radius: 4px;
+	background: var(--memex-surface);
+	color: var(--memex-text);
+	font: inherit;
+}
+
+.memex-reminder-form-title {
+	flex: 1 1 16rem;
+	min-width: 12rem;
+}
+
+.memex-reminder-quick {
+	flex-basis: 100%;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.4rem;
+	font-size: 0.9rem;
+}
+
+.memex-reminder-quick button[type="button"] {
+	padding: 0.25rem 0.6rem;
+	background: transparent;
+	border: 1px solid var(--memex-border);
+	border-radius: 999px;
+	color: var(--memex-text);
+	cursor: pointer;
+	font: inherit;
+	font-size: 0.85rem;
+}
+
+.memex-reminder-quick button[type="button"]:hover {
+	color: var(--memex-accent);
+	border-color: var(--memex-accent);
+}
+
+.memex-reminder-readout {
+	flex-basis: 100%;
+	margin: 0;
+	min-height: 1.2em;
+	font-variant-numeric: tabular-nums;
+}
+
+.memex-reminder-heading {
+	font-size: 0.85rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: var(--memex-muted);
+	margin: 1.5rem 0 0.5rem;
+}
+
+.memex-reminder-list {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+	border: 1px solid var(--memex-border);
+	border-radius: 6px;
+	background: var(--memex-surface);
+}
+
+.memex-reminder {
+	display: grid;
+	grid-template-columns: 9.5rem 1fr auto auto;
+	align-items: center;
+	gap: 0.75rem;
+	padding: 0.6rem 0.9rem;
+	border-bottom: 1px solid var(--memex-border);
+}
+
+.memex-reminder:last-child {
+	border-bottom: none;
+}
+
+.memex-reminder-due {
+	font-variant-numeric: tabular-nums;
+	color: var(--memex-muted);
+	font-size: 0.9rem;
+}
+
+.memex-reminder-title {
+	color: var(--memex-text);
+}
+
+.memex-reminder-source {
+	font-size: 0.85rem;
+	color: var(--memex-accent);
+	text-decoration: none;
+}
+
+.memex-reminder-source:hover {
+	color: var(--memex-accent-hover);
+	text-decoration: underline;
+}
+
+.memex-reminder-complete button {
+	padding: 0.25rem 0.6rem;
+	background: transparent;
+	border: 1px solid var(--memex-border);
+	border-radius: 4px;
+	color: var(--memex-muted);
+	cursor: pointer;
+	font: inherit;
+}
+
+.memex-reminder-complete button:hover {
+	color: var(--memex-accent);
+	border-color: var(--memex-accent);
+}
+
+.memex-reminder-list.is-done .memex-reminder-title {
+	color: var(--memex-muted);
+	text-decoration: line-through;
+}
+
+.memex-error {
+	padding: 0.6rem 0.9rem;
+	background: var(--memex-stub-bg);
+	color: var(--memex-stub);
+	border-radius: 4px;
+	margin: 1rem 0;
+}
+
+/* In-note reminder block (memex/reminder) */
+
+.memex-reminder-inline {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 0.4rem;
+	padding: 0.35rem 0.7rem;
+	background: var(--memex-stub-bg);
+	border: 1px solid var(--memex-stub);
+	border-radius: 999px;
+	color: var(--memex-stub);
+	font-size: 0.95rem;
+}
+
+.memex-reminder-inline-due {
+	font-variant-numeric: tabular-nums;
+	font-weight: 600;
+}
+
+.memex-reminder-inline.is-editing {
+	display: block;
+	max-width: 22rem;
+	border-radius: 6px;
+	padding: 0.5rem 0.75rem;
+}
+
 /* Responsive */
 
 @media (max-width: 800px) {
@@ -542,5 +709,12 @@ body.memex {
 	.memex-sidebar {
 		position: static;
 		height: auto;
+	}
+	.memex-reminder-form {
+		grid-template-columns: 1fr;
+	}
+	.memex-reminder {
+		grid-template-columns: 1fr;
+		gap: 0.25rem;
 	}
 }

@@ -128,10 +128,97 @@
 		});
 	}
 
+	// --- Quick-due presets on /memex/reminders ----------------------------
+
+	function initQuickDue() {
+		var buttons = document.querySelectorAll('[data-quick-due]');
+		if (!buttons.length) return;
+		Array.prototype.forEach.call(buttons, function (btn) {
+			btn.addEventListener('click', function () {
+				var date = computeQuickDue(btn.getAttribute('data-quick-due'));
+				if (!date) return;
+				var form = btn.closest('form');
+				if (!form) return;
+				var input = form.querySelector('input[type="datetime-local"]');
+				if (!input) return;
+				input.value = toDatetimeLocalValue(date);
+				renderReadout(form, date);
+			});
+		});
+		// Keep the readout in sync when the user edits the picker by hand.
+		Array.prototype.forEach.call(
+			document.querySelectorAll('.memex-reminder-form input[type="datetime-local"]'),
+			function (input) {
+				input.addEventListener('change', function () {
+					if (!input.value) return;
+					var d = new Date(input.value);
+					if (!isNaN(d.getTime())) renderReadout(input.form, d);
+				});
+			}
+		);
+	}
+
+	function computeQuickDue(spec) {
+		if (!spec) return null;
+		var now = new Date();
+		var m;
+		if ((m = spec.match(/^\+(\d+)(min|hour|day)s?$/))) {
+			var n = parseInt(m[1], 10);
+			var ms = m[2] === 'min' ? 60000 : m[2] === 'hour' ? 3600000 : 86400000;
+			return new Date(now.getTime() + n * ms);
+		}
+		if ((m = spec.match(/^(today|tomorrow|weekend|monday|\+(\d+)days?)\s+(\d{1,2}):(\d{2})$/))) {
+			var which = m[1];
+			var h = parseInt(m[3], 10);
+			var min = parseInt(m[4], 10);
+			var d = new Date(now);
+			d.setHours(h, min, 0, 0);
+			if (which === 'today') {
+				if (d <= now) d.setDate(d.getDate() + 1);
+			} else if (which === 'tomorrow') {
+				d.setDate(d.getDate() + 1);
+			} else if (which === 'weekend') {
+				// Saturday = 6. If already Saturday, jump to next Saturday.
+				var add = (6 - d.getDay() + 7) % 7;
+				if (add === 0) add = 7;
+				d.setDate(d.getDate() + add);
+			} else if (which === 'monday') {
+				var addM = (1 - d.getDay() + 7) % 7;
+				if (addM === 0) addM = 7;
+				d.setDate(d.getDate() + addM);
+			} else {
+				d.setDate(d.getDate() + parseInt(m[2], 10));
+			}
+			return d;
+		}
+		return null;
+	}
+
+	function toDatetimeLocalValue(d) {
+		var pad = function (n) { return n < 10 ? '0' + n : '' + n; };
+		return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate())
+			+ 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+	}
+
+	function renderReadout(form, d) {
+		if (!form) return;
+		var readout = form.querySelector('[data-quick-readout]');
+		if (!readout) return;
+		try {
+			readout.textContent = '→ ' + d.toLocaleString(undefined, {
+				weekday: 'long', month: 'short', day: 'numeric',
+				hour: 'numeric', minute: '2-digit',
+			});
+		} catch (e) {
+			readout.textContent = '→ ' + d.toString();
+		}
+	}
+
 	// --- Bootstrap ---------------------------------------------------------
 
 	document.addEventListener('DOMContentLoaded', function () {
 		var graph = document.getElementById('memex-graph');
 		if (graph) renderGraph(graph);
+		initQuickDue();
 	});
 })();

@@ -55,11 +55,13 @@ class App extends BaseApp {
 		$this->app->route( 'broken' );
 		$this->app->route( 'import' );
 		$this->app->route( 'quick-capture' );
+		$this->app->route( 'reminders' );
 	}
 
 	protected function setup_menu(): void {
 		$this->app->add_menu_item( '', __( 'All Notes', 'memex' ), home_url( '/memex/' ) );
 		$this->app->add_menu_item( 'daily', __( 'Today', 'memex' ), home_url( '/memex/daily' ) );
+		$this->app->add_menu_item( 'reminders', __( 'Reminders', 'memex' ), home_url( '/memex/reminders' ) );
 		$this->app->add_menu_item( 'search', __( 'Search', 'memex' ), home_url( '/memex/search' ) );
 		$this->app->add_menu_item( 'graph', __( 'Graph', 'memex' ), home_url( '/memex/graph' ) );
 		$this->app->add_menu_item( 'orphans', __( 'Orphans', 'memex' ), home_url( '/memex/orphans' ) );
@@ -72,6 +74,7 @@ class App extends BaseApp {
 		parent::init();
 
 		Links::register();
+		Reminder::register();
 
 		// Make memex_note findable in Gutenberg's link picker.
 		add_filter(
@@ -110,7 +113,17 @@ class App extends BaseApp {
 		wp_enqueue_script(
 			'memex-block-editor',
 			$base . 'assets/memex-editor.js',
-			array( 'wp-data', 'wp-dom-ready', 'wp-api-fetch', 'wp-url', 'wp-i18n' ),
+			array(
+				'wp-data',
+				'wp-dom-ready',
+				'wp-api-fetch',
+				'wp-url',
+				'wp-i18n',
+				'wp-blocks',
+				'wp-element',
+				'wp-block-editor',
+				'wp-components',
+			),
 			MEMEX_VERSION,
 			true
 		);
@@ -131,10 +144,12 @@ class App extends BaseApp {
 
 	public function activate(): void {
 		CPT::register();
+		Reminder::activate();
 		flush_rewrite_rules();
 	}
 
 	public function deactivate(): void {
+		Reminder::deactivate();
 		flush_rewrite_rules();
 	}
 

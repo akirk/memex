@@ -130,4 +130,106 @@
 			}
 		}, 5000 );
 	} );
+
+	/* ─────────────────────────────────────────────────────────────────────
+	 * Reminder block (memex/reminder)
+	 *
+	 * Static block — its rendered HTML lives in post_content, the canonical
+	 * data lives in the block's JSON attributes. PHP-side reconcile() walks
+	 * parsed blocks on save_post and upserts a `memex_reminder` CPT row per
+	 * block, keyed by `blockId`.
+	 * ───────────────────────────────────────────────────────────────────── */
+
+	if ( wp.blocks && wp.element && wp.blockEditor && wp.components ) {
+		var registerBlockType = wp.blocks.registerBlockType;
+		var el                = wp.element.createElement;
+		var Fragment          = wp.element.Fragment;
+		var useBlockProps     = wp.blockEditor.useBlockProps;
+		var TextControl       = wp.components.TextControl;
+		var DateTimePicker    = wp.components.DateTimePicker;
+		var __                = wp.i18n.__;
+
+		var randomId = function () {
+			return 'r' + Math.random().toString( 36 ).slice( 2, 10 );
+		};
+
+		// Display "YYYY-MM-DD HH:MM" from a DateTimePicker ISO-ish string
+		// (which is local time, no offset, e.g. "2026-05-01T14:30:00").
+		var formatDue = function ( iso ) {
+			if ( ! iso ) {
+				return '';
+			}
+			return iso.slice( 0, 16 ).replace( 'T', ' ' );
+		};
+
+		registerBlockType( 'memex/reminder', {
+			apiVersion: 2,
+			title:       __( 'Reminder', 'memex' ),
+			description: __( 'A nudge by email when due.', 'memex' ),
+			icon:        'bell',
+			category:    'text',
+			keywords:    [ 'reminder', 'remind', 'todo', 'alert' ],
+			supports:    { html: false, multiple: true },
+			attributes:  {
+				blockId: { type: 'string', default: '' },
+				due:     { type: 'string', default: '' },
+				label:   { type: 'string', default: '' },
+			},
+
+			edit: function ( props ) {
+				var attributes    = props.attributes;
+				var setAttributes = props.setAttributes;
+
+				if ( ! attributes.blockId ) {
+					setAttributes( { blockId: randomId() } );
+				}
+
+				var blockProps = useBlockProps( {
+					className: 'memex-reminder-inline is-editing',
+				} );
+
+				return el(
+					'div',
+					blockProps,
+					el( TextControl, {
+						label:       __( 'Remind me to…', 'memex' ),
+						value:       attributes.label,
+						placeholder: __( 'Buy milk', 'memex' ),
+						onChange:    function ( value ) {
+							setAttributes( { label: value } );
+						},
+					} ),
+					el( DateTimePicker, {
+						currentDate: attributes.due || null,
+						is12Hour:    false,
+						onChange:    function ( value ) {
+							setAttributes( { due: value || '' } );
+						},
+					} )
+				);
+			},
+
+			save: function ( props ) {
+				var attributes = props.attributes;
+				var blockProps = useBlockProps.save( {
+					className: 'memex-reminder-inline',
+				} );
+				var due   = formatDue( attributes.due );
+				var label = attributes.label || '';
+				return el(
+					'p',
+					blockProps,
+					el( 'span', { className: 'memex-reminder-inline-icon' }, '⏰' ),
+					' ',
+					due
+						? el( 'span', { className: 'memex-reminder-inline-due' }, due )
+						: null,
+					due && label ? ' — ' : null,
+					label
+						? el( 'span', { className: 'memex-reminder-inline-label' }, label )
+						: null
+				);
+			},
+		} );
+	}
 } )( window.wp );
