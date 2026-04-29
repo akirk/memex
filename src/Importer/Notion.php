@@ -14,7 +14,6 @@
 namespace Memex\Importer;
 
 use Memex\CPT;
-use Memex\WikiLinks;
 use Parsedown;
 
 class Notion extends Importer {

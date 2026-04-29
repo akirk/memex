@@ -4,7 +4,6 @@
  */
 
 use Memex\CPT;
-use Memex\WikiLinks;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit; }

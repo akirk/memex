@@ -3,18 +3,21 @@
  * Import dispatcher.
  *
  * Flow:
- *   1. `begin()` detaches the save_post wiki-link sync so we can insert notes
- *      fast without N^2 resolution pass.
+ *   1. `begin()` detaches the save_post link sync so we can insert notes
+ *      fast without an N^2 resolve pass.
  *   2. Run a specific importer — it returns a batch of inserted post IDs.
- *   3. `end()` re-attaches the sync and runs WikiLinks::sync_links_from_content
- *      on every imported note, so `[[links]]` resolve correctly now that all
- *      titles exist (and only truly-missing targets become stubs).
+ *      Importers stage `[[Title]]` shorthand in content because they don't yet
+ *      know which titles will end up existing.
+ *   3. `end()` re-attaches the sync, then walks each imported note: converts
+ *      shorthand to `<a href>` HTML (creating stubs for truly-missing targets)
+ *      and stores the backlink rows. After `end()`, all imported content is
+ *      in the canonical HTML-only at-rest form.
  */
 
 namespace Memex\Importer;
 
 use Memex\CPT;
-use Memex\WikiLinks;
+use Memex\Links;
 
 abstract class Importer {
 	/** Human-readable source name (obsidian/notion/evernote/roam/markdown). */
@@ -88,24 +91,41 @@ abstract class Importer {
 	}
 
 	/**
-	 * Detach save_post wiki-link sync for the duration of the import.
+	 * Detach save_post link sync for the duration of the import.
 	 */
 	public static function begin(): void {
-		remove_action( 'save_post_' . CPT::POST_TYPE, array( WikiLinks::class, 'on_save' ), 20 );
+		remove_action( 'save_post_' . CPT::POST_TYPE, array( Links::class, 'on_save' ), 20 );
 	}
 
 	/**
-	 * Re-attach hook and run link sync for every imported note.
+	 * Re-attach the save_post hook, then for each imported note: rewrite
+	 * `[[Title]]` shorthand to anchors (creating stubs for missing targets,
+	 * now that all imported titles exist) and store the backlink rows.
 	 *
 	 * @param int[] $ids
 	 */
 	public static function end( array $ids ): void {
-		add_action( 'save_post_' . CPT::POST_TYPE, array( WikiLinks::class, 'on_save' ), 20, 2 );
+		add_action( 'save_post_' . CPT::POST_TYPE, array( Links::class, 'on_save' ), 20, 2 );
 		foreach ( $ids as $id ) {
 			$p = get_post( $id );
-			if ( $p ) {
-				WikiLinks::sync_links_from_content( (int) $p->ID, (string) $p->post_content );
+			if ( ! $p ) {
+				continue;
 			}
+			$content    = (string) $p->post_content;
+			$normalised = Links::shorthand_to_html( $content );
+			if ( $normalised !== $content ) {
+				// Detach our own hook so the wp_update_post doesn't trigger a
+				// redundant save_post → sync_backlinks pass on the same content.
+				remove_action( 'save_post_' . CPT::POST_TYPE, array( Links::class, 'on_save' ), 20 );
+				wp_update_post(
+					array(
+						'ID'           => $id,
+						'post_content' => $normalised,
+					)
+				);
+				add_action( 'save_post_' . CPT::POST_TYPE, array( Links::class, 'on_save' ), 20, 2 );
+			}
+			Links::sync_backlinks( (int) $id, $normalised );
 		}
 	}
 
@@ -127,7 +147,7 @@ abstract class Importer {
 		);
 		$data = array_merge( $defaults, $args );
 
-		$existing_id = WikiLinks::resolve( $title );
+		$existing_id = Links::resolve( $title );
 		if ( $existing_id ) {
 			$existing = get_post( $existing_id );
 			$is_stub  = (bool) get_post_meta( $existing_id, CPT::META_STUB, true );

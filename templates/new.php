@@ -3,7 +3,7 @@
  * Quick-create form: /memex/new?title=...
  */
 
-use Memex\WikiLinks;
+use Memex\Links;
 use Memex\CPT;
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -14,7 +14,7 @@ $title = isset( $_GET['title'] ) ? sanitize_text_field( wp_unslash( $_GET['title
 $memex_title = __( 'New note', 'memex' );
 include __DIR__ . '/_header.php';
 
-$existing = $title ? WikiLinks::resolve( $title ) : 0;
+$existing = $title ? Links::resolve( $title ) : 0;
 if ( $existing ) :
 	?>
 	<p>

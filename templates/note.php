@@ -6,7 +6,7 @@
  */
 
 use Memex\CPT;
-use Memex\WikiLinks;
+use Memex\Links;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit; }
@@ -59,7 +59,7 @@ if ( $slug ) {
 
 	// Fallback: resolve by title (case-insensitive).
 	if ( ! $post ) {
-		$id = WikiLinks::resolve( rawurldecode( $slug ) );
+		$id = Links::resolve( rawurldecode( $slug ) );
 		if ( $id ) {
 			$post = get_post( $id );
 		}
@@ -107,8 +107,8 @@ $children     = get_posts(
 		'post_status'    => array( 'publish', 'draft', 'private' ),
 	)
 );
-$backlinks    = WikiLinks::get_backlinks( (int) $post->ID );
-$forward      = WikiLinks::get_forward_links( (int) $post->ID );
+$backlinks    = Links::get_backlinks( (int) $post->ID );
+$forward      = Links::get_forward_links( (int) $post->ID );
 $tags         = get_the_terms( $post->ID, CPT::TAXONOMY );
 $edit_link    = admin_url( 'post.php?post=' . $post->ID . '&action=edit' );
 $import_src   = (string) get_post_meta( $post->ID, CPT::META_IMPORT_SOURCE, true );

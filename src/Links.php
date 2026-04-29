@@ -1,32 +1,44 @@
 <?php
 /**
- * [[Wiki-link]] parsing, stub creation, backlink tracking, and rendering.
+ * Note-to-note link tracking.
  *
- * Syntax supported:
- *   [[Target]]               - link to a note titled "Target"
- *   [[Target|Display text]]  - Obsidian-style display-text override
- *   [[Target#Heading]]       - heading anchor (kept as fragment)
+ * Memex stores notes as HTML — Gutenberg's link picker (which we extend in
+ * NoteSearch + assets/memex-editor.js so it suggests and creates memex_notes)
+ * is the single authoring path, and `<a href="/memex/note/SLUG">…</a>` is the
+ * canonical at-rest form. Gutenberg also treats `[[` as a built-in shortcut
+ * that opens the picker, so we don't need a custom shorthand at the storage
+ * layer at all.
  *
- * Storage model:
- *   Each forward link is stored as a separate post_meta row with key
- *   `_memex_links_to` and value = target post ID. One row per target makes
- *   backlink queries trivial: `meta_key = _memex_links_to, meta_value = ID`.
- *   Serialized-array meta would defeat meta_query.
+ * Imports from Obsidian / Notion / Roam *do* arrive in `[[Target]]` shape, so
+ * we keep a shorthand→HTML helper here that the importers run once per note
+ * before the content is persisted. After that, every consumer — backlinks,
+ * forward links, the graph, display — only ever sees `<a href>` HTML.
+ *
+ * Storage:
+ *   `_memex_links_to` post_meta — one row per outgoing target post ID. Lets
+ *   us answer "what links to X?" with a single meta_query.
  */
 
 namespace Memex;
 
-class WikiLinks {
-	const LINK_REGEX = '/\[\[([^\[\]\|]+?)(?:\|([^\[\]]+?))?\]\]/';
+class Links {
+	/**
+	 * `[[Target]]` or `[[Target|Display text]]`. Used only by the import
+	 * conversion path; never at runtime against user-editable content.
+	 */
+	private const SHORTHAND_REGEX = '/\[\[([^\[\]\|]+?)(?:\|([^\[\]]+?))?\]\]/';
 
 	public static function register() {
 		add_action( 'save_post_' . CPT::POST_TYPE, array( __CLASS__, 'on_save' ), 20, 2 );
 		add_action( 'wp_trash_post', array( __CLASS__, 'on_trash' ) );
-		add_filter( 'the_content', array( __CLASS__, 'render_links' ), 9 );
+		// Display-time only: tag memex-internal anchors with `.memex-link` so
+		// notes-internal links pick up the in-app styling regardless of how
+		// they were authored (Gutenberg picker, hand-typed href, importer).
+		add_filter( 'the_content', array( __CLASS__, 'style_internal_links' ), 9 );
 	}
 
 	/**
-	 * After a note is saved, sync forward-link meta rows.
+	 * Sync forward-link meta rows from the saved content's hrefs.
 	 */
 	public static function on_save( $post_id, $post ) {
 		if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) {
@@ -35,7 +47,7 @@ class WikiLinks {
 		if ( 'auto-draft' === $post->post_status || 'trash' === $post->post_status ) {
 			return;
 		}
-		self::sync_links_from_content( $post_id, $post->post_content );
+		self::sync_backlinks( (int) $post_id, (string) $post->post_content );
 	}
 
 	public static function on_trash( $post_id ) {
@@ -46,60 +58,19 @@ class WikiLinks {
 	}
 
 	/**
-	 * Extract `[[Target]]` strings from content.
+	 * Rewrite `_memex_links_to` rows for a note from the hrefs in its content.
 	 *
-	 * @return array<int,array{target:string,display:?string}>
+	 * @return int[] target post IDs that were stored.
 	 */
-	public static function extract_links( string $content ): array {
-		if ( ! preg_match_all( self::LINK_REGEX, $content, $matches, PREG_SET_ORDER ) ) {
-			return array();
-		}
-		$out = array();
-		foreach ( $matches as $m ) {
-			$target = trim( $m[1] );
-			if ( '' === $target ) {
-				continue;
-			}
-			$out[] = array(
-				'target'  => $target,
-				'display' => isset( $m[2] ) && '' !== trim( $m[2] ) ? trim( $m[2] ) : null,
-			);
-		}
-		return $out;
-	}
-
-	/**
-	 * Sync forward-link meta rows from the given content.
-	 *
-	 * Recognises two link shapes:
-	 *   1. `<a href="/memex/note/SLUG">…</a>` — what Gutenberg's link picker emits.
-	 *   2. `[[Target]]` wiki-links — portable syntax used by imports and by anyone
-	 *      who'd rather type brackets than open a link dialog.
-	 *
-	 * Only wiki-links auto-create stub notes (pre-declare an idea before
-	 * writing it). HTML links resolve against existing notes — if the target
-	 * isn't a memex_note URL we recognise, the link is ignored for backlink
-	 * purposes (it's just an ordinary external/internal link).
-	 */
-	public static function sync_links_from_content( int $post_id, string $content ): array {
+	public static function sync_backlinks( int $post_id, string $content ): array {
 		delete_post_meta( $post_id, CPT::META_LINKS_TO );
 		$stored = array();
-
-		foreach ( self::extract_links( $content ) as $link ) {
-			$target    = self::strip_fragment( $link['target'] );
-			$target_id = self::resolve_or_create( $target );
-			if ( $target_id && $target_id !== $post_id && ! in_array( $target_id, $stored, true ) ) {
-				$stored[] = $target_id;
-			}
-		}
-
 		foreach ( self::extract_hrefs( $content ) as $href ) {
-			$target_id = self::resolve_href( $href );
-			if ( $target_id && $target_id !== $post_id && ! in_array( $target_id, $stored, true ) ) {
-				$stored[] = $target_id;
+			$tid = self::resolve_href( $href );
+			if ( $tid && $tid !== $post_id && ! in_array( $tid, $stored, true ) ) {
+				$stored[] = $tid;
 			}
 		}
-
 		foreach ( $stored as $tid ) {
 			add_post_meta( $post_id, CPT::META_LINKS_TO, $tid );
 		}
@@ -107,7 +78,7 @@ class WikiLinks {
 	}
 
 	/**
-	 * Pull every `href` value out of `<a>` tags in post_content.
+	 * Pull every `href` value out of `<a>` tags.
 	 *
 	 * @return string[]
 	 */
@@ -122,21 +93,19 @@ class WikiLinks {
 	}
 
 	/**
-	 * Resolve a Memex-note-looking URL to a note ID, or 0 if it doesn't point
-	 * at one of our notes. Accepts absolute and relative URLs.
+	 * Resolve a memex-note-looking URL to a note ID, or 0 if it doesn't point
+	 * at one of our notes. Accepts absolute, relative, and `?p=N` URLs.
 	 */
 	public static function resolve_href( string $href ): int {
 		$href = trim( $href );
 		if ( '' === $href ) {
 			return 0;
 		}
-		// Drop fragment; keep query for ?p=N fallback.
 		$frag_pos = strpos( $href, '#' );
 		if ( false !== $frag_pos ) {
 			$href = substr( $href, 0, $frag_pos );
 		}
 
-		// Ensure we're looking at a same-site URL: relative, or same host as home_url().
 		$parts = wp_parse_url( $href );
 		if ( ! empty( $parts['host'] ) ) {
 			$home_host = wp_parse_url( home_url(), PHP_URL_HOST );
@@ -147,9 +116,8 @@ class WikiLinks {
 		$path  = $parts['path'] ?? $href;
 		$query = $parts['query'] ?? '';
 
-		// /memex/note/SLUG
 		if ( preg_match( '#/memex/note/([^/]+)/?$#', $path, $m ) ) {
-			$slug = rawurldecode( $m[1] );
+			$slug    = rawurldecode( $m[1] );
 			$by_slug = get_posts(
 				array(
 					'post_type'      => CPT::POST_TYPE,
@@ -168,7 +136,6 @@ class WikiLinks {
 			}
 		}
 
-		// ?p=N or ?post=N (Gutenberg sometimes emits `?p=` for non-public types).
 		if ( '' !== $query ) {
 			parse_str( $query, $q );
 			foreach ( array( 'p', 'post', 'memex_note' ) as $key ) {
@@ -184,14 +151,6 @@ class WikiLinks {
 		return 0;
 	}
 
-	private static function strip_fragment( string $target ): string {
-		$pos = strpos( $target, '#' );
-		if ( false === $pos ) {
-			return $target;
-		}
-		return trim( substr( $target, 0, $pos ) );
-	}
-
 	/**
 	 * Find an existing note by title (case-insensitive) or slug.
 	 */
@@ -200,9 +159,14 @@ class WikiLinks {
 		if ( '' === $title ) {
 			return 0;
 		}
-		$title = self::strip_fragment( $title );
+		$hash_pos = strpos( $title, '#' );
+		if ( false !== $hash_pos ) {
+			$title = trim( substr( $title, 0, $hash_pos ) );
+			if ( '' === $title ) {
+				return 0;
+			}
+		}
 
-		// Exact title match (any case).
 		global $wpdb;
 		$id = (int) $wpdb->get_var(
 			$wpdb->prepare(
@@ -220,7 +184,6 @@ class WikiLinks {
 			return $id;
 		}
 
-		// Slug match.
 		$slug    = sanitize_title( $title );
 		$by_slug = get_posts(
 			array(
@@ -236,14 +199,15 @@ class WikiLinks {
 	}
 
 	/**
-	 * Find or create a stub note for the given title.
+	 * Find an existing note by title, otherwise create a stub. Stubs let an
+	 * importer reference a note that hasn't been created yet in the same pass.
 	 */
 	public static function resolve_or_create( string $title ): int {
 		$existing = self::resolve( $title );
 		if ( $existing ) {
 			return $existing;
 		}
-		$title = trim( self::strip_fragment( $title ) );
+		$title = trim( $title );
 		if ( '' === $title ) {
 			return 0;
 		}
@@ -264,41 +228,79 @@ class WikiLinks {
 	}
 
 	/**
-	 * Replace `[[...]]` strings with anchors when content is rendered.
+	 * Convert `[[Target]]` / `[[Target|Display]]` shorthand to `<a href>` HTML.
+	 *
+	 * Importers call this once on each note's content before persisting, so
+	 * stored content is plain HTML. Unresolved targets become stub notes so
+	 * the link has somewhere to point.
 	 */
-	public static function render_links( $content ) {
-		if ( ! is_string( $content ) || false === strpos( $content, '[[' ) ) {
+	public static function shorthand_to_html( string $content ): string {
+		if ( false === strpos( $content, '[[' ) ) {
 			return $content;
 		}
-		return preg_replace_callback(
-			self::LINK_REGEX,
+		return (string) preg_replace_callback(
+			self::SHORTHAND_REGEX,
 			static function ( $m ) {
 				$raw_target = trim( $m[1] );
-				$display    = isset( $m[2] ) && '' !== trim( $m[2] ) ? trim( $m[2] ) : $raw_target;
-				$target     = self::strip_fragment( $raw_target );
-				$fragment   = '';
-				$hash       = strpos( $raw_target, '#' );
-				if ( false !== $hash ) {
-					$fragment = '#' . sanitize_title( substr( $raw_target, $hash + 1 ) );
+				if ( '' === $raw_target ) {
+					return $m[0];
 				}
-				$id = self::resolve( $target );
-				if ( $id ) {
-					$url = CPT::url( $id ) . $fragment;
-					return sprintf(
-						'<a class="memex-link" href="%s" data-memex-target="%s">%s</a>',
-						esc_url( $url ),
-						esc_attr( $target ),
-						esc_html( $display )
-					);
+				$display = isset( $m[2] ) && '' !== trim( $m[2] ) ? trim( $m[2] ) : $raw_target;
+
+				$fragment = '';
+				$target   = $raw_target;
+				$hash_pos = strpos( $raw_target, '#' );
+				if ( false !== $hash_pos ) {
+					$fragment = '#' . sanitize_title( substr( $raw_target, $hash_pos + 1 ) );
+					$target   = trim( substr( $raw_target, 0, $hash_pos ) );
 				}
-				$create_url = add_query_arg( 'title', rawurlencode( $target ), home_url( '/memex/new' ) );
+
+				$id = self::resolve_or_create( $target );
+				if ( ! $id ) {
+					return $m[0];
+				}
 				return sprintf(
-					'<a class="memex-link memex-link-stub" href="%s" title="%s" data-memex-target="%s">%s</a>',
-					esc_url( $create_url ),
-					esc_attr__( 'Create this note', 'memex' ),
-					esc_attr( $target ),
+					'<a href="%s">%s</a>',
+					esc_url( CPT::url( $id ) . $fragment ),
 					esc_html( $display )
 				);
+			},
+			$content
+		);
+	}
+
+	/**
+	 * Display-time filter: tag anchors that resolve to memex notes with a
+	 * `.memex-link` class (and `.memex-link-stub` when the target is a stub),
+	 * so notes-internal links pick up the in-app styling.
+	 */
+	public static function style_internal_links( $content ) {
+		if ( ! is_string( $content ) || false === stripos( $content, '<a ' ) ) {
+			return $content;
+		}
+		return (string) preg_replace_callback(
+			'/<a\b([^>]*)>/i',
+			static function ( $m ) {
+				$attrs = $m[1];
+				if ( ! preg_match( '/\bhref\s*=\s*(["\'])(.*?)\1/i', $attrs, $h ) ) {
+					return $m[0];
+				}
+				$id = self::resolve_href( $h[2] );
+				if ( ! $id ) {
+					return $m[0];
+				}
+				$is_stub = (bool) get_post_meta( $id, CPT::META_STUB, true );
+				$classes = $is_stub ? 'memex-link memex-link-stub' : 'memex-link';
+				if ( preg_match( '/\bclass\s*=\s*(["\'])(.*?)\1/i', $attrs, $c ) ) {
+					if ( false !== strpos( $c[2], 'memex-link' ) ) {
+						return $m[0];
+					}
+					$new   = $c[2] . ' ' . $classes;
+					$attrs = str_replace( $c[0], 'class=' . $c[1] . $new . $c[1], $attrs );
+				} else {
+					$attrs .= ' class="' . $classes . '"';
+				}
+				return '<a' . $attrs . '>';
 			},
 			$content
 		);
@@ -350,35 +352,5 @@ class WikiLinks {
 			)
 		);
 		return $posts ? $posts : array();
-	}
-
-	/**
-	 * All titles that are referenced but don't yet exist (orphan targets).
-	 *
-	 * @return string[]
-	 */
-	public static function get_broken_targets( int $limit = 500 ): array {
-		$notes = get_posts(
-			array(
-				'post_type'      => CPT::POST_TYPE,
-				'post_status'    => array( 'publish', 'draft', 'private' ),
-				'posts_per_page' => $limit,
-				'fields'         => 'ids',
-			)
-		);
-		$broken = array();
-		foreach ( $notes as $id ) {
-			$post = get_post( $id );
-			if ( ! $post ) {
-				continue;
-			}
-			foreach ( self::extract_links( $post->post_content ) as $link ) {
-				$t = self::strip_fragment( $link['target'] );
-				if ( ! self::resolve( $t ) ) {
-					$broken[ strtolower( $t ) ] = $t;
-				}
-			}
-		}
-		return array_values( $broken );
 	}
 }

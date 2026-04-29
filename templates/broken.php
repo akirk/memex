@@ -1,13 +1,13 @@
 <?php
 /**
- * Broken links — `[[Target]]` references where Target doesn't exist as a note.
+ * Broken links — references to notes that don't (yet) have content.
  *
- * Any resolved-but-stub target counts too, so the list is useful for filling in
- * what you actually planned to write.
+ * Stubs are notes auto-created for an unresolved link target — listing them
+ * gives the user a punch-list of topics they planned to write but haven't.
  */
 
 use Memex\CPT;
-use Memex\WikiLinks;
+use Memex\Links;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit; }
@@ -15,7 +15,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 $memex_title = __( 'Broken links', 'memex' );
 include __DIR__ . '/_header.php';
 
-// Find all stub notes — they were auto-created by the wiki-link parser.
+// Find all stub notes — they were auto-created when an importer encountered
+// a link to a note that didn't exist yet.
 $stubs = get_posts(
 	array(
 		'post_type'      => CPT::POST_TYPE,
@@ -41,7 +42,7 @@ $stubs = get_posts(
 <?php else : ?>
 	<ul class="memex-note-list">
 		<?php foreach ( $stubs as $s ) : ?>
-			<?php $backlinks = WikiLinks::get_backlinks( (int) $s->ID ); ?>
+			<?php $backlinks = Links::get_backlinks( (int) $s->ID ); ?>
 			<li class="memex-note-list-item is-stub">
 				<a class="memex-note-list-title" href="<?php echo esc_url( CPT::url( $s ) ); ?>"><?php echo esc_html( $s->post_title ); ?></a>
 				<p class="memex-note-list-excerpt">

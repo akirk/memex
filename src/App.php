@@ -71,7 +71,7 @@ class App extends BaseApp {
 		// BaseApp::init runs setup_database → routes → menu → WpApp::init.
 		parent::init();
 
-		WikiLinks::register();
+		Links::register();
 
 		// Make memex_note findable in Gutenberg's link picker.
 		add_filter(
@@ -93,10 +93,27 @@ class App extends BaseApp {
 
 		// Enqueue app assets when a memex template is about to render.
 		add_action( 'wp_app_before_render', array( $this, 'enqueue_assets' ) );
+		// Override Gutenberg's link picker on memex_note edit screens so the
+		// "Create new" button creates a memex_note and suggestions include notes.
+		add_action( 'enqueue_block_editor_assets', array( $this, 'enqueue_block_editor_assets' ) );
 		add_action( 'admin_post_memex_quick_capture', array( $this, 'handle_quick_capture' ) );
 		add_action( 'admin_post_memex_create_note', array( $this, 'handle_create_note' ) );
 		add_action( 'admin_post_memex_import', array( $this, 'handle_import' ) );
-		add_action( 'wp_ajax_memex_title_suggest', array( $this, 'ajax_title_suggest' ) );
+	}
+
+	public function enqueue_block_editor_assets() {
+		$screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+		if ( ! $screen || CPT::POST_TYPE !== $screen->post_type ) {
+			return;
+		}
+		$base = plugin_dir_url( dirname( __DIR__ ) . '/memex.php' );
+		wp_enqueue_script(
+			'memex-block-editor',
+			$base . 'assets/memex-editor.js',
+			array( 'wp-data', 'wp-dom-ready', 'wp-api-fetch', 'wp-url', 'wp-i18n' ),
+			MEMEX_VERSION,
+			true
+		);
 	}
 
 	public function enqueue_assets() {
@@ -163,7 +180,7 @@ class App extends BaseApp {
 			wp_safe_redirect( home_url( '/memex/' ) );
 			exit;
 		}
-		$existing = WikiLinks::resolve( $title );
+		$existing = Links::resolve( $title );
 		if ( $existing ) {
 			wp_safe_redirect( CPT::url( $existing ) );
 			exit;
@@ -245,9 +262,6 @@ class App extends BaseApp {
 	 * bare `<p>` gets collapsed into a single "Classic" block. This helper emits one
 	 * `wp:paragraph` per blank-line-separated paragraph, preserves single-line breaks
 	 * as `<br>`, HTML-escapes user input, and prepends `HH:MM · ` to the first block.
-	 *
-	 * `[[wiki-links]]` survive because `esc_html` doesn't touch `[` or `]`; our
-	 * `the_content` filter renders them on display.
 	 */
 	private static function plain_text_to_paragraph_blocks( string $text, string $timestamp ): string {
 		$text  = str_replace( "\r\n", "\n", $text );
@@ -270,12 +284,4 @@ class App extends BaseApp {
 		return implode( "\n\n", $out );
 	}
 
-	public function ajax_title_suggest() {
-		if ( ! is_user_logged_in() ) {
-			wp_send_json_error( array( 'message' => 'auth' ), 401 );
-		}
-		$q       = isset( $_GET['q'] ) ? sanitize_text_field( wp_unslash( $_GET['q'] ) ) : '';
-		$results = Search::title_suggest( $q, 10 );
-		wp_send_json_success( $results );
-	}
 }

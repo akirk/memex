@@ -4,7 +4,7 @@
  */
 
 use Memex\CPT;
-use Memex\WikiLinks;
+use Memex\Links;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit; }
@@ -22,7 +22,7 @@ if ( $slug ) {
 	);
 	$post = $q ? $q[0] : null;
 	if ( ! $post ) {
-		$id = WikiLinks::resolve( rawurldecode( $slug ) );
+		$id = Links::resolve( rawurldecode( $slug ) );
 		if ( $id ) {
 			$post = get_post( $id );
 		}

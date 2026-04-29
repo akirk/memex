@@ -6,7 +6,7 @@
  */
 
 use Memex\CPT;
-use Memex\WikiLinks;
+use Memex\Links;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit; }
@@ -24,7 +24,7 @@ if ( $slug ) {
 	);
 	$post = $q ? $q[0] : null;
 	if ( ! $post ) {
-		$id = WikiLinks::resolve( rawurldecode( $slug ) );
+		$id = Links::resolve( rawurldecode( $slug ) );
 		if ( $id ) {
 			$post = get_post( $id );
 		}
@@ -44,7 +44,7 @@ if ( ! $post ) {
 
 $memex_title = sprintf( /* translators: %s: note title */ __( 'Backlinks to %s', 'memex' ), $post->post_title );
 include __DIR__ . '/_header.php';
-$backlinks = WikiLinks::get_backlinks( (int) $post->ID );
+$backlinks = Links::get_backlinks( (int) $post->ID );
 ?>
 
 <header class="memex-page-header">
