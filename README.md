@@ -39,7 +39,7 @@ Notes live as a custom post type, so you keep WordPress's editor (Gutenberg), re
 
 - WordPress with a logged-in user
 - PHP 7.4+
-- [`akirk/wp-app`](https://github.com/akirk/wp-app) ^1.0 (installed via Composer)
+- [`akirk/wp-app`](https://github.com/akirk/wp-app) ^1.2 (installed via Composer)
 
 ## Install
 
