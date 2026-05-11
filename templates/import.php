@@ -87,7 +87,7 @@ $max_upload = wp_max_upload_size();
 	<h2><?php esc_html_e( 'What gets imported?', 'memex' ); ?></h2>
 	<ul>
 		<li><strong>Obsidian / Markdown</strong> — <?php esc_html_e( 'YAML frontmatter (title, tags, aliases), #hashtags, [[wiki-links]], and folder hierarchy.', 'memex' ); ?></li>
-		<li><strong>Notion</strong> — <?php esc_html_e( 'Page hierarchy, HTML/Markdown body, internal page links rewritten to [[wiki-links]].', 'memex' ); ?></li>
+		<li><strong>Notion</strong> — <?php esc_html_e( 'Page hierarchy, HTML/Markdown body, internal page links rewritten as memex links between notes.', 'memex' ); ?></li>
 		<li><strong>Evernote</strong> — <?php esc_html_e( 'Note title, HTML body (ENML), tags, created/updated timestamps.', 'memex' ); ?></li>
 		<li><strong>Roam Research</strong> — <?php esc_html_e( 'Pages, nested bullet outline, [[page-links]], #hashtags, TODO/DONE markers.', 'memex' ); ?></li>
 	</ul>

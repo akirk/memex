@@ -1,6 +1,6 @@
 <?php
 /**
- * Simple force-directed graph of notes and their [[wiki-links]].
+ * Simple force-directed graph of notes and the links between them.
  *
  * Renders a static SVG via D3-less layout using a naive fruchterman-ish
  * iteration entirely in-browser. Data is emitted as JSON and the JS file
