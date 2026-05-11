@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	<title><?php wp_app_title( isset( $memex_title ) ? esc_html( $memex_title ) : '' ); ?></title>
 	<?php wp_app_head(); ?>
 </head>
-<body class="memex">
+<body class="wp-app-body memex">
 	<?php wp_app_body_open(); ?>
 
 	<div class="memex-layout">
