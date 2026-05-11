@@ -1,0 +1,41 @@
+<?php return array(
+    'root' => array(
+        'name' => 'akirk/memex',
+        'pretty_version' => 'dev-update-wp-app-color-vars',
+        'version' => 'dev-update-wp-app-color-vars',
+        'reference' => 'ce28332d645b0506fde761f72fe11a725152bc93',
+        'type' => 'wordpress-plugin',
+        'install_path' => __DIR__ . '/../../',
+        'aliases' => array(),
+        'dev' => false,
+    ),
+    'versions' => array(
+        'akirk/memex' => array(
+            'pretty_version' => 'dev-update-wp-app-color-vars',
+            'version' => 'dev-update-wp-app-color-vars',
+            'reference' => 'ce28332d645b0506fde761f72fe11a725152bc93',
+            'type' => 'wordpress-plugin',
+            'install_path' => __DIR__ . '/../../',
+            'aliases' => array(),
+            'dev_requirement' => false,
+        ),
+        'akirk/wp-app' => array(
+            'pretty_version' => 'v1.2.0',
+            'version' => '1.2.0.0',
+            'reference' => '110f51d2df9cdb4cd055ae0ef52ed48c5d3900b5',
+            'type' => 'library',
+            'install_path' => __DIR__ . '/../akirk/wp-app',
+            'aliases' => array(),
+            'dev_requirement' => false,
+        ),
+        'erusev/parsedown' => array(
+            'pretty_version' => '1.8.0',
+            'version' => '1.8.0.0',
+            'reference' => '96baaad00f71ba04d76e45b4620f54d3beabd6f7',
+            'type' => 'library',
+            'install_path' => __DIR__ . '/../erusev/parsedown',
+            'aliases' => array(),
+            'dev_requirement' => false,
+        ),
+    ),
+);
