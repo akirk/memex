@@ -13,7 +13,6 @@ Notes live as a custom post type, so you keep WordPress's editor (Gutenberg), re
 - **Reminders.** A Gutenberg block (`memex/reminder`) attached to a note. The plugin schedules a 5-minute cron and emails you when one is due. List view at `/memex/reminders`.
 - **Graph, orphans, broken links.** Built-in views for navigating the link structure of your notes.
 - **Importers.** Obsidian / generic Markdown, Notion (HTML/Markdown export), Evernote (`.enex`), and Roam Research (JSON). `[[Wiki-Links]]` from sources are converted to `<a href>` on import; missing targets become stub notes so links resolve.
-- **Dark mode toggle** in the masterbar.
 - **Login required.** The app and notes are private by default — `memex_note` is registered as `public => false`.
 
 ## Routes
