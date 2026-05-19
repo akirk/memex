@@ -17,7 +17,7 @@ class App extends BaseApp {
 				'my_apps'                      => true,
 				'my_apps_icon'                 => plugins_url( 'assets/icon.svg', dirname( __DIR__ ) . '/memex.php' ),
 				'show_masterbar_for_anonymous' => false,
-				'show_dark_mode_toggle'        => true,
+				'show_dark_mode_toggle'        => false,
 			)
 		);
 	}
