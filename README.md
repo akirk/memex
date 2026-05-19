@@ -2,17 +2,17 @@
 
 Turns WordPress into a note-taking app: bi-directional links, automatic backlinks, daily notes, tags, reminders, and one-click import from Obsidian, Notion, Evernote, and Roam Research.
 
-Notes live as a custom post type, so you keep WordPress's editor (Gutenberg), revisions, search, media library, and permissions — but with a dedicated note-taking UI mounted at `/memex/`.
+Notes live as a custom post type, so you keep WordPress revisions, search, media library, and permissions — but authoring happens in a dedicated note-taking UI mounted at `/memex/`.
 
 ## Highlights
 
-- **Wiki-style links.** Type `[[` in Gutenberg to open the link picker; it suggests existing notes and creates new ones inline. Links are stored as plain `<a href>` HTML — no custom shortcode at rest.
+- **Wiki-style links.** Type `[[` in the Memex editor to link notes. Matching note titles are suggested inline, and missing targets become stub notes.
 - **Automatic backlinks.** Every note has a backlinks panel showing what links to it. Forward links are tracked too.
 - **Daily notes.** `/memex/daily` opens today's note (creates it on demand). Quick-capture appends a timestamped paragraph from anywhere in the app.
 - **Tags.** A `memex_tag` taxonomy with a per-tag listing at `/memex/tag/{slug}`.
-- **Reminders.** A Gutenberg block (`memex/reminder`) attached to a note. The plugin schedules a 5-minute cron and emails you when one is due. List view at `/memex/reminders`.
+- **Reminders.** Create reminders at `/memex/reminders`; the plugin schedules a 5-minute cron and emails you when one is due.
 - **Graph, orphans, broken links.** Built-in views for navigating the link structure of your notes.
-- **Importers.** Obsidian / generic Markdown, Notion (HTML/Markdown export), Evernote (`.enex`), and Roam Research (JSON). `[[Wiki-Links]]` from sources are converted to `<a href>` on import; missing targets become stub notes so links resolve.
+- **Importers.** Obsidian / generic Markdown, Notion (HTML/Markdown export), Evernote (`.enex`), and Roam Research (JSON). `[[Wiki-Links]]` from sources stay editable; missing targets become stub notes so links resolve.
 - **Login required.** The app and notes are private by default — `memex_note` is registered as `public => false`.
 
 ## Routes
@@ -21,7 +21,7 @@ Notes live as a custom post type, so you keep WordPress's editor (Gutenberg), re
 | ---------------------------------- | ------------------------------------------------- |
 | `/memex/`                          | All notes                                         |
 | `/memex/note/{slug}`               | View a note                                       |
-| `/memex/edit/{slug}`               | Open the note in the WP editor                    |
+| `/memex/edit/{slug}`               | Edit the note in Memex                            |
 | `/memex/new`                       | Create a note                                     |
 | `/memex/daily` · `/memex/daily/{date}` | Daily note for today (or a given date)        |
 | `/memex/search`                    | Full-text search                                  |
@@ -69,13 +69,13 @@ Auto-detect sniffs file extension and content; you can also force a specific imp
 - Stub flag: `_memex_stub` (1 if the note was auto-created by an unresolved link).
 - Reminders: `memex_reminder` CPT — `post_status` is `publish` while pending, `private` once done; due time in `_memex_due_at` (UTC).
 
-The link layer is HTML-only at rest. Gutenberg's `[[` shortcut opens the (extended) link picker, the picker writes `<a href="/memex/note/{slug}">…</a>`, and on save the plugin extracts hrefs and rewrites the `_memex_links_to` rows. Display-time, internal anchors get a `.memex-link` class (and `.memex-link-stub` if the target is a stub) so they pick up app styling.
+The link layer recognizes `[[Note Title]]`, `[[Note Title|display text]]`, and legacy internal HTML anchors. On save, the plugin extracts those targets and rewrites the `_memex_links_to` rows. Display-time, wiki links and internal anchors get a `.memex-link` class (and `.memex-link-stub` if the target is a stub) so they pick up app styling.
 
 ## Development notes
 
 - Boots on `init:5` so CPTs and routes register before WP's `init:10` and the textdomain is available (WP 6.7+).
 - Routes, masterbar menu, and access control are provided by `WpApp`. See its [README](https://github.com/akirk/wp-app/blob/main/README.md) for routing and template details.
-- Templates live in `templates/`; assets (CSS/JS, including the editor extensions for the `[[` link picker and the reminder block) live in `assets/`.
+- Templates live in `templates/`; assets (CSS/JS, including the in-app `[[` autocomplete) live in `assets/`.
 
 ## License
 

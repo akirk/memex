@@ -76,7 +76,7 @@ class App extends BaseApp {
 		Links::register();
 		Reminder::register();
 
-		// Make memex_note findable in Gutenberg's link picker.
+		// Keep direct wp-admin edits compatible with note links.
 		add_filter(
 			'wp_rest_search_handlers',
 			static function ( $handlers ) {
@@ -90,18 +90,18 @@ class App extends BaseApp {
 			}
 		);
 
-		// Route memex_note permalinks through the WpApp (/memex/note/{slug})
-		// so Gutenberg inserts the app URL when linking to a note.
+		// Route memex_note permalinks through the WpApp (/memex/note/{slug}).
 		add_filter( 'post_type_link', array( CPT::class, 'filter_permalink' ), 10, 2 );
 
 		// Enqueue app assets when a memex template is about to render.
 		add_action( 'wp_app_before_render', array( $this, 'enqueue_assets' ) );
-		// Override Gutenberg's link picker on memex_note edit screens so the
-		// "Create new" button creates a memex_note and suggestions include notes.
+		// If a user opens wp-admin directly, keep the block editor note-aware.
 		add_action( 'enqueue_block_editor_assets', array( $this, 'enqueue_block_editor_assets' ) );
 		add_action( 'admin_post_memex_quick_capture', array( $this, 'handle_quick_capture' ) );
 		add_action( 'admin_post_memex_create_note', array( $this, 'handle_create_note' ) );
+		add_action( 'admin_post_memex_update_note', array( $this, 'handle_update_note' ) );
 		add_action( 'admin_post_memex_import', array( $this, 'handle_import' ) );
+		add_action( 'wp_ajax_memex_title_suggest', array( $this, 'ajax_title_suggest' ) );
 	}
 
 	public function enqueue_block_editor_assets() {
@@ -211,7 +211,48 @@ class App extends BaseApp {
 		if ( is_wp_error( $id ) || ! $id ) {
 			wp_die( esc_html__( 'Could not create note.', 'memex' ) );
 		}
-		wp_safe_redirect( admin_url( 'post.php?post=' . $id . '&action=edit' ) );
+		wp_safe_redirect( home_url( '/memex/edit/' . rawurlencode( get_post_field( 'post_name', $id ) ?: (string) $id ) ) );
+		exit;
+	}
+
+	public function handle_update_note() {
+		$id = isset( $_POST['id'] ) ? (int) $_POST['id'] : 0;
+		check_admin_referer( 'memex_update_note_' . $id );
+
+		$post = get_post( $id );
+		if ( ! $post || CPT::POST_TYPE !== $post->post_type ) {
+			wp_die( esc_html__( 'Note not found.', 'memex' ) );
+		}
+		if ( ! current_user_can( 'edit_post', $id ) ) {
+			wp_die( esc_html__( 'Not allowed.', 'memex' ) );
+		}
+
+		$title = isset( $_POST['title'] ) ? sanitize_text_field( wp_unslash( $_POST['title'] ) ) : '';
+		$text  = isset( $_POST['content'] ) ? trim( wp_unslash( $_POST['content'] ) ) : '';
+		if ( '' === $title ) {
+			wp_safe_redirect( add_query_arg( 'error', 'missing-title', home_url( '/memex/edit/' . rawurlencode( $post->post_name ?: (string) $id ) ) ) );
+			exit;
+		}
+
+		$content = self::plain_text_to_paragraph_blocks( $text );
+		// The in-app editor does not manage reminder blocks; keep existing
+		// reminder records intact instead of reconciling against plain text.
+		remove_action( 'save_post_' . CPT::POST_TYPE, array( Reminder::class, 'on_save_note' ), 25 );
+		$result  = wp_update_post(
+			array(
+				'ID'           => $id,
+				'post_title'   => $title,
+				'post_content' => $content,
+				'post_status'  => 'publish',
+			),
+			true
+		);
+		add_action( 'save_post_' . CPT::POST_TYPE, array( Reminder::class, 'on_save_note' ), 25, 2 );
+		if ( is_wp_error( $result ) ) {
+			wp_die( esc_html__( 'Could not save note.', 'memex' ) );
+		}
+		delete_post_meta( $id, CPT::META_STUB );
+		wp_safe_redirect( CPT::url( $id ) );
 		exit;
 	}
 
@@ -271,14 +312,15 @@ class App extends BaseApp {
 	}
 
 	/**
-	 * Turn a plain-text textarea value into a valid Gutenberg paragraph-block sequence.
+	 * Turn a plain-text textarea value into a valid WordPress paragraph-block sequence.
 	 *
-	 * Gutenberg parses `<!-- wp:paragraph --><p>…</p><!-- /wp:paragraph -->` natively;
-	 * bare `<p>` gets collapsed into a single "Classic" block. This helper emits one
+	 * WordPress parses `<!-- wp:paragraph --><p>…</p><!-- /wp:paragraph -->` natively;
+	 * bare `<p>` can be treated as a single classic block. This helper emits one
 	 * `wp:paragraph` per blank-line-separated paragraph, preserves single-line breaks
-	 * as `<br>`, HTML-escapes user input, and prepends `HH:MM · ` to the first block.
+	 * as `<br>`, and HTML-escapes user input. Quick capture can pass a timestamp
+	 * to prefix the first block.
 	 */
-	private static function plain_text_to_paragraph_blocks( string $text, string $timestamp ): string {
+	private static function plain_text_to_paragraph_blocks( string $text, string $timestamp = '' ): string {
 		$text  = str_replace( "\r\n", "\n", $text );
 		$paras = preg_split( '/\n\s*\n/', $text );
 		$out   = array();
@@ -290,13 +332,34 @@ class App extends BaseApp {
 			}
 			$lines = array_map( 'esc_html', explode( "\n", $p ) );
 			$inner = implode( '<br>', $lines );
-			if ( $first ) {
+			if ( $first && '' !== $timestamp ) {
 				$inner = '<strong>' . esc_html( $timestamp ) . '</strong> · ' . $inner;
 				$first = false;
 			}
 			$out[] = "<!-- wp:paragraph -->\n<p>" . $inner . "</p>\n<!-- /wp:paragraph -->";
 		}
 		return implode( "\n\n", $out );
+	}
+
+	public static function content_to_editor_text( string $content ): string {
+		$content = Links::internal_anchors_to_shorthand( $content );
+		$content = preg_replace( '/<!--\s*\/?wp:[^>]*-->/', '', $content );
+		$content = preg_replace( '/<br\s*\/?>/i', "\n", $content );
+		$content = preg_replace( '/<\/(p|div|li|h[1-6])\s*>/i', "\n\n", $content );
+		$content = preg_replace( '/<hr\b[^>]*>/i', "\n\n---\n\n", $content );
+		$text    = wp_strip_all_tags( $content, true );
+		$text    = html_entity_decode( $text, ENT_QUOTES | ENT_HTML5, get_bloginfo( 'charset' ) ?: 'UTF-8' );
+		$text    = preg_replace( "/\n{3,}/", "\n\n", $text );
+		return trim( $text );
+	}
+
+	public function ajax_title_suggest() {
+		if ( ! is_user_logged_in() ) {
+			wp_send_json_error( array( 'message' => 'auth' ), 401 );
+		}
+		$q       = isset( $_GET['q'] ) ? sanitize_text_field( wp_unslash( $_GET['q'] ) ) : '';
+		$results = Search::title_suggest( $q, 10 );
+		wp_send_json_success( $results );
 	}
 
 }
