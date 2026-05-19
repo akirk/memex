@@ -19,8 +19,8 @@ body.memex {
 }
 
 .memex-sidebar {
-	background: var(--wp-app-masterbar-background);
-	color: var(--wp-app-masterbar-text);
+	background: var(--wp-app-color-surface-alt);
+	color: var(--wp-app-color-text);
 	padding: 1.25rem 1rem;
 	position: sticky;
 	top: 0;
@@ -31,7 +31,7 @@ body.memex {
 }
 
 .memex-sidebar a {
-	color: var(--wp-app-masterbar-text);
+	color: var(--wp-app-color-text);
 	text-decoration: none;
 }
 
@@ -43,7 +43,7 @@ body.memex {
 }
 
 .memex-brand a {
-	color: var(--wp-app-admin-icon-color-current);
+	color: var(--wp-app-color-link);
 }
 
 .memex-nav {
@@ -57,12 +57,12 @@ body.memex {
 	padding: 0.4rem 0.6rem;
 	border-radius: 4px;
 	font-size: 0.92rem;
-	color: var(--wp-app-admin-icon-color-base);
+	color: var(--wp-app-color-muted);
 }
 
 .memex-nav a:hover {
-	background: var(--wp-app-admin-color-subtle);
-	color: var(--wp-app-admin-icon-color-current);
+	background: var(--wp-app-color-surface);
+	color: var(--wp-app-color-link-hover);
 }
 
 .memex-quick-capture,
@@ -76,10 +76,10 @@ body.memex {
 .memex-quick-capture textarea,
 .memex-create input {
 	width: 100%;
-	background: var(--wp-app-admin-color-subtle);
-	border: 1px solid var(--wp-app-admin-color-primary);
+	background: var(--wp-app-color-surface);
+	border: 1px solid var(--wp-app-color-border);
 	border-radius: 4px;
-	color: var(--wp-app-admin-icon-color-current);
+	color: var(--wp-app-color-text);
 	padding: 0.5rem 0.6rem;
 	font: inherit;
 	resize: vertical;
@@ -88,14 +88,14 @@ body.memex {
 
 .memex-quick-capture textarea::placeholder,
 .memex-create input::placeholder {
-	color: var(--wp-app-admin-icon-color-base);
+	color: var(--wp-app-color-muted);
 }
 
 .memex-quick-capture button,
 .memex-create button {
 	align-self: flex-end;
 	background: var(--wp-app-color-primary, var(--wp-app-color-secondary));
-	color: var(--wp-app-color-primary-text, var(--wp-app-color-text));
+	color: var(--wp-app-color-on-primary, #fff);
 	border: 0;
 	border-radius: 4px;
 	padding: 0.35rem 0.7rem;
@@ -106,7 +106,7 @@ body.memex {
 .memex-quick-capture button:hover,
 .memex-create button:hover {
 	background: var(--wp-app-color-primary-hover, var(--wp-app-color-secondary-hover));
-	color: var(--wp-app-color-primary-text, var(--wp-app-color-text));
+	color: var(--wp-app-color-on-primary, #fff);
 }
 
 /* Main column */
@@ -432,14 +432,14 @@ body.memex {
 
 .memex-button-primary {
 	background: var(--wp-app-color-primary, var(--wp-app-color-secondary));
-	color: var(--wp-app-color-primary-text, var(--wp-app-color-text));
+	color: var(--wp-app-color-on-primary, #fff);
 	border-color: var(--wp-app-color-primary, var(--wp-app-color-border));
 }
 
 .memex-button-primary:hover {
 	background: var(--wp-app-color-primary-hover, var(--wp-app-color-secondary-hover));
 	border-color: var(--wp-app-color-primary-hover, var(--wp-app-color-border));
-	color: var(--wp-app-color-primary-text, var(--wp-app-color-text));
+	color: var(--wp-app-color-on-primary, #fff);
 }
 
 .memex-search button,
@@ -449,7 +449,7 @@ body.memex {
 .memex-quick-capture-full button {
 	padding: 0.5rem 1rem;
 	background: var(--wp-app-color-primary, var(--wp-app-color-secondary));
-	color: var(--wp-app-color-primary-text, var(--wp-app-color-text));
+	color: var(--wp-app-color-on-primary, #fff);
 	border: 0;
 	border-radius: 4px;
 	cursor: pointer;
@@ -462,7 +462,7 @@ body.memex {
 .memex-import-form button:hover,
 .memex-quick-capture-full button:hover {
 	background: var(--wp-app-color-primary-hover, var(--wp-app-color-secondary-hover));
-	color: var(--wp-app-color-primary-text, var(--wp-app-color-text));
+	color: var(--wp-app-color-on-primary, #fff);
 }
 
 .memex-autocomplete {
