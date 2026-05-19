@@ -1,18 +1,14 @@
 <?php
 /**
- * Note-to-note link tracking.
+ * [[Wiki-link]] parsing, stub creation, backlink tracking, and rendering.
  *
- * Memex stores notes as HTML — Gutenberg's link picker (which we extend in
- * NoteSearch + assets/memex-editor.js so it suggests and creates memex_notes)
- * is the single authoring path, and `<a href="/memex/note/SLUG">…</a>` is the
- * canonical at-rest form. Gutenberg also treats `[[` as a built-in shortcut
- * that opens the picker, so we don't need a custom shorthand at the storage
- * layer at all.
+ * The Memex app is the primary authoring surface. Users can type:
+ *   [[Target]]
+ *   [[Target|Display text]]
+ *   [[Target#Heading]]
  *
- * Imports from Obsidian / Notion / Roam *do* arrive in `[[Target]]` shape, so
- * we keep a shorthand→HTML helper here that the importers run once per note
- * before the content is persisted. After that, every consumer — backlinks,
- * forward links, the graph, display — only ever sees `<a href>` HTML.
+ * Gutenberg-authored/imported HTML anchors are still understood so older notes
+ * continue to participate in backlinks and graph views.
  *
  * Storage:
  *   `_memex_links_to` post_meta — one row per outgoing target post ID. Lets
@@ -22,23 +18,17 @@
 namespace Memex;
 
 class Links {
-	/**
-	 * `[[Target]]` or `[[Target|Display text]]`. Used only by the import
-	 * conversion path; never at runtime against user-editable content.
-	 */
-	private const SHORTHAND_REGEX = '/\[\[([^\[\]\|]+?)(?:\|([^\[\]]+?))?\]\]/';
+	const LINK_REGEX = '/\[\[([^\[\]\|]+?)(?:\|([^\[\]]+?))?\]\]/';
 
 	public static function register() {
 		add_action( 'save_post_' . CPT::POST_TYPE, array( __CLASS__, 'on_save' ), 20, 2 );
 		add_action( 'wp_trash_post', array( __CLASS__, 'on_trash' ) );
-		// Display-time only: tag memex-internal anchors with `.memex-link` so
-		// notes-internal links pick up the in-app styling regardless of how
-		// they were authored (Gutenberg picker, hand-typed href, importer).
-		add_filter( 'the_content', array( __CLASS__, 'style_internal_links' ), 9 );
+		add_filter( 'the_content', array( __CLASS__, 'render_links' ), 9 );
+		add_filter( 'the_content', array( __CLASS__, 'style_internal_links' ), 10 );
 	}
 
 	/**
-	 * Sync forward-link meta rows from the saved content's hrefs.
+	 * Sync forward-link meta rows from saved note content.
 	 */
 	public static function on_save( $post_id, $post ) {
 		if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) {
@@ -47,7 +37,7 @@ class Links {
 		if ( 'auto-draft' === $post->post_status || 'trash' === $post->post_status ) {
 			return;
 		}
-		self::sync_backlinks( (int) $post_id, (string) $post->post_content );
+		self::sync_links_from_content( (int) $post_id, (string) $post->post_content );
 	}
 
 	public static function on_trash( $post_id ) {
@@ -58,13 +48,44 @@ class Links {
 	}
 
 	/**
-	 * Rewrite `_memex_links_to` rows for a note from the hrefs in its content.
+	 * Extract `[[Target]]` strings from content.
+	 *
+	 * @return array<int,array{target:string,display:?string}>
+	 */
+	public static function extract_links( string $content ): array {
+		if ( ! preg_match_all( self::LINK_REGEX, $content, $matches, PREG_SET_ORDER ) ) {
+			return array();
+		}
+		$out = array();
+		foreach ( $matches as $m ) {
+			$target = trim( $m[1] );
+			if ( '' === $target ) {
+				continue;
+			}
+			$out[] = array(
+				'target'  => $target,
+				'display' => isset( $m[2] ) && '' !== trim( $m[2] ) ? trim( $m[2] ) : null,
+			);
+		}
+		return $out;
+	}
+
+	/**
+	 * Rewrite `_memex_links_to` rows for a note from wiki links and HTML hrefs.
 	 *
 	 * @return int[] target post IDs that were stored.
 	 */
-	public static function sync_backlinks( int $post_id, string $content ): array {
+	public static function sync_links_from_content( int $post_id, string $content ): array {
 		delete_post_meta( $post_id, CPT::META_LINKS_TO );
 		$stored = array();
+
+		foreach ( self::extract_links( $content ) as $link ) {
+			$tid = self::resolve_or_create( self::strip_fragment( $link['target'] ) );
+			if ( $tid && $tid !== $post_id && ! in_array( $tid, $stored, true ) ) {
+				$stored[] = $tid;
+			}
+		}
+
 		foreach ( self::extract_hrefs( $content ) as $href ) {
 			$tid = self::resolve_href( $href );
 			if ( $tid && $tid !== $post_id && ! in_array( $tid, $stored, true ) ) {
@@ -75,6 +96,10 @@ class Links {
 			add_post_meta( $post_id, CPT::META_LINKS_TO, $tid );
 		}
 		return $stored;
+	}
+
+	public static function sync_backlinks( int $post_id, string $content ): array {
+		return self::sync_links_from_content( $post_id, $content );
 	}
 
 	/**
@@ -151,6 +176,14 @@ class Links {
 		return 0;
 	}
 
+	private static function strip_fragment( string $target ): string {
+		$pos = strpos( $target, '#' );
+		if ( false === $pos ) {
+			return $target;
+		}
+		return trim( substr( $target, 0, $pos ) );
+	}
+
 	/**
 	 * Find an existing note by title (case-insensitive) or slug.
 	 */
@@ -159,12 +192,9 @@ class Links {
 		if ( '' === $title ) {
 			return 0;
 		}
-		$hash_pos = strpos( $title, '#' );
-		if ( false !== $hash_pos ) {
-			$title = trim( substr( $title, 0, $hash_pos ) );
-			if ( '' === $title ) {
-				return 0;
-			}
+		$title = self::strip_fragment( $title );
+		if ( '' === $title ) {
+			return 0;
 		}
 
 		global $wpdb;
@@ -207,7 +237,7 @@ class Links {
 		if ( $existing ) {
 			return $existing;
 		}
-		$title = trim( $title );
+		$title = trim( self::strip_fragment( $title ) );
 		if ( '' === $title ) {
 			return 0;
 		}
@@ -228,18 +258,63 @@ class Links {
 	}
 
 	/**
+	 * Replace `[[...]]` strings with anchors when content is rendered.
+	 */
+	public static function render_links( $content ) {
+		if ( ! is_string( $content ) || false === strpos( $content, '[[' ) ) {
+			return $content;
+		}
+		return (string) preg_replace_callback(
+			self::LINK_REGEX,
+			static function ( $m ) {
+				$raw_target = trim( $m[1] );
+				if ( '' === $raw_target ) {
+					return $m[0];
+				}
+				$display  = isset( $m[2] ) && '' !== trim( $m[2] ) ? trim( $m[2] ) : $raw_target;
+				$target   = self::strip_fragment( $raw_target );
+				$fragment = '';
+				$hash     = strpos( $raw_target, '#' );
+				if ( false !== $hash ) {
+					$fragment = '#' . sanitize_title( substr( $raw_target, $hash + 1 ) );
+				}
+				$id = self::resolve( $target );
+				if ( $id ) {
+					$url     = CPT::url( $id ) . $fragment;
+					$classes = (bool) get_post_meta( $id, CPT::META_STUB, true ) ? 'memex-link memex-link-stub' : 'memex-link';
+					return sprintf(
+						'<a class="%s" href="%s" data-memex-target="%s">%s</a>',
+						esc_attr( $classes ),
+						esc_url( $url ),
+						esc_attr( $target ),
+						esc_html( $display )
+					);
+				}
+				$create_url = add_query_arg( 'title', rawurlencode( $target ), home_url( '/memex/new' ) );
+				return sprintf(
+					'<a class="memex-link memex-link-stub" href="%s" title="%s" data-memex-target="%s">%s</a>',
+					esc_url( $create_url ),
+					esc_attr__( 'Create this note', 'memex' ),
+					esc_attr( $target ),
+					esc_html( $display )
+				);
+			},
+			$content
+		);
+	}
+
+	/**
 	 * Convert `[[Target]]` / `[[Target|Display]]` shorthand to `<a href>` HTML.
 	 *
-	 * Importers call this once on each note's content before persisting, so
-	 * stored content is plain HTML. Unresolved targets become stub notes so
-	 * the link has somewhere to point.
+	 * Kept for compatibility with older migration paths. Normal app editing
+	 * now keeps wiki-link text in stored note content.
 	 */
 	public static function shorthand_to_html( string $content ): string {
 		if ( false === strpos( $content, '[[' ) ) {
 			return $content;
 		}
 		return (string) preg_replace_callback(
-			self::SHORTHAND_REGEX,
+			self::LINK_REGEX,
 			static function ( $m ) {
 				$raw_target = trim( $m[1] );
 				if ( '' === $raw_target ) {
@@ -264,6 +339,36 @@ class Links {
 					esc_url( CPT::url( $id ) . $fragment ),
 					esc_html( $display )
 				);
+			},
+			$content
+		);
+	}
+
+	/**
+	 * Convert stored internal anchors back to wiki-link syntax for the in-app editor.
+	 */
+	public static function internal_anchors_to_shorthand( string $content ): string {
+		if ( false === stripos( $content, '<a ' ) ) {
+			return $content;
+		}
+		return (string) preg_replace_callback(
+			'/<a\b([^>]*)>(.*?)<\/a>/is',
+			static function ( $m ) {
+				$attrs = $m[1];
+				if ( ! preg_match( '/\bhref\s*=\s*(["\'])(.*?)\1/i', $attrs, $h ) ) {
+					return $m[0];
+				}
+				$id = self::resolve_href( $h[2] );
+				if ( ! $id ) {
+					return $m[0];
+				}
+				$title   = get_the_title( $id );
+				$display = html_entity_decode( wp_strip_all_tags( $m[2] ), ENT_QUOTES | ENT_HTML5, get_bloginfo( 'charset' ) ?: 'UTF-8' );
+				$display = trim( preg_replace( '/\s+/', ' ', $display ) );
+				if ( '' === $display || 0 === strcasecmp( $display, $title ) ) {
+					return '[[' . $title . ']]';
+				}
+				return '[[' . $title . '|' . $display . ']]';
 			},
 			$content
 		);

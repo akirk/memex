@@ -110,7 +110,8 @@ $children     = get_posts(
 $backlinks    = Links::get_backlinks( (int) $post->ID );
 $forward      = Links::get_forward_links( (int) $post->ID );
 $tags         = get_the_terms( $post->ID, CPT::TAXONOMY );
-$edit_link    = admin_url( 'post.php?post=' . $post->ID . '&action=edit' );
+$edit_slug    = $post->post_name ? $post->post_name : (string) $post->ID;
+$edit_link    = home_url( '/memex/edit/' . rawurlencode( $edit_slug ) );
 $import_src   = (string) get_post_meta( $post->ID, CPT::META_IMPORT_SOURCE, true );
 ?>
 

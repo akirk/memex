@@ -332,6 +332,7 @@ body.memex {
 
 .memex-search,
 .memex-create-form,
+.memex-edit-form,
 .memex-import-form,
 .memex-quick-capture-full {
 	display: flex;
@@ -356,6 +357,8 @@ body.memex {
 }
 
 .memex-create-form input,
+.memex-edit-form input[type="text"],
+.memex-edit-form textarea,
 .memex-import-form input[type="file"],
 .memex-quick-capture-full textarea {
 	padding: 0.5rem;
@@ -364,6 +367,30 @@ body.memex {
 	border-radius: 4px;
 	background: var(--wp-app-color-surface);
 	color: var(--wp-app-color-text);
+}
+
+.memex-edit-form label {
+	display: grid;
+	gap: 0.25rem;
+	font-weight: 600;
+}
+
+.memex-edit-form {
+	max-width: 900px;
+}
+
+.memex-edit-form textarea {
+	min-height: 28rem;
+	resize: vertical;
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+	line-height: 1.5;
+}
+
+.memex-edit-actions {
+	display: flex;
+	gap: 0.5rem;
+	align-items: center;
+	flex-wrap: wrap;
 }
 
 .memex-quick-capture-full textarea {
@@ -417,6 +444,7 @@ body.memex {
 
 .memex-search button,
 .memex-create-form button,
+.memex-edit-form button,
 .memex-import-form button,
 .memex-quick-capture-full button {
 	padding: 0.5rem 1rem;
@@ -430,10 +458,43 @@ body.memex {
 
 .memex-search button:hover,
 .memex-create-form button:hover,
+.memex-edit-form button:hover,
 .memex-import-form button:hover,
 .memex-quick-capture-full button:hover {
 	background: var(--wp-app-color-primary-hover, var(--wp-app-color-secondary-hover));
 	color: var(--wp-app-color-primary-text, var(--wp-app-color-text));
+}
+
+.memex-autocomplete {
+	position: absolute;
+	z-index: 10000;
+	display: grid;
+	min-width: 12rem;
+	max-height: 14rem;
+	overflow-y: auto;
+	padding: 0.25rem 0;
+	background: var(--wp-app-color-surface);
+	border: 1px solid var(--wp-app-color-border);
+	border-radius: 4px;
+	box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+}
+
+.memex-autocomplete button {
+	display: block;
+	width: 100%;
+	padding: 0.35rem 0.65rem;
+	border: 0;
+	background: transparent;
+	color: var(--wp-app-color-text);
+	font: inherit;
+	font-size: 0.9rem;
+	text-align: left;
+	cursor: pointer;
+}
+
+.memex-autocomplete button:hover {
+	background: var(--wp-app-color-surface-alt);
+	color: var(--wp-app-color-link-hover);
 }
 
 /* Notices */

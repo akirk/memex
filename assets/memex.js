@@ -214,11 +214,96 @@
 		}
 	}
 
+	// --- [[ autocomplete in textareas --------------------------------------
+
+	function setupAutocomplete() {
+		var textareas = document.querySelectorAll(
+			'.memex-quick-capture textarea, .memex-quick-capture-full textarea, .memex-edit-form textarea'
+		);
+		Array.prototype.forEach.call(textareas, function (ta) {
+			var popover;
+
+			function close() {
+				if (popover) popover.remove();
+				popover = null;
+			}
+
+			function open(results, caretCoords) {
+				close();
+				if (!results.length) return;
+				popover = document.createElement('div');
+				popover.className = 'memex-autocomplete';
+				results.forEach(function (r) {
+					var row = document.createElement('button');
+					row.type = 'button';
+					row.textContent = r.title;
+					row.addEventListener('mousedown', function (ev) {
+						ev.preventDefault();
+						insert(r.title);
+					});
+					popover.appendChild(row);
+				});
+				document.body.appendChild(popover);
+				popover.style.left = caretCoords.left + 'px';
+				popover.style.top = (caretCoords.top + 24) + 'px';
+			}
+
+			function insert(title) {
+				var val = ta.value;
+				var pos = ta.selectionStart;
+				var before = val.slice(0, pos);
+				var after = val.slice(pos);
+				var idx = before.lastIndexOf('[[');
+				if (idx === -1) return;
+				ta.value = before.slice(0, idx + 2) + title + ']]' + after;
+				var newPos = idx + 2 + title.length + 2;
+				ta.selectionStart = ta.selectionEnd = newPos;
+				close();
+				ta.focus();
+			}
+
+			ta.addEventListener('input', function () {
+				var pos = ta.selectionStart;
+				var before = ta.value.slice(0, pos);
+				var idx = before.lastIndexOf('[[');
+				if (idx === -1) {
+					close();
+					return;
+				}
+				var query = before.slice(idx + 2);
+				if (query.length < 1 || /[\]\n]/.test(query)) {
+					close();
+					return;
+				}
+				fetch(ajaxurl() + '?action=memex_title_suggest&q=' + encodeURIComponent(query), {
+					credentials: 'same-origin',
+				})
+					.then(function (r) { return r.json(); })
+					.then(function (json) {
+						if (!json.success) return;
+						var rect = ta.getBoundingClientRect();
+						open(json.data, {
+							left: rect.left + window.scrollX + 12,
+							top: rect.top + window.scrollY + 8,
+						});
+					})
+					.catch(function () {});
+			});
+
+			ta.addEventListener('blur', function () { setTimeout(close, 120); });
+		});
+	}
+
+	function ajaxurl() {
+		return window.ajaxurl || (window.location.origin + '/wp-admin/admin-ajax.php');
+	}
+
 	// --- Bootstrap ---------------------------------------------------------
 
 	document.addEventListener('DOMContentLoaded', function () {
 		var graph = document.getElementById('memex-graph');
 		if (graph) renderGraph(graph);
 		initQuickDue();
+		setupAutocomplete();
 	});
 })();

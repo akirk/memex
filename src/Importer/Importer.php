@@ -8,10 +8,9 @@
  *   2. Run a specific importer — it returns a batch of inserted post IDs.
  *      Importers stage `[[Title]]` shorthand in content because they don't yet
  *      know which titles will end up existing.
- *   3. `end()` re-attaches the sync, then walks each imported note: converts
- *      shorthand to `<a href>` HTML (creating stubs for truly-missing targets)
- *      and stores the backlink rows. After `end()`, all imported content is
- *      in the canonical HTML-only at-rest form.
+ *   3. `end()` re-attaches the sync, then walks each imported note, resolving
+ *      shorthand links into backlink rows and creating stubs for truly-missing
+ *      targets. Imported wiki-link text remains editable in the Memex app.
  */
 
 namespace Memex\Importer;
@@ -98,9 +97,9 @@ abstract class Importer {
 	}
 
 	/**
-	 * Re-attach the save_post hook, then for each imported note: rewrite
-	 * `[[Title]]` shorthand to anchors (creating stubs for missing targets,
-	 * now that all imported titles exist) and store the backlink rows.
+	 * Re-attach the save_post hook, then for each imported note: resolve
+	 * `[[Title]]` shorthand into backlink rows, creating stubs for missing
+	 * targets now that all imported titles exist.
 	 *
 	 * @param int[] $ids
 	 */
@@ -111,21 +110,7 @@ abstract class Importer {
 			if ( ! $p ) {
 				continue;
 			}
-			$content    = (string) $p->post_content;
-			$normalised = Links::shorthand_to_html( $content );
-			if ( $normalised !== $content ) {
-				// Detach our own hook so the wp_update_post doesn't trigger a
-				// redundant save_post → sync_backlinks pass on the same content.
-				remove_action( 'save_post_' . CPT::POST_TYPE, array( Links::class, 'on_save' ), 20 );
-				wp_update_post(
-					array(
-						'ID'           => $id,
-						'post_content' => $normalised,
-					)
-				);
-				add_action( 'save_post_' . CPT::POST_TYPE, array( Links::class, 'on_save' ), 20, 2 );
-			}
-			Links::sync_backlinks( (int) $id, $normalised );
+			Links::sync_links_from_content( (int) $id, (string) $p->post_content );
 		}
 	}
 
