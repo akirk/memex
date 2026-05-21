@@ -22,19 +22,36 @@ define( 'MEMEX_PLUGIN_URL', plugins_url( '', __FILE__ ) );
 require_once __DIR__ . '/vendor/autoload.php';
 
 /*
- * Boot on `init` priority 5 — early enough that CPT registration and route
- * setup happen before WP's default init:10, late enough that the plugin
- * textdomain is loadable (WP 6.7+ warns if translations run before init).
- *
- * WpApp v1.1+ Registry::register_app detects `did_action('init')` and
- * registers rewrite rules immediately, so the older "must-use-plugins_loaded"
- * requirement no longer applies.
+ * Keep a single App instance for the request. Constructing the App registers
+ * WpApp's router, so do that on plugins_loaded, then defer translated labels
+ * and other runtime WordPress registrations until init.
+ */
+function memex_app(): App {
+	static $app = null;
+
+	if ( null === $app ) {
+		$app = new App();
+	}
+
+	return $app;
+}
+
+add_action(
+	'plugins_loaded',
+	function () {
+		memex_app()->register_app();
+	}
+);
+
+/*
+ * Register CPTs, translated menu labels, and request handlers on init:5.
+ * This is before the default init:10 callbacks while still avoiding WP 6.7+
+ * just-in-time textdomain notices.
  */
 add_action(
 	'init',
 	function () {
-		$app = new App();
-		$app->init();
+		memex_app()->init();
 	},
 	5
 );
@@ -42,15 +59,14 @@ add_action(
 register_activation_hook(
 	__FILE__,
 	function () {
-		$app = new App();
-		$app->activate();
+		memex_app()->register_app();
+		memex_app()->activate();
 	}
 );
 
 register_deactivation_hook(
 	__FILE__,
 	function () {
-		$app = new App();
-		$app->deactivate();
+		memex_app()->deactivate();
 	}
 );

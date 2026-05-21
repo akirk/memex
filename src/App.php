@@ -7,13 +7,16 @@ use WpApp\BaseApp;
 use Memex\Importer\Importer;
 
 class App extends BaseApp {
+	private $app_registered = false;
+	private $runtime_registered = false;
+
 	public function __construct() {
 		$this->app = new WpApp(
 			$this->get_template_dir(),
 			$this->get_url_path(),
 			array(
 				'require_login'                => true,
-				'app_name'                     => __( 'Memex', 'memex' ),
+				'app_name'                     => 'Memex',
 				'my_apps'                      => true,
 				'my_apps_icon'                 => plugins_url( 'assets/icon.svg', dirname( __DIR__ ) . '/memex.php' ),
 				'show_masterbar_for_anonymous' => false,
@@ -69,9 +72,29 @@ class App extends BaseApp {
 		$this->app->add_menu_item( 'import', __( 'Import', 'memex' ), home_url( '/memex/import' ) );
 	}
 
+	public function register_app() {
+		if ( $this->app_registered ) {
+			return;
+		}
+
+		$this->setup_routes();
+		$this->app->init();
+
+		$this->app_registered = true;
+	}
+
 	public function init() {
-		// BaseApp::init runs setup_database → routes → menu → WpApp::init.
-		parent::init();
+		if ( $this->runtime_registered ) {
+			return;
+		}
+
+		$this->runtime_registered = true;
+
+		$this->register_app();
+		$this->setup_database();
+		$this->setup_menu();
+
+		do_action( 'base_app_initialized', $this );
 
 		Links::register();
 		Reminder::register();
