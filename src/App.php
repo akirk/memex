@@ -98,6 +98,7 @@ class App extends BaseApp {
 
 		Links::register();
 		Reminder::register();
+		AI::register();
 
 		// Keep direct wp-admin edits compatible with note links.
 		add_filter(
