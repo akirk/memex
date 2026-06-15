@@ -34,21 +34,23 @@ $orphans = get_posts(
 ?>
 
 <header class="memex-page-header">
-	<h1><?php esc_html_e( 'Orphan notes', 'memex' ); ?></h1>
+	<h1 id="orphan-notes-heading"><?php esc_html_e( 'Orphan notes', 'memex' ); ?></h1>
 	<p class="memex-muted"><?php esc_html_e( 'Notes that no other note links to. Good candidates to connect or archive.', 'memex' ); ?></p>
 </header>
 
 <?php if ( ! $orphans ) : ?>
 	<p><?php esc_html_e( 'No orphans — every note is connected.', 'memex' ); ?></p>
 <?php else : ?>
-	<ul class="memex-note-list">
-		<?php foreach ( $orphans as $o ) : ?>
-			<li class="memex-note-list-item">
-				<a class="memex-note-list-title" href="<?php echo esc_url( CPT::url( $o ) ); ?>"><?php echo esc_html( $o->post_title ); ?></a>
-				<div class="memex-note-list-meta"><?php echo esc_html( get_the_modified_date( '', $o ) ); ?></div>
-			</li>
-		<?php endforeach; ?>
-	</ul>
+	<section id="orphan-notes" aria-labelledby="orphan-notes-heading" data-ai-assistant-important>
+		<ul class="memex-note-list">
+			<?php foreach ( $orphans as $o ) : ?>
+				<li class="memex-note-list-item">
+					<a class="memex-note-list-title" href="<?php echo esc_url( CPT::url( $o ) ); ?>"><?php echo esc_html( $o->post_title ); ?></a>
+					<div class="memex-note-list-meta"><?php echo esc_html( get_the_modified_date( '', $o ) ); ?></div>
+				</li>
+			<?php endforeach; ?>
+		</ul>
+	</section>
 <?php endif; ?>
 
 <?php include __DIR__ . '/_footer.php'; ?>

@@ -115,7 +115,7 @@ $edit_link    = home_url( '/memex/edit/' . rawurlencode( $edit_slug ) );
 $import_src   = (string) get_post_meta( $post->ID, CPT::META_IMPORT_SOURCE, true );
 ?>
 
-<article class="memex-note">
+<article id="selected-note" class="memex-note" aria-labelledby="selected-note-heading" data-ai-assistant-important>
 	<?php if ( $parent ) : ?>
 		<nav class="memex-breadcrumb">
 			<a href="<?php echo esc_url( CPT::url( $parent ) ); ?>">&larr; <?php echo esc_html( $parent->post_title ); ?></a>
@@ -123,7 +123,7 @@ $import_src   = (string) get_post_meta( $post->ID, CPT::META_IMPORT_SOURCE, true
 	<?php endif; ?>
 
 	<header class="memex-note-header">
-		<h1>
+		<h1 id="selected-note-heading">
 			<?php echo esc_html( $post->post_title ); ?>
 			<?php if ( $is_stub ) : ?>
 				<span class="memex-badge memex-badge-stub"><?php esc_html_e( 'stub', 'memex' ); ?></span>
@@ -148,7 +148,7 @@ $import_src   = (string) get_post_meta( $post->ID, CPT::META_IMPORT_SOURCE, true
 		</div>
 	</header>
 
-	<div class="memex-note-body">
+	<section id="selected-note-content" class="memex-note-body" aria-label="<?php esc_attr_e( 'Selected note content', 'memex' ); ?>" data-ai-assistant-important>
 		<?php
 		if ( '' === trim( $post->post_content ) ) {
 			echo '<p class="memex-muted"><em>' . esc_html__( 'This note is empty.', 'memex' ) . '</em> <a href="' . esc_url( $edit_link ) . '">' . esc_html__( 'Start writing →', 'memex' ) . '</a></p>';
@@ -156,11 +156,11 @@ $import_src   = (string) get_post_meta( $post->ID, CPT::META_IMPORT_SOURCE, true
 			echo apply_filters( 'the_content', $post->post_content ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 		}
 		?>
-	</div>
+	</section>
 
 	<?php if ( $children ) : ?>
-		<section class="memex-panel memex-children">
-			<h2><?php esc_html_e( 'Nested notes', 'memex' ); ?></h2>
+		<section class="memex-panel memex-children" aria-labelledby="nested-notes-heading">
+			<h2 id="nested-notes-heading"><?php esc_html_e( 'Nested notes', 'memex' ); ?></h2>
 			<ul>
 				<?php foreach ( $children as $c ) : ?>
 					<li><a href="<?php echo esc_url( CPT::url( $c ) ); ?>"><?php echo esc_html( $c->post_title ); ?></a></li>
@@ -170,8 +170,8 @@ $import_src   = (string) get_post_meta( $post->ID, CPT::META_IMPORT_SOURCE, true
 	<?php endif; ?>
 
 	<?php if ( $forward ) : ?>
-		<section class="memex-panel memex-forward">
-			<h2><?php esc_html_e( 'Links from here', 'memex' ); ?> <span class="memex-muted">(<?php echo count( $forward ); ?>)</span></h2>
+		<section class="memex-panel memex-forward" aria-labelledby="links-from-here-heading">
+			<h2 id="links-from-here-heading"><?php esc_html_e( 'Links from here', 'memex' ); ?> <span class="memex-muted">(<?php echo count( $forward ); ?>)</span></h2>
 			<ul>
 				<?php foreach ( $forward as $f ) : ?>
 					<li><a href="<?php echo esc_url( CPT::url( $f ) ); ?>"><?php echo esc_html( $f->post_title ); ?></a></li>
@@ -180,8 +180,8 @@ $import_src   = (string) get_post_meta( $post->ID, CPT::META_IMPORT_SOURCE, true
 		</section>
 	<?php endif; ?>
 
-	<section class="memex-panel memex-backlinks">
-		<h2>
+	<section class="memex-panel memex-backlinks" aria-labelledby="linked-mentions-heading">
+		<h2 id="linked-mentions-heading">
 			<?php esc_html_e( 'Linked mentions', 'memex' ); ?>
 			<span class="memex-muted">(<?php echo count( $backlinks ); ?>)</span>
 		</h2>

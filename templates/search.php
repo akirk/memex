@@ -17,8 +17,9 @@ $results = $q ? Search::query( $q, 100 ) : array();
 
 <header class="memex-page-header">
 	<h1><?php esc_html_e( 'Search', 'memex' ); ?></h1>
-	<form class="memex-search" method="get" action="<?php echo esc_url( home_url( '/memex/search' ) ); ?>">
-		<input type="search" name="q" value="<?php echo esc_attr( $q ); ?>" placeholder="<?php esc_attr_e( 'Search your notes…', 'memex' ); ?>" autofocus>
+	<form class="memex-search" method="get" action="<?php echo esc_url( home_url( '/memex/search' ) ); ?>" role="search" aria-label="<?php esc_attr_e( 'Search notes', 'memex' ); ?>">
+		<label class="screen-reader-text" for="memex-search-query"><?php esc_html_e( 'Search your notes', 'memex' ); ?></label>
+		<input id="memex-search-query" type="search" name="q" value="<?php echo esc_attr( $q ); ?>" placeholder="<?php esc_attr_e( 'Search your notes…', 'memex' ); ?>" autofocus>
 		<button type="submit"><?php esc_html_e( 'Search', 'memex' ); ?></button>
 	</form>
 </header>
@@ -36,25 +37,27 @@ $results = $q ? Search::query( $q, 100 ) : array();
 		?>
 	</p>
 <?php else : ?>
-	<p class="memex-muted">
-		<?php
-		printf(
-			/* translators: 1: number of results 2: query */
-			esc_html( _n( '%1$d match for "%2$s"', '%1$d matches for "%2$s"', count( $results ), 'memex' ) ),
-			count( $results ),
-			esc_html( $q )
-		);
-		?>
-	</p>
-	<ul class="memex-note-list">
-		<?php foreach ( $results as $post ) : ?>
-			<li class="memex-note-list-item">
-				<a class="memex-note-list-title" href="<?php echo esc_url( CPT::url( $post ) ); ?>"><?php echo esc_html( $post->post_title ); ?></a>
-				<p class="memex-note-list-excerpt"><?php echo esc_html( wp_trim_words( wp_strip_all_tags( $post->post_content ), 30, '…' ) ); ?></p>
-				<div class="memex-note-list-meta"><?php echo esc_html( get_the_modified_date( '', $post ) ); ?></div>
-			</li>
-		<?php endforeach; ?>
-	</ul>
+	<section id="search-results" aria-labelledby="search-results-heading" data-ai-assistant-important>
+		<h2 id="search-results-heading" class="memex-muted">
+			<?php
+			printf(
+				/* translators: 1: number of results 2: query */
+				esc_html( _n( '%1$d match for "%2$s"', '%1$d matches for "%2$s"', count( $results ), 'memex' ) ),
+				count( $results ),
+				esc_html( $q )
+			);
+			?>
+		</h2>
+		<ul class="memex-note-list">
+			<?php foreach ( $results as $post ) : ?>
+				<li class="memex-note-list-item">
+					<a class="memex-note-list-title" href="<?php echo esc_url( CPT::url( $post ) ); ?>"><?php echo esc_html( $post->post_title ); ?></a>
+					<p class="memex-note-list-excerpt"><?php echo esc_html( wp_trim_words( wp_strip_all_tags( $post->post_content ), 30, '…' ) ); ?></p>
+					<div class="memex-note-list-meta"><?php echo esc_html( get_the_modified_date( '', $post ) ); ?></div>
+				</li>
+			<?php endforeach; ?>
+		</ul>
+	</section>
 <?php endif; ?>
 
 <?php include __DIR__ . '/_footer.php'; ?>
