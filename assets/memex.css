@@ -476,6 +476,122 @@ body.memex {
 	flex-wrap: wrap;
 }
 
+.memex-edit-shell {
+	display: grid;
+	grid-template-columns: minmax(640px, 900px) minmax(18rem, 24rem);
+	gap: 1.25rem;
+	align-items: start;
+	width: 100%;
+}
+
+.memex-main:has(.memex-edit-shell) {
+	max-width: none;
+}
+
+.memex-edit-revisions {
+	background: var(--wp-app-color-surface);
+	border: 1px solid var(--wp-app-color-border);
+	border-radius: 6px;
+	padding: 0.85rem;
+	position: sticky;
+	top: 1rem;
+	max-height: calc(100vh - 2rem);
+	overflow: auto;
+}
+
+.memex-edit-revisions h2 {
+	margin: 0 0 0.75rem;
+	font-size: 1rem;
+}
+
+.memex-edit-revision-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: grid;
+	gap: 0.25rem;
+}
+
+.memex-edit-revision-list button {
+	display: grid;
+	gap: 0.1rem;
+	width: 100%;
+	padding: 0.45rem 0.55rem;
+	border: 0;
+	border-radius: 4px;
+	background: transparent;
+	color: var(--wp-app-color-text);
+	cursor: pointer;
+	font: inherit;
+	text-align: left;
+}
+
+.memex-edit-revision-list button:hover,
+.memex-edit-revision-list button.is-selected {
+	background: var(--wp-app-color-surface-alt);
+	color: var(--wp-app-color-link-hover);
+}
+
+.memex-edit-revision-list small {
+	color: var(--wp-app-color-muted);
+}
+
+.memex-revision-diffs {
+	margin-top: 1rem;
+}
+
+.memex-revision-diff h3 {
+	margin: 0 0 0.5rem;
+	font-size: 0.95rem;
+}
+
+.memex-diff-block {
+	margin-top: 0.75rem;
+	overflow-x: auto;
+}
+
+.memex-diff-block table.diff {
+	width: 100%;
+	border-collapse: collapse;
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+	font-size: 0.78rem;
+	line-height: 1.4;
+}
+
+.memex-diff-block table.diff th {
+	padding: 0.35rem 0.45rem;
+	background: var(--wp-app-color-surface-alt);
+	color: var(--wp-app-color-muted);
+	text-align: left;
+}
+
+.memex-diff-block .memex-revision-diff-number {
+	padding: 0.35rem 0.45rem;
+	background: var(--wp-app-color-surface-alt);
+	color: var(--wp-app-color-muted);
+	font-weight: 600;
+}
+
+.memex-diff-block table.diff td {
+	padding: 0.2rem 0.35rem;
+	vertical-align: top;
+	border-top: 1px solid var(--wp-app-color-border);
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.memex-diff-block .diff-deletedline {
+	background: #fef2f2;
+	color: #991b1b;
+	cursor: pointer;
+}
+
+.memex-diff-block .diff-addedline {
+	background: #f0fdf4;
+	color: #166534;
+	cursor: pointer;
+}
+
 .memex-quick-capture-full textarea {
 	width: 100%;
 	resize: vertical;
@@ -848,6 +964,13 @@ body.memex {
 	.memex-sidebar {
 		position: static;
 		height: auto;
+	}
+	.memex-edit-shell {
+		grid-template-columns: 1fr;
+	}
+	.memex-edit-revisions {
+		position: static;
+		max-height: none;
 	}
 	.memex-reminder-form {
 		grid-template-columns: 1fr;
