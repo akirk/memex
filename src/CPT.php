@@ -123,6 +123,15 @@ class CPT {
 	}
 
 	/**
+	 * Post statuses that should be visible inside the authenticated Memex app.
+	 *
+	 * @return string[]
+	 */
+	public static function readable_statuses(): array {
+		return array( 'publish', 'draft', 'private', 'pending' );
+	}
+
+	/**
 	 * Permalink for a note in the Memex app.
 	 */
 	public static function url( $post ): string {
@@ -130,10 +139,7 @@ class CPT {
 		if ( ! $post ) {
 			return '';
 		}
-		$slug = $post->post_name ? $post->post_name : sanitize_title( $post->post_title );
-		if ( ! $slug ) {
-			$slug = (string) $post->ID;
-		}
+		$slug = $post->post_name ? $post->post_name : (string) $post->ID;
 		return home_url( '/memex/note/' . rawurlencode( $slug ) );
 	}
 

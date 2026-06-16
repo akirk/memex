@@ -14,7 +14,7 @@ $paged = max( 1, isset( $_GET['paged'] ) ? (int) $_GET['paged'] : 1 );
 $q     = new WP_Query(
 	array(
 		'post_type'      => CPT::POST_TYPE,
-		'post_status'    => array( 'publish', 'draft', 'private' ),
+		'post_status'    => CPT::readable_statuses(),
 		'posts_per_page' => 25,
 		'orderby'        => 'modified',
 		'order'          => 'DESC',
@@ -23,7 +23,7 @@ $q     = new WP_Query(
 );
 
 $counts        = wp_count_posts( CPT::POST_TYPE );
-$total_notes   = (int) ( $counts->publish ?? 0 ) + (int) ( $counts->draft ?? 0 ) + (int) ( $counts->private ?? 0 );
+$total_notes   = (int) ( $counts->publish ?? 0 ) + (int) ( $counts->draft ?? 0 ) + (int) ( $counts->private ?? 0 ) + (int) ( $counts->pending ?? 0 );
 ?>
 <header class="memex-page-header">
 	<h1><?php echo esc_html( $memex_title ); ?></h1>
@@ -64,7 +64,7 @@ $total_notes   = (int) ( $counts->publish ?? 0 ) + (int) ( $counts->draft ?? 0 )
 			$daily   = (string) get_post_meta( $post->ID, CPT::META_DAILY, true );
 			$tags    = get_the_terms( $post->ID, CPT::TAXONOMY );
 			?>
-			<li class="memex-note-list-item <?php echo $is_stub ? 'is-stub' : ''; ?>">
+			<li class="memex-note-list-item <?php echo $is_stub ? 'is-stub' : ''; ?>" data-note-id="<?php echo (int) $post->ID; ?>" data-note-status="<?php echo esc_attr( $post->post_status ); ?>">
 				<a class="memex-note-list-title" href="<?php echo esc_url( CPT::url( $post ) ); ?>">
 					<?php echo esc_html( $post->post_title ); ?>
 					<?php if ( $daily ) : ?>
@@ -79,6 +79,9 @@ $total_notes   = (int) ( $counts->publish ?? 0 ) + (int) ( $counts->draft ?? 0 )
 				<?php endif; ?>
 				<div class="memex-note-list-meta">
 					<span><?php echo esc_html( get_the_modified_date( '', $post ) ); ?></span>
+					<?php if ( $is_stub ) : ?>
+						<span><?php echo esc_html( sprintf( /* translators: %1$d: note ID, %2$s: post status */ __( 'ID %1$d · %2$s', 'memex' ), (int) $post->ID, $post->post_status ) ); ?></span>
+					<?php endif; ?>
 					<?php if ( $tags ) : ?>
 						<span class="memex-tags">
 							<?php foreach ( $tags as $t ) : ?>

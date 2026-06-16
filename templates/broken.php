@@ -20,7 +20,7 @@ include __DIR__ . '/_header.php';
 $stubs = get_posts(
 	array(
 		'post_type'      => CPT::POST_TYPE,
-		'post_status'    => array( 'publish', 'draft', 'private' ),
+		'post_status'    => CPT::readable_statuses(),
 		'meta_key'       => CPT::META_STUB,
 		'meta_value'     => '1',
 		'posts_per_page' => 500,
@@ -44,7 +44,7 @@ $stubs = get_posts(
 		<ul class="memex-note-list">
 			<?php foreach ( $stubs as $s ) : ?>
 				<?php $backlinks = Links::get_backlinks( (int) $s->ID ); ?>
-				<li class="memex-note-list-item is-stub">
+				<li class="memex-note-list-item is-stub" data-note-id="<?php echo (int) $s->ID; ?>" data-note-status="<?php echo esc_attr( $s->post_status ); ?>">
 					<a class="memex-note-list-title" href="<?php echo esc_url( CPT::url( $s ) ); ?>"><?php echo esc_html( $s->post_title ); ?></a>
 					<p class="memex-note-list-excerpt">
 						<?php
@@ -54,6 +54,7 @@ $stubs = get_posts(
 							count( $backlinks )
 						);
 						?>
+						<span class="memex-muted"><?php echo esc_html( sprintf( /* translators: %1$d: note ID, %2$s: post status */ __( 'ID %1$d · %2$s', 'memex' ), (int) $s->ID, $s->post_status ) ); ?></span>
 					</p>
 				</li>
 			<?php endforeach; ?>

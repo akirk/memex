@@ -147,7 +147,7 @@ class Links {
 				array(
 					'post_type'      => CPT::POST_TYPE,
 					'name'           => $slug,
-					'post_status'    => array( 'publish', 'draft', 'private' ),
+					'post_status'    => CPT::readable_statuses(),
 					'posts_per_page' => 1,
 					'fields'         => 'ids',
 				)
@@ -219,13 +219,32 @@ class Links {
 			array(
 				'post_type'        => CPT::POST_TYPE,
 				'name'             => $slug,
-				'post_status'      => array( 'publish', 'draft', 'private', 'pending' ),
+				'post_status'      => CPT::readable_statuses(),
 				'numberposts'      => 1,
 				'fields'           => 'ids',
 				'suppress_filters' => false,
 			)
 		);
-		return $by_slug ? (int) $by_slug[0] : 0;
+		if ( $by_slug ) {
+			return (int) $by_slug[0];
+		}
+
+		$candidates = get_posts(
+			array(
+				'post_type'        => CPT::POST_TYPE,
+				'post_status'      => CPT::readable_statuses(),
+				'numberposts'      => -1,
+				'fields'           => 'ids',
+				'suppress_filters' => false,
+			)
+		);
+		foreach ( $candidates as $candidate_id ) {
+			if ( $slug === sanitize_title( get_the_title( $candidate_id ) ) ) {
+				return (int) $candidate_id;
+			}
+		}
+
+		return 0;
 	}
 
 	/**
@@ -423,7 +442,7 @@ class Links {
 		$posts = get_posts(
 			array(
 				'post_type'        => CPT::POST_TYPE,
-				'post_status'      => array( 'publish', 'draft', 'private' ),
+				'post_status'      => CPT::readable_statuses(),
 				'numberposts'      => $limit,
 				'meta_key'         => CPT::META_LINKS_TO,
 				'meta_value'       => (string) $post_id,
@@ -450,7 +469,7 @@ class Links {
 		$posts = get_posts(
 			array(
 				'post_type'   => CPT::POST_TYPE,
-				'post_status' => array( 'publish', 'draft', 'private' ),
+				'post_status' => CPT::readable_statuses(),
 				'post__in'    => $ids,
 				'orderby'     => 'post__in',
 				'numberposts' => count( $ids ),
