@@ -55,12 +55,21 @@ if ( ! function_exists( 'wp_text_diff' ) ) {
 if ( ! function_exists( 'memex_prepare_revision_diff' ) ) {
 	function memex_prepare_revision_diff( string $diff, int $revision_number ): string {
 		$diff = preg_replace( '/<caption class="diff-title">.*?<\/caption>\s*/s', '', $diff );
-		return preg_replace(
-			'/(<tr class="diff-sub-title">\s*)<td><\/td>/',
+		$diff = preg_replace(
+			'/(<tr\b[^>]*class="[^"]*\bdiff-sub-title\b[^"]*"[^>]*>\s*)<td\b[^>]*>\s*<\/td>/i',
 			'$1<td class="memex-revision-diff-number">' . (int) $revision_number . '</td>',
 			$diff,
 			1
 		);
+		if ( false === strpos( $diff, 'memex-revision-diff-number' ) ) {
+			$diff = preg_replace(
+				'/<td\b[^>]*>\s*<\/td>/i',
+				'<td class="memex-revision-diff-number">' . (int) $revision_number . '</td>',
+				$diff,
+				1
+			);
+		}
+		return $diff;
 	}
 }
 $revisions = current_user_can( 'edit_post', $post->ID ) ? wp_get_post_revisions(
