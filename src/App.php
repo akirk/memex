@@ -370,6 +370,14 @@ class App extends BaseApp {
 	private static function markdown_to_html( string $markdown ): string {
 		$markdown = str_replace( "\r\n", "\n", $markdown );
 		$markdown = preg_replace_callback(
+			'/\\\\([\\\\`*_{}\[\]()#+\-.!|>])/',
+			static function ( $m ) {
+				return 'MEMEXESCAPEDCHARTOKEN' . base64_encode( $m[1] ) . 'ENDMEMEXESCAPEDCHARTOKEN';
+			},
+			$markdown
+		);
+		$markdown = str_replace( '\\', 'MEMEXBACKSLASHTOKEN', $markdown );
+		$markdown = preg_replace_callback(
 			'/\[\[([^\[\]]+?)\]\]/',
 			static function ( $m ) {
 				return 'MEMEXLINKTOKEN' . base64_encode( $m[1] ) . 'ENDMEMEXLINKTOKEN';
@@ -386,6 +394,14 @@ class App extends BaseApp {
 			'/MEMEXLINKTOKEN([A-Za-z0-9+\/=]+)ENDMEMEXLINKTOKEN/',
 			static function ( $m ) {
 				return '[[' . base64_decode( $m[1] ) . ']]';
+			},
+			$html
+		);
+		$html = str_replace( 'MEMEXBACKSLASHTOKEN', '\\', $html );
+		$html = preg_replace_callback(
+			'/MEMEXESCAPEDCHARTOKEN([A-Za-z0-9+\/=]+)ENDMEMEXESCAPEDCHARTOKEN/',
+			static function ( $m ) {
+				return '\\' . base64_decode( $m[1] );
 			},
 			$html
 		);

@@ -39,6 +39,14 @@ class AppContentConversionTest extends TestCase {
 		$this->assertStringContainsString( '<li>[[Project Hail Mary|PHM]]</li>', $html );
 	}
 
+	public function test_markdown_to_html_preserves_literal_backslashes(): void {
+		$html = $this->markdown_to_html( 'Keep \*literal asterisk\*, C:\Temp, and \[[escaped brackets]]' );
+
+		$this->assertStringContainsString( '\*literal asterisk\*', $html );
+		$this->assertStringContainsString( 'C:\Temp', $html );
+		$this->assertStringContainsString( '\[[escaped brackets]]', $html );
+	}
+
 	private function markdown_to_html( string $markdown ): string {
 		$method = new ReflectionMethod( App::class, 'markdown_to_html' );
 		$method->setAccessible( true );
