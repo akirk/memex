@@ -259,8 +259,13 @@ body.memex {
 	font-size: 1.02rem;
 }
 
+.memex-note-body h1 { margin-top: 1.75rem; font-size: 1.65rem; }
 .memex-note-body h2 { margin-top: 1.5rem; font-size: 1.4rem; }
 .memex-note-body h3 { margin-top: 1.25rem; font-size: 1.2rem; }
+.memex-note-body ul,
+.memex-note-body ol {
+	padding-left: 1.4rem;
+}
 .memex-note-body pre {
 	background: var(--wp-app-color-surface-alt);
 	border: 1px solid var(--wp-app-color-border);
@@ -396,6 +401,72 @@ body.memex {
 	resize: vertical;
 	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 	line-height: 1.5;
+}
+
+.memex-markdown-editor {
+	width: 100%;
+	height: clamp(28rem, 62vh, 44rem);
+	min-height: 28rem;
+}
+
+.memex-markdown-editor.is-ready {
+	display: block;
+}
+
+.memex-markdown-source-hidden {
+	position: absolute !important;
+	width: 1px !important;
+	height: 1px !important;
+	overflow: hidden !important;
+	clip: rect(0 0 0 0) !important;
+	clip-path: inset(50%) !important;
+	white-space: nowrap !important;
+}
+
+.memex-markdown-editor .overtype-container {
+	border: 1px solid var(--wp-app-color-border);
+	border-radius: 4px;
+	background: var(--wp-app-color-surface);
+	overflow: hidden;
+	height: 100%;
+}
+
+.memex-markdown-editor .overtype-toolbar {
+	border-bottom: 1px solid var(--wp-app-color-border);
+}
+
+.memex-markdown-editor .overtype-toolbar-button {
+	border-radius: 3px;
+}
+
+.memex-markdown-editor .overtype-input,
+.memex-markdown-editor .overtype-preview {
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+.memex-markdown-editor .overtype-stats {
+	border-top: 1px solid var(--wp-app-color-border);
+	color: var(--wp-app-color-muted);
+	font-size: 0.78rem;
+}
+
+.memex-markdown-editor .memex-editor-wikilink {
+	background: color-mix(in srgb, var(--wp-app-color-link) 9%, transparent);
+	color: var(--wp-app-color-link);
+	border-radius: 3px;
+}
+
+.memex-markdown-editor .memex-editor-wikilink-marker,
+.memex-markdown-editor .memex-editor-wikilink-target {
+	color: var(--wp-app-color-muted);
+	opacity: 0.82;
+}
+
+.memex-markdown-editor .memex-editor-wikilink-label {
+	color: var(--wp-app-color-link);
+	text-decoration: underline;
+	text-decoration-thickness: 1px;
+	text-underline-offset: 0.14em;
 }
 
 .memex-edit-actions {

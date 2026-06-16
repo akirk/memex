@@ -75,7 +75,8 @@ include __DIR__ . '/_header.php';
 
 		<label>
 			<span><?php esc_html_e( 'Note', 'memex' ); ?></span>
-			<textarea name="content" rows="24" autofocus><?php echo esc_textarea( App::content_to_editor_text( (string) $post->post_content ) ); ?></textarea>
+			<div class="memex-markdown-editor" data-memex-markdown-editor></div>
+			<textarea name="content" rows="24" autofocus data-memex-markdown-source><?php echo esc_textarea( App::content_to_editor_text( (string) $post->post_content ) ); ?></textarea>
 		</label>
 
 		<div class="memex-edit-actions">

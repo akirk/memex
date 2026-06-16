@@ -258,13 +258,144 @@
 		}
 	}
 
+	// --- Markdown editor ----------------------------------------------------
+
+	function setupMarkdownSyntax() {
+		if (!window.OverType || typeof window.OverType.setCustomSyntax !== 'function') return;
+		if (window.OverType._memexWikiSyntaxReady) return;
+
+		window.OverType.setCustomSyntax(function (html) {
+			return html.replace(
+				/\[\[([^\]\|<]+?)(?:\|([^\]<]+?))?\]\]/g,
+				function (match, target, label) {
+					if (label) {
+						return '<span class="memex-editor-wikilink"><span class="memex-editor-wikilink-marker">[[</span><span class="memex-editor-wikilink-target">' + target + '</span><span class="memex-editor-wikilink-marker">|</span><span class="memex-editor-wikilink-label">' + label + '</span><span class="memex-editor-wikilink-marker">]]</span></span>';
+					}
+					return '<span class="memex-editor-wikilink"><span class="memex-editor-wikilink-marker">[[</span><span class="memex-editor-wikilink-label">' + target + '</span><span class="memex-editor-wikilink-marker">]]</span></span>';
+				}
+			);
+		});
+		window.OverType._memexWikiSyntaxReady = true;
+	}
+
+	function setupMarkdownEditor() {
+		if (!window.OverType) return;
+		setupMarkdownSyntax();
+
+		var forms = document.querySelectorAll('.memex-edit-form');
+		Array.prototype.forEach.call(forms, function (form) {
+			var source = form.querySelector('textarea[data-memex-markdown-source]');
+			var host = form.querySelector('[data-memex-markdown-editor]');
+			if (!source || !host || host.dataset.memexOvertypeReady) return;
+
+			var styles = window.getComputedStyle(document.documentElement);
+			function cssVar(name, fallback) {
+				var value = styles.getPropertyValue(name).trim();
+				return value || fallback;
+			}
+
+			var theme = {
+				name: 'memex',
+				colors: {
+					bgPrimary: cssVar('--wp-app-color-surface', '#ffffff'),
+					bgSecondary: cssVar('--wp-app-color-surface-alt', '#f6f7f7'),
+					border: cssVar('--wp-app-color-border', '#dcdcde'),
+					text: cssVar('--wp-app-color-text', '#1d2327'),
+					textPrimary: cssVar('--wp-app-color-text', '#1d2327'),
+					textSecondary: cssVar('--wp-app-color-muted', '#646970'),
+					primary: cssVar('--wp-app-color-link', '#2271b1'),
+					link: cssVar('--wp-app-color-link', '#2271b1'),
+					cursor: cssVar('--wp-app-color-link', '#2271b1'),
+					selection: 'rgba(34, 113, 177, 0.22)',
+					codeBg: cssVar('--wp-app-color-surface-alt', '#f6f7f7'),
+					toolbarBg: cssVar('--wp-app-color-surface', '#ffffff'),
+					toolbarBorder: cssVar('--wp-app-color-border', '#dcdcde'),
+					toolbarHover: cssVar('--wp-app-color-surface-alt', '#f6f7f7'),
+					toolbarIcon: cssVar('--wp-app-color-text', '#1d2327'),
+					syntaxMarker: cssVar('--wp-app-color-muted', '#646970'),
+				},
+			};
+
+			var editors = new window.OverType(host, {
+				value: source.value,
+				theme: theme,
+				toolbar: true,
+				showStats: true,
+				smartLists: true,
+				spellcheck: true,
+				fontSize: '15px',
+				lineHeight: 1.55,
+				minHeight: '28rem',
+				textareaProps: {
+					'aria-label': source.getAttribute('aria-label') || 'Note markdown',
+				},
+				onChange: function (value) {
+					source.value = value;
+				},
+			});
+
+			var editor = editors && editors[0];
+			if (!editor) return;
+
+			host.dataset.memexOvertypeReady = '1';
+			host.classList.add('is-ready');
+			source.classList.add('memex-markdown-source-hidden');
+			source.removeAttribute('autofocus');
+			editor.textarea._memexOvertypeEditor = editor;
+
+			form.addEventListener('submit', function () {
+				source.value = editor.getValue();
+			});
+
+			if (source.hasAttribute('data-memex-should-focus') || document.activeElement === source) {
+				editor.focus();
+			} else if (source.defaultValue === source.value) {
+				setTimeout(function () { editor.focus(); }, 0);
+			}
+		});
+	}
+
 	// --- [[ autocomplete in textareas --------------------------------------
+
+	function looksLikeUrl(text) {
+		return /^(https?:\/\/|mailto:|ftp:\/\/|\/|#|\?|\.)\S+$/i.test(text.trim());
+	}
+
+	function setupPasteLinkWrapping(ta) {
+		if (ta._memexPasteLinkWrappingReady) return;
+		ta._memexPasteLinkWrappingReady = true;
+
+		ta.addEventListener('paste', function (ev) {
+			var start = ta.selectionStart;
+			var end = ta.selectionEnd;
+			if (typeof start !== 'number' || typeof end !== 'number' || start === end) return;
+
+			var pasted = ev.clipboardData && ev.clipboardData.getData('text/plain');
+			if (!pasted || !looksLikeUrl(pasted)) return;
+
+			var url = pasted.trim();
+			var selected = ta.value.slice(start, end);
+			if (/^\[[^\]]+\]\([^)]+\)$/.test(selected)) return;
+
+			ev.preventDefault();
+			var replacement = '[' + selected + '](' + url + ')';
+			ta.value = ta.value.slice(0, start) + replacement + ta.value.slice(end);
+			ta.selectionStart = start;
+			ta.selectionEnd = start + replacement.length;
+			ta.dispatchEvent(new Event('input', { bubbles: true }));
+			if (ta._memexOvertypeEditor && typeof ta._memexOvertypeEditor.updatePreview === 'function') {
+				ta._memexOvertypeEditor.updatePreview();
+			}
+		});
+	}
 
 	function setupAutocomplete() {
 		var textareas = document.querySelectorAll(
 			'.memex-quick-capture textarea, .memex-quick-capture-full textarea, .memex-edit-form textarea'
 		);
 		Array.prototype.forEach.call(textareas, function (ta) {
+			if (ta.classList.contains('memex-markdown-source-hidden')) return;
+			setupPasteLinkWrapping(ta);
 			var popover;
 
 			function close() {
@@ -302,6 +433,10 @@
 				ta.value = before.slice(0, idx + 2) + title + ']]' + after;
 				var newPos = idx + 2 + title.length + 2;
 				ta.selectionStart = ta.selectionEnd = newPos;
+				ta.dispatchEvent(new Event('input', { bubbles: true }));
+				if (ta._memexOvertypeEditor && typeof ta._memexOvertypeEditor.updatePreview === 'function') {
+					ta._memexOvertypeEditor.updatePreview();
+				}
 				close();
 				ta.focus();
 			}
@@ -349,6 +484,7 @@
 		if (graph) renderGraph(graph);
 		initQuickDue();
 		setupAiAssistantRefresh();
+		setupMarkdownEditor();
 		setupAutocomplete();
 	});
 })();
