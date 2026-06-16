@@ -265,11 +265,13 @@ class App extends BaseApp {
 		// reminder records intact instead of reconciling against plain text.
 		remove_action( 'save_post_' . CPT::POST_TYPE, array( Reminder::class, 'on_save_note' ), 25 );
 		$result  = wp_update_post(
-			array(
-				'ID'           => $id,
-				'post_title'   => $title,
-				'post_content' => $content,
-				'post_status'  => 'publish',
+			wp_slash(
+				array(
+					'ID'           => $id,
+					'post_title'   => $title,
+					'post_content' => $content,
+					'post_status'  => 'publish',
+				)
 			),
 			true
 		);

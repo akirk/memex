@@ -47,6 +47,17 @@ class AppContentConversionTest extends TestCase {
 		$this->assertStringContainsString( '\[[escaped brackets]]', $html );
 	}
 
+	public function test_slashing_post_array_preserves_backslashes_through_core_unslash(): void {
+		$html = $this->markdown_to_html( 'test is "this \working" and test \n' );
+		$post = wp_slash(
+			array(
+				'post_content' => $html,
+			)
+		);
+
+		$this->assertSame( $html, wp_unslash( $post['post_content'] ) );
+	}
+
 	private function markdown_to_html( string $markdown ): string {
 		$method = new ReflectionMethod( App::class, 'markdown_to_html' );
 		$method->setAccessible( true );
