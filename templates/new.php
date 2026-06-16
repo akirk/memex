@@ -15,9 +15,14 @@ $memex_title = __( 'New note', 'memex' );
 include __DIR__ . '/_header.php';
 
 $existing = $title ? Links::resolve( $title ) : 0;
+?>
+<header class="memex-page-header">
+	<h1 id="new-note-heading"><?php esc_html_e( 'New note', 'memex' ); ?></h1>
+</header>
+<?php
 if ( $existing ) :
 	?>
-	<p>
+	<p role="status">
 		<?php
 		printf(
 			/* translators: %s: note title */
@@ -27,7 +32,7 @@ if ( $existing ) :
 		?>
 	</p>
 <?php else : ?>
-	<form class="memex-create-form" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+	<form class="memex-create-form" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" aria-labelledby="new-note-heading" data-ai-assistant-important>
 		<input type="hidden" name="action" value="memex_create_note">
 		<?php wp_nonce_field( 'memex_create_note' ); ?>
 		<label><?php esc_html_e( 'Title', 'memex' ); ?>

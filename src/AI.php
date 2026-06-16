@@ -29,7 +29,7 @@ class AI {
 			self::CATEGORY,
 			array(
 				'label'       => __( 'Memex', 'memex' ),
-				'description' => __( 'Search, read, create, update, and connect Memex notes and reminders.', 'memex' ),
+				'description' => __( 'Search, read, save, and capture Memex notes and reminders.', 'memex' ),
 			)
 		);
 	}
@@ -43,13 +43,13 @@ class AI {
 			'search-notes',
 			array(
 				'label'               => __( 'Search Memex Notes', 'memex' ),
-				'description'         => __( 'Searches Memex notes by title and content, or lists recent notes when no query is provided.', 'memex' ),
+				'description'         => __( 'Returns matching or recent notes with id, title, excerpt, tags, and view_url.', 'memex' ),
 				'input_schema'        => self::search_notes_input_schema(),
 				'output_schema'       => self::notes_list_output_schema(),
 				'execute_callback'    => array( __CLASS__, 'ability_search_notes' ),
 				'permission_callback' => array( __CLASS__, 'can_read' ),
 				'meta'                => self::meta(
-					__( 'Use this when the user asks to find, list, summarize, or choose Memex notes. Use returned id values with memex/get-note, and use view_url when linking notes.', 'memex' ),
+					__( 'Find/list notes. Use id with get-note.', 'memex' ),
 					true,
 					false,
 					true
@@ -61,13 +61,13 @@ class AI {
 			'get-note',
 			array(
 				'label'               => __( 'Get Memex Note', 'memex' ),
-				'description'         => __( 'Returns one Memex note by ID, slug, or title, including editable text, rendered text, wiki links, backlinks, tags, daily date, and view URL.', 'memex' ),
+				'description'         => __( 'Returns one note by id, slug, title, or daily_date with content, links, backlinks, tags, and view_url.', 'memex' ),
 				'input_schema'        => self::note_lookup_input_schema(),
 				'output_schema'       => self::note_output_schema( true ),
 				'execute_callback'    => array( __CLASS__, 'ability_get_note' ),
 				'permission_callback' => array( __CLASS__, 'can_read' ),
 				'meta'                => self::meta(
-					__( 'Use this after search-notes when full note content, backlinks, outgoing links, tags, or the editable plain-text form is needed. If more than one lookup field is present, id is authoritative.', 'memex' ),
+					__( 'Read a note. id wins over slug, title, and daily_date.', 'memex' ),
 					true,
 					false,
 					true
@@ -76,61 +76,16 @@ class AI {
 		);
 
 		self::register_ability(
-			'get-daily-note',
+			'save-note',
 			array(
-				'label'               => __( 'Get Memex Daily Note', 'memex' ),
-				'description'         => __( 'Returns the Memex daily note for a YYYY-MM-DD date, or today when no date is provided.', 'memex' ),
-				'input_schema'        => array(
-					'type'                 => 'object',
-					'properties'           => array(
-						'date' => array(
-							'type'        => 'string',
-							'description' => __( 'Date in YYYY-MM-DD format. Defaults to today in the site timezone.', 'memex' ),
-						),
-					),
-					'additionalProperties' => false,
-				),
+				'label'               => __( 'Save Memex Note', 'memex' ),
+				'description'         => __( 'Creates or updates a note and returns its content, tags, links, backlinks, and view_url.', 'memex' ),
+				'input_schema'        => self::save_note_input_schema(),
 				'output_schema'       => self::note_output_schema( true ),
-				'execute_callback'    => array( __CLASS__, 'ability_get_daily_note' ),
-				'permission_callback' => array( __CLASS__, 'can_read' ),
-				'meta'                => self::meta(
-					__( 'Use this when the user asks about today\'s note, a journal entry, or a specific daily note. This ability does not create missing daily notes; use quick-capture to append to today and create it if needed.', 'memex' ),
-					true,
-					false,
-					true
-				),
-			)
-		);
-
-		self::register_ability(
-			'create-note',
-			array(
-				'label'               => __( 'Create Memex Note', 'memex' ),
-				'description'         => __( 'Creates a new Memex note with optional plain-text content and tags.', 'memex' ),
-				'input_schema'        => self::save_note_input_schema( false ),
-				'output_schema'       => self::note_output_schema( true ),
-				'execute_callback'    => array( __CLASS__, 'ability_create_note' ),
+				'execute_callback'    => array( __CLASS__, 'ability_save_note' ),
 				'permission_callback' => array( __CLASS__, 'can_edit' ),
 				'meta'                => self::meta(
-					__( 'Use this when the user asks to create a new Memex note. If the title already exists, return the existing note instead of creating a duplicate. Use content_text for plain text with wiki-link syntax like [[Target]].', 'memex' ),
-					false,
-					false,
-					false
-				),
-			)
-		);
-
-		self::register_ability(
-			'update-note',
-			array(
-				'label'               => __( 'Update Memex Note', 'memex' ),
-				'description'         => __( 'Updates a Memex note title, full plain-text content, and/or tags.', 'memex' ),
-				'input_schema'        => self::save_note_input_schema( true ),
-				'output_schema'       => self::note_output_schema( true ),
-				'execute_callback'    => array( __CLASS__, 'ability_update_note' ),
-				'permission_callback' => array( __CLASS__, 'can_edit' ),
-				'meta'                => self::meta(
-					__( 'Use this when the user asks to edit an existing note. content_text replaces the whole note body, so inspect get-note first unless the user supplied the complete replacement content.', 'memex' ),
+					__( 'Save note content/tags. id or slug updates; title updates if found or creates.', 'memex' ),
 					false,
 					true,
 					false
@@ -139,26 +94,16 @@ class AI {
 		);
 
 		self::register_ability(
-			'quick-capture',
+			'capture',
 			array(
-				'label'               => __( 'Quick Capture to Memex', 'memex' ),
-				'description'         => __( 'Appends plain text to today\'s Memex daily note, creating the daily note if needed.', 'memex' ),
-				'input_schema'        => array(
-					'type'                 => 'object',
-					'required'             => array( 'content_text' ),
-					'properties'           => array(
-						'content_text' => array(
-							'type'        => 'string',
-							'description' => __( 'Plain text to append to today\'s daily note. Wiki-link syntax like [[Target]] is preserved.', 'memex' ),
-						),
-					),
-					'additionalProperties' => false,
-				),
+				'label'               => __( 'Capture to Memex', 'memex' ),
+				'description'         => __( 'Appends content to today\'s daily note and returns the updated note with view_url.', 'memex' ),
+				'input_schema'        => self::capture_input_schema(),
 				'output_schema'       => self::note_output_schema( true ),
-				'execute_callback'    => array( __CLASS__, 'ability_quick_capture' ),
+				'execute_callback'    => array( __CLASS__, 'ability_capture' ),
 				'permission_callback' => array( __CLASS__, 'can_edit' ),
 				'meta'                => self::meta(
-					__( 'Use this for quick notes, inbox capture, journal additions, and appending short text to today\'s daily note. Link the returned view_url.', 'memex' ),
+					__( 'Append quick thoughts to today. Use save-note to replace a note body.', 'memex' ),
 					false,
 					false,
 					false
@@ -170,22 +115,13 @@ class AI {
 			'list-reminders',
 			array(
 				'label'               => __( 'List Memex Reminders', 'memex' ),
-				'description'         => __( 'Lists the signed-in user\'s Memex reminders grouped as overdue, upcoming, and done.', 'memex' ),
-				'input_schema'        => array(
-					'type'                 => 'object',
-					'properties'           => array(
-						'include_done' => array(
-							'type'        => 'boolean',
-							'description' => __( 'Whether to include completed reminders. Defaults to true.', 'memex' ),
-						),
-					),
-					'additionalProperties' => false,
-				),
+				'description'         => __( 'Returns reminders grouped by overdue, upcoming, and done with ids and source note links.', 'memex' ),
+				'input_schema'        => self::list_reminders_input_schema(),
 				'output_schema'       => self::reminders_output_schema(),
 				'execute_callback'    => array( __CLASS__, 'ability_list_reminders' ),
 				'permission_callback' => array( __CLASS__, 'can_read' ),
 				'meta'                => self::meta(
-					__( 'Use this when the user asks what reminders are due, overdue, upcoming, or completed. Use reminder id values with memex/complete-reminder.', 'memex' ),
+					__( 'List due reminders. Use id with save-reminder.', 'memex' ),
 					true,
 					false,
 					true
@@ -194,79 +130,33 @@ class AI {
 		);
 
 		self::register_ability(
-			'create-reminder',
+			'save-reminder',
 			array(
-				'label'               => __( 'Create Memex Reminder', 'memex' ),
-				'description'         => __( 'Creates a Memex reminder for the signed-in user, optionally linked to a note.', 'memex' ),
-				'input_schema'        => array(
-					'type'                 => 'object',
-					'required'             => array( 'title', 'due' ),
-					'properties'           => array(
-						'title'   => array(
-							'type'        => 'string',
-							'description' => __( 'Reminder label.', 'memex' ),
-						),
-						'due'     => array(
-							'type'        => 'string',
-							'description' => __( 'Due date/time as YYYY-MM-DDTHH:MM in the site timezone, or an ISO date/time with timezone.', 'memex' ),
-						),
-						'note_id' => array(
-							'type'        => 'integer',
-							'description' => __( 'Optional Memex note ID to attach as the reminder source.', 'memex' ),
-						),
-					),
-					'additionalProperties' => false,
-				),
+				'label'               => __( 'Save Memex Reminder', 'memex' ),
+				'description'         => __( 'Creates, updates, or completes a reminder and returns its id, due time, status, and source note.', 'memex' ),
+				'input_schema'        => self::save_reminder_input_schema(),
 				'output_schema'       => self::reminder_output_schema(),
-				'execute_callback'    => array( __CLASS__, 'ability_create_reminder' ),
+				'execute_callback'    => array( __CLASS__, 'ability_save_reminder' ),
 				'permission_callback' => array( __CLASS__, 'can_edit' ),
 				'meta'                => self::meta(
-					__( 'Use this when the user asks to be reminded. Resolve relative dates before calling and pass a concrete due date/time. Link source_note.view_url when present.', 'memex' ),
+					__( 'Create/update reminders. status=done completes one. Resolve relative due times first.', 'memex' ),
 					false,
-					false,
+					true,
 					false
-				),
-			)
-		);
-
-		self::register_ability(
-			'complete-reminder',
-			array(
-				'label'               => __( 'Complete Memex Reminder', 'memex' ),
-				'description'         => __( 'Marks a Memex reminder done.', 'memex' ),
-				'input_schema'        => array(
-					'type'                 => 'object',
-					'required'             => array( 'id' ),
-					'properties'           => array(
-						'id' => array(
-							'type'        => 'integer',
-							'description' => __( 'Reminder ID from memex/list-reminders or memex/create-reminder.', 'memex' ),
-						),
-					),
-					'additionalProperties' => false,
-				),
-				'output_schema'       => self::reminder_output_schema(),
-				'execute_callback'    => array( __CLASS__, 'ability_complete_reminder' ),
-				'permission_callback' => array( __CLASS__, 'can_edit' ),
-				'meta'                => self::meta(
-					__( 'Use this when the user asks to mark a reminder done. Confirm the reminder title and due time after completion.', 'memex' ),
-					false,
-					false,
-					true
 				),
 			)
 		);
 	}
 
 	public static function register_ability_domains( array $domains ): array {
-		$domains[ self::CATEGORY ] = 'Memex notes, personal knowledge base, wiki links, backlinks, graph, tags, daily notes, journal entries, quick capture, reminders, note import, orphan notes, broken links';
+		$domains[ self::CATEGORY ] = 'Memex notes and reminders. Notes use content as editable plain text; [[Title]] creates wiki links. save-note replaces content; capture appends to today. Use view_url when presenting notes.';
 		return $domains;
 	}
 
 	public static function register_welcome_tips( array $tips, array $context = array() ): array {
 		$memex_tips = array(
 			__( 'Ask me to find related notes, summarize a note, or trace backlinks in Memex.', 'memex' ),
-			__( 'Ask me to quick-capture an idea, create a note, or set a reminder from a note.', 'memex' ),
+			__( 'Ask me to capture an idea, save a note, or set a reminder from a note.', 'memex' ),
 		);
 
 		$existing = isset( $tips[ self::CATEGORY ] ) ? $tips[ self::CATEGORY ] : array();
@@ -285,11 +175,11 @@ class AI {
 			return __( 'Present Memex search results as a concise list with note titles linked by view_url. Use ids for follow-up get-note calls, and say when no matching notes were found.', 'memex' );
 		}
 
-		if ( in_array( $ability_id, array( 'memex/get-note', 'memex/get-daily-note' ), true ) ) {
+		if ( 'memex/get-note' === $ability_id ) {
 			return __( 'When presenting a Memex note, link the title with view_url, summarize only the relevant content, and mention backlinks, outgoing wiki links, tags, or reminders when they help answer the user.', 'memex' );
 		}
 
-		if ( in_array( $ability_id, array( 'memex/create-note', 'memex/update-note', 'memex/quick-capture' ), true ) ) {
+		if ( in_array( $ability_id, array( 'memex/save-note', 'memex/capture' ), true ) ) {
 			return __( 'Confirm the Memex note title and link it with view_url. If the result indicates an existing note was reused, say that instead of saying a new note was created.', 'memex' );
 		}
 
@@ -297,7 +187,7 @@ class AI {
 			return __( 'Present Memex reminders grouped by overdue, upcoming, and done. Include due_local and source note links when present.', 'memex' );
 		}
 
-		if ( in_array( $ability_id, array( 'memex/create-reminder', 'memex/complete-reminder' ), true ) ) {
+		if ( 'memex/save-reminder' === $ability_id ) {
 			return __( 'Confirm the reminder title, due_local time, status, and source note link when present.', 'memex' );
 		}
 
@@ -345,37 +235,40 @@ class AI {
 		return self::note_payload( $post, true );
 	}
 
-	public static function ability_get_daily_note( $input = array() ) {
+	public static function ability_save_note( $input = array() ) {
 		$input = is_array( $input ) ? $input : array();
-		$date  = isset( $input['date'] ) && '' !== (string) $input['date'] ? sanitize_text_field( (string) $input['date'] ) : DailyNote::today();
-		if ( ! DailyNote::is_valid_date( $date ) ) {
-			return new \WP_Error( 'memex_invalid_date', __( 'Date must be in YYYY-MM-DD format.', 'memex' ) );
+
+		$post = null;
+		if ( ! empty( $input['id'] ) || ! empty( $input['slug'] ) ) {
+			$post = self::resolve_note_from_input( $input );
+			if ( ! $post ) {
+				return new \WP_Error( 'memex_note_not_found', __( 'Memex note not found.', 'memex' ) );
+			}
+		} elseif ( ! empty( $input['title'] ) ) {
+			$post = self::resolve_note_from_input( $input );
 		}
 
-		$post = DailyNote::find( $date );
-		if ( ! $post ) {
-			return new \WP_Error( 'memex_daily_note_not_found', __( 'Daily note not found.', 'memex' ) );
-		}
-
-		return self::note_payload( $post, true );
-	}
-
-	public static function ability_create_note( $input = array() ) {
-		$input = is_array( $input ) ? $input : array();
-		$title = isset( $input['title'] ) ? sanitize_text_field( (string) $input['title'] ) : '';
-		if ( '' === $title ) {
-			return new \WP_Error( 'memex_missing_title', __( 'A note title is required.', 'memex' ) );
-		}
-
-		$existing = Links::resolve( $title );
-		if ( $existing ) {
-			$payload = self::note_payload( get_post( $existing ), true );
+		if ( $post ) {
+			$input['id'] = (int) $post->ID;
+			$payload     = self::update_note_from_input( $input );
+			if ( is_wp_error( $payload ) ) {
+				return $payload;
+			}
 			$payload['created'] = false;
 			$payload['existing'] = true;
 			return $payload;
 		}
 
-		$content = isset( $input['content_text'] ) ? self::plain_text_to_paragraph_blocks( (string) $input['content_text'] ) : '';
+		if ( empty( $input['title'] ) ) {
+			return new \WP_Error( 'memex_missing_title', __( 'A note title is required when creating a note.', 'memex' ) );
+		}
+
+		return self::create_note_from_input( $input );
+	}
+
+	private static function create_note_from_input( array $input ) {
+		$title   = sanitize_text_field( (string) $input['title'] );
+		$content = isset( $input['content'] ) ? self::plain_text_to_paragraph_blocks( (string) $input['content'] ) : '';
 		$id      = wp_insert_post(
 			array(
 				'post_type'    => CPT::POST_TYPE,
@@ -398,8 +291,7 @@ class AI {
 		return $payload;
 	}
 
-	public static function ability_update_note( $input = array() ) {
-		$input = is_array( $input ) ? $input : array();
+	private static function update_note_from_input( array $input ) {
 		$id    = isset( $input['id'] ) ? absint( $input['id'] ) : 0;
 		$post  = $id ? get_post( $id ) : null;
 		if ( ! $post || CPT::POST_TYPE !== $post->post_type ) {
@@ -417,8 +309,8 @@ class AI {
 			}
 			$update['post_title'] = $title;
 		}
-		if ( array_key_exists( 'content_text', $input ) ) {
-			$update['post_content'] = self::plain_text_to_paragraph_blocks( (string) $input['content_text'] );
+		if ( array_key_exists( 'content', $input ) ) {
+			$update['post_content'] = self::plain_text_to_paragraph_blocks( (string) $input['content'] );
 		}
 
 		if ( count( $update ) > 1 ) {
@@ -438,11 +330,11 @@ class AI {
 		return $payload;
 	}
 
-	public static function ability_quick_capture( $input = array() ) {
+	public static function ability_capture( $input = array() ) {
 		$input = is_array( $input ) ? $input : array();
-		$raw   = isset( $input['content_text'] ) ? trim( (string) $input['content_text'] ) : '';
+		$raw   = isset( $input['content'] ) ? trim( (string) $input['content'] ) : '';
 		if ( '' === $raw ) {
-			return new \WP_Error( 'memex_missing_content', __( 'Quick capture content is required.', 'memex' ) );
+			return new \WP_Error( 'memex_missing_content', __( 'Capture content is required.', 'memex' ) );
 		}
 
 		$note = DailyNote::get_or_create( DailyNote::today() );
@@ -482,70 +374,93 @@ class AI {
 		);
 	}
 
-	public static function ability_create_reminder( $input = array() ) {
+	public static function ability_save_reminder( $input = array() ) {
 		$input = is_array( $input ) ? $input : array();
-		$title = isset( $input['title'] ) ? sanitize_text_field( (string) $input['title'] ) : '';
-		$due   = isset( $input['due'] ) ? sanitize_text_field( (string) $input['due'] ) : '';
-		if ( '' === $title || '' === $due ) {
-			return new \WP_Error( 'memex_missing_reminder_fields', __( 'Reminder title and due date are required.', 'memex' ) );
-		}
-
-		$due_gmt = false !== strpos( $due, 'T' ) || preg_match( '/[zZ]|[+\-]\d{2}:?\d{2}$/', $due )
-			? Reminder::iso_to_gmt( $due )
-			: Reminder::local_input_to_gmt( $due );
-		if ( '' === $due_gmt ) {
-			return new \WP_Error( 'memex_invalid_due_date', __( 'Could not parse reminder due date.', 'memex' ) );
-		}
-
-		$parent = isset( $input['note_id'] ) ? absint( $input['note_id'] ) : 0;
-		if ( $parent && ! CPT::is_note( $parent ) ) {
-			return new \WP_Error( 'memex_note_not_found', __( 'Source note not found.', 'memex' ) );
-		}
-
-		$id = wp_insert_post(
-			array(
-				'post_type'   => Reminder::POST_TYPE,
-				'post_title'  => $title,
-				'post_status' => 'publish',
-				'post_author' => get_current_user_id(),
-				'post_parent' => $parent,
-			),
-			true
-		);
-		if ( is_wp_error( $id ) ) {
-			return $id;
-		}
-		update_post_meta( (int) $id, Reminder::META_DUE_AT, $due_gmt );
-
-		$payload = self::reminder_payload( get_post( $id ) );
-		$payload['created'] = true;
-		return $payload;
-	}
-
-	public static function ability_complete_reminder( $input = array() ) {
-		$input    = is_array( $input ) ? $input : array();
 		$id       = isset( $input['id'] ) ? absint( $input['id'] ) : 0;
 		$reminder = $id ? get_post( $id ) : null;
-		if ( ! $reminder || Reminder::POST_TYPE !== $reminder->post_type ) {
+
+		if ( $id && ( ! $reminder || Reminder::POST_TYPE !== $reminder->post_type ) ) {
 			return new \WP_Error( 'memex_reminder_not_found', __( 'Reminder not found.', 'memex' ) );
 		}
-		if ( (int) $reminder->post_author !== get_current_user_id() && ! current_user_can( 'edit_others_pages' ) ) {
+		if ( $reminder && (int) $reminder->post_author !== get_current_user_id() && ! current_user_can( 'edit_others_pages' ) ) {
 			return new \WP_Error( 'memex_forbidden', __( 'You are not allowed to edit this reminder.', 'memex' ) );
 		}
 
-		$result = wp_update_post(
-			array(
-				'ID'          => $id,
-				'post_status' => 'private',
-			),
-			true
-		);
-		if ( is_wp_error( $result ) ) {
-			return $result;
+		$status = isset( $input['status'] ) ? sanitize_key( (string) $input['status'] ) : '';
+		$status = 'done' === $status ? 'private' : ( 'pending' === $status ? 'publish' : '' );
+		$due_gmt = '';
+		if ( array_key_exists( 'due', $input ) ) {
+			$due = sanitize_text_field( (string) $input['due'] );
+			if ( '' === $due ) {
+				return new \WP_Error( 'memex_invalid_due_date', __( 'Could not parse reminder due date.', 'memex' ) );
+			}
+			$due_gmt = false !== strpos( $due, 'T' ) || preg_match( '/[zZ]|[+\-]\d{2}:?\d{2}$/', $due )
+				? Reminder::iso_to_gmt( $due )
+				: Reminder::local_input_to_gmt( $due );
+			if ( '' === $due_gmt ) {
+				return new \WP_Error( 'memex_invalid_due_date', __( 'Could not parse reminder due date.', 'memex' ) );
+			}
+		}
+
+		$update = array();
+		if ( $id ) {
+			$update['ID'] = $id;
+		} else {
+			$title = isset( $input['title'] ) ? sanitize_text_field( (string) $input['title'] ) : '';
+			$due   = isset( $input['due'] ) ? sanitize_text_field( (string) $input['due'] ) : '';
+			if ( '' === $title || '' === $due ) {
+				return new \WP_Error( 'memex_missing_reminder_fields', __( 'Reminder title and due date are required.', 'memex' ) );
+			}
+			$update = array(
+				'post_type'   => Reminder::POST_TYPE,
+				'post_status' => $status ?: 'publish',
+				'post_author' => get_current_user_id(),
+			);
+		}
+
+		if ( array_key_exists( 'title', $input ) ) {
+			$title = sanitize_text_field( (string) $input['title'] );
+			if ( '' === $title ) {
+				return new \WP_Error( 'memex_missing_reminder_title', __( 'Reminder title cannot be empty.', 'memex' ) );
+			}
+			$update['post_title'] = $title;
+		}
+
+		if ( $status ) {
+			$update['post_status'] = $status;
+		}
+
+		if ( array_key_exists( 'note_id', $input ) ) {
+			$parent = absint( $input['note_id'] );
+			if ( $parent && ! CPT::is_note( $parent ) ) {
+				return new \WP_Error( 'memex_note_not_found', __( 'Source note not found.', 'memex' ) );
+			}
+			$update['post_parent'] = $parent;
+		}
+
+		if ( $id && count( $update ) > 1 ) {
+			$result = wp_update_post( $update, true );
+			if ( is_wp_error( $result ) ) {
+				return $result;
+			}
+		} elseif ( ! $id ) {
+			$result = wp_insert_post( $update, true );
+			if ( is_wp_error( $result ) ) {
+				return $result;
+			}
+			$id = (int) $result;
 		}
 
 		$payload = self::reminder_payload( get_post( $id ) );
-		$payload['completed'] = true;
+		if ( '' !== $due_gmt ) {
+			update_post_meta( $id, Reminder::META_DUE_AT, $due_gmt );
+			$payload = self::reminder_payload( get_post( $id ) );
+		}
+
+		$payload[ $reminder ? 'updated' : 'created' ] = true;
+		if ( 'private' === $status ) {
+			$payload['completed'] = true;
+		}
 		return $payload;
 	}
 
@@ -589,6 +504,14 @@ class AI {
 			return $id ? get_post( $id ) : null;
 		}
 
+		if ( ! empty( $input['daily_date'] ) ) {
+			$date = sanitize_text_field( (string) $input['daily_date'] );
+			if ( 'today' === strtolower( $date ) ) {
+				$date = DailyNote::today();
+			}
+			return DailyNote::is_valid_date( $date ) ? DailyNote::find( $date ) : null;
+		}
+
 		return null;
 	}
 
@@ -624,7 +547,7 @@ class AI {
 			$outgoing_ids = array_map( 'intval', get_post_meta( $post->ID, CPT::META_LINKS_TO, false ) );
 			$backlinks    = Links::get_backlinks( (int) $post->ID, 50 );
 
-			$payload['content_text'] = App::content_to_editor_text( (string) $post->post_content );
+			$payload['content'] = App::content_to_editor_text( (string) $post->post_content );
 			$payload['content_html'] = apply_filters( 'the_content', $post->post_content );
 			$payload['outgoing_links'] = array_map(
 				static function ( $id ) {
@@ -706,11 +629,11 @@ class AI {
 			'properties'           => array(
 				'query' => array(
 					'type'        => 'string',
-					'description' => __( 'Search phrase for note titles and content. Omit or leave empty to list recent notes.', 'memex' ),
+					'description' => __( 'Search text. Empty lists recent notes.', 'memex' ),
 				),
 				'limit' => array(
 					'type'        => 'integer',
-					'description' => __( 'Maximum notes to return, from 1 to 50. Defaults to 10.', 'memex' ),
+					'description' => __( '1-50. Default 10.', 'memex' ),
 				),
 			),
 			'additionalProperties' => false,
@@ -721,55 +644,110 @@ class AI {
 		return array(
 			'type'                 => 'object',
 			'properties'           => array(
-				'id'    => array(
+				'id'         => array(
 					'type'        => 'integer',
-					'description' => __( 'Memex note ID from search-notes, create-note, update-note, quick-capture, or get-daily-note.', 'memex' ),
+					'description' => __( 'Note ID.', 'memex' ),
 				),
-				'slug'  => array(
+				'slug'       => array(
 					'type'        => 'string',
-					'description' => __( 'Memex note slug from a /memex/note/{slug} URL.', 'memex' ),
+					'description' => __( 'Note slug.', 'memex' ),
 				),
-				'title' => array(
+				'title'      => array(
 					'type'        => 'string',
-					'description' => __( 'Exact Memex note title when ID or slug is not known.', 'memex' ),
+					'description' => __( 'Exact title.', 'memex' ),
+				),
+				'daily_date' => array(
+					'type'        => 'string',
+					'description' => __( 'YYYY-MM-DD or today.', 'memex' ),
 				),
 			),
 			'additionalProperties' => false,
 		);
 	}
 
-	private static function save_note_input_schema( bool $require_id ): array {
-		$properties = array(
-			'title'        => array(
-				'type'        => 'string',
-				'description' => __( 'Note title.', 'memex' ),
-			),
-			'content_text' => array(
-				'type'        => 'string',
-				'description' => __( 'Plain-text note content. Blank lines create paragraphs; wiki-link syntax like [[Target]] is preserved.', 'memex' ),
-			),
-			'tags'         => array(
-				'type'        => 'array',
-				'description' => __( 'Tag names to assign to the note.', 'memex' ),
-				'items'       => array( 'type' => 'string' ),
-			),
-		);
-		if ( $require_id ) {
-			$properties = array_merge(
-				array(
-					'id' => array(
-						'type'        => 'integer',
-						'description' => __( 'Memex note ID to update.', 'memex' ),
-					),
-				),
-				$properties
-			);
-		}
-
+	private static function save_note_input_schema(): array {
 		return array(
 			'type'                 => 'object',
-			'required'             => $require_id ? array( 'id' ) : array( 'title' ),
-			'properties'           => $properties,
+			'properties'           => array(
+				'id'           => array(
+					'type'        => 'integer',
+					'description' => __( 'Update by ID.', 'memex' ),
+				),
+				'slug'         => array(
+					'type'        => 'string',
+					'description' => __( 'Update by slug.', 'memex' ),
+				),
+				'title'        => array(
+					'type'        => 'string',
+					'description' => __( 'Find or create by title.', 'memex' ),
+				),
+				'content'      => array(
+					'type'        => 'string',
+					'description' => __( 'Plain text body. Replaces existing content.', 'memex' ),
+				),
+				'tags'         => array(
+					'type'        => 'array',
+					'description' => __( 'Tag names.', 'memex' ),
+					'items'       => array( 'type' => 'string' ),
+				),
+			),
+			'additionalProperties' => false,
+		);
+	}
+
+	private static function capture_input_schema(): array {
+		return array(
+			'type'                 => 'object',
+			'required'             => array( 'content' ),
+			'properties'           => array(
+				'content' => array(
+					'type'        => 'string',
+					'description' => __( 'Plain text to append to today.', 'memex' ),
+				),
+			),
+			'additionalProperties' => false,
+		);
+	}
+
+	private static function list_reminders_input_schema(): array {
+		return array(
+			'type'                 => 'object',
+			'properties'           => array(
+				'include_done' => array(
+					'type'        => 'boolean',
+					'description' => __( 'Include completed reminders. Default true.', 'memex' ),
+				),
+			),
+			'additionalProperties' => false,
+		);
+	}
+
+	private static function save_reminder_input_schema(): array {
+		return array(
+			'type'                 => 'object',
+			'properties'           => array(
+				'id'      => array(
+					'type'        => 'integer',
+					'description' => __( 'Reminder ID to update.', 'memex' ),
+				),
+				'title'   => array(
+					'type'        => 'string',
+					'description' => __( 'Reminder text.', 'memex' ),
+				),
+				'due'     => array(
+					'type'        => 'string',
+					'description' => __( 'YYYY-MM-DDTHH:MM local or ISO datetime.', 'memex' ),
+				),
+				'note_id' => array(
+					'type'        => 'integer',
+					'description' => __( 'Source note ID.', 'memex' ),
+				),
+				'status'  => array(
+					'type'        => 'string',
+					'enum'        => array( 'pending', 'done' ),
+					'description' => __( 'pending or done.', 'memex' ),
+				),
+			),
 			'additionalProperties' => false,
 		);
 	}
@@ -813,7 +791,7 @@ class AI {
 			'appended'   => array( 'type' => 'boolean', 'description' => __( 'Whether this ability call appended content to the note.', 'memex' ) ),
 		);
 		if ( $include_content ) {
-			$properties['content_text'] = array( 'type' => 'string', 'description' => __( 'Editable plain-text content.', 'memex' ) );
+			$properties['content'] = array( 'type' => 'string', 'description' => __( 'Editable plain-text content.', 'memex' ) );
 			$properties['content_html'] = array( 'type' => 'string', 'description' => __( 'Rendered HTML content.', 'memex' ) );
 			$properties['outgoing_links'] = array( 'type' => 'array', 'items' => self::linked_note_schema() );
 			$properties['backlinks'] = array( 'type' => 'array', 'items' => self::note_schema( false ) );
@@ -862,6 +840,7 @@ class AI {
 				'is_overdue'  => array( 'type' => 'boolean' ),
 				'source_note' => self::linked_note_schema(),
 				'created'     => array( 'type' => 'boolean', 'description' => __( 'Whether this ability call created the reminder.', 'memex' ) ),
+				'updated'     => array( 'type' => 'boolean', 'description' => __( 'Whether this ability call updated the reminder.', 'memex' ) ),
 				'completed'   => array( 'type' => 'boolean', 'description' => __( 'Whether this ability call completed the reminder.', 'memex' ) ),
 			),
 		);

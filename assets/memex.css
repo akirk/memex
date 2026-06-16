@@ -12,6 +12,18 @@ body.memex {
 	margin: 0;
 }
 
+.screen-reader-text {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
+}
+
 .memex-layout {
 	display: grid;
 	grid-template-columns: 260px 1fr;
@@ -408,6 +420,11 @@ body.memex {
 	border-radius: 6px;
 }
 
+.memex-import-types legend {
+	font-weight: 600;
+	padding: 0 0.25rem;
+}
+
 .memex-import-types label {
 	font-size: 0.92rem;
 }
@@ -616,6 +633,10 @@ body.memex {
 	align-items: center;
 	gap: 0.4rem;
 	font-size: 0.9rem;
+	border: 0;
+	margin: 0;
+	padding: 0;
+	min-inline-size: 0;
 }
 
 .memex-reminder-quick button[type="button"] {

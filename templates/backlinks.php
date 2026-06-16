@@ -48,7 +48,7 @@ $backlinks = Links::get_backlinks( (int) $post->ID );
 ?>
 
 <header class="memex-page-header">
-	<h1>
+	<h1 id="backlinks-heading">
 		<?php
 		printf(
 			/* translators: %s: note title */
@@ -61,14 +61,16 @@ $backlinks = Links::get_backlinks( (int) $post->ID );
 </header>
 
 <?php if ( $backlinks ) : ?>
-	<ul class="memex-note-list">
-		<?php foreach ( $backlinks as $b ) : ?>
-			<li class="memex-note-list-item">
-				<a class="memex-note-list-title" href="<?php echo esc_url( CPT::url( $b ) ); ?>"><?php echo esc_html( $b->post_title ); ?></a>
-				<p class="memex-note-list-excerpt"><?php echo esc_html( wp_trim_words( wp_strip_all_tags( $b->post_content ), 40, '…' ) ); ?></p>
-			</li>
-		<?php endforeach; ?>
-	</ul>
+	<section id="backlink-results" aria-labelledby="backlinks-heading" data-ai-assistant-important>
+		<ul class="memex-note-list">
+			<?php foreach ( $backlinks as $b ) : ?>
+				<li class="memex-note-list-item">
+					<a class="memex-note-list-title" href="<?php echo esc_url( CPT::url( $b ) ); ?>"><?php echo esc_html( $b->post_title ); ?></a>
+					<p class="memex-note-list-excerpt"><?php echo esc_html( wp_trim_words( wp_strip_all_tags( $b->post_content ), 40, '…' ) ); ?></p>
+				</li>
+			<?php endforeach; ?>
+		</ul>
+	</section>
 <?php else : ?>
 	<p class="memex-muted"><?php esc_html_e( 'No notes link to this one.', 'memex' ); ?></p>
 <?php endif; ?>

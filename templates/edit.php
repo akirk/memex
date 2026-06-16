@@ -41,7 +41,7 @@ if ( ! $post ) {
 	$memex_title = __( 'Note not found', 'memex' );
 	include __DIR__ . '/_header.php';
 	?>
-	<header class="memex-page-header"><h1><?php esc_html_e( 'Note not found', 'memex' ); ?></h1></header>
+	<header class="memex-page-header"><h1 id="memex-page-title"><?php esc_html_e( 'Note not found', 'memex' ); ?></h1></header>
 	<p><a href="<?php echo esc_url( home_url( '/memex/' ) ); ?>"><?php esc_html_e( 'All notes', 'memex' ); ?></a></p>
 	<?php
 	include __DIR__ . '/_footer.php';
@@ -53,17 +53,17 @@ include __DIR__ . '/_header.php';
 ?>
 
 <header class="memex-page-header">
-	<h1><?php echo esc_html( $memex_title ); ?></h1>
+	<h1 id="memex-page-title"><?php echo esc_html( $memex_title ); ?></h1>
 	<p class="memex-muted"><a href="<?php echo esc_url( CPT::url( $post ) ); ?>">&larr; <?php esc_html_e( 'Back to the note', 'memex' ); ?></a></p>
 </header>
 
 <?php if ( ! current_user_can( 'edit_post', $post->ID ) ) : ?>
-	<p class="memex-error"><?php esc_html_e( 'You are not allowed to edit this note.', 'memex' ); ?></p>
+	<p class="memex-error" role="alert"><?php esc_html_e( 'You are not allowed to edit this note.', 'memex' ); ?></p>
 <?php else : ?>
 	<?php if ( isset( $_GET['error'] ) && 'missing-title' === $_GET['error'] ) : ?>
-		<div class="memex-notice memex-notice-error"><?php esc_html_e( 'Please enter a title.', 'memex' ); ?></div>
+		<div class="memex-notice memex-notice-error" role="alert"><?php esc_html_e( 'Please enter a title.', 'memex' ); ?></div>
 	<?php endif; ?>
-	<form class="memex-edit-form" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+	<form class="memex-edit-form" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" aria-labelledby="memex-page-title" data-ai-assistant-important>
 		<input type="hidden" name="action" value="memex_update_note">
 		<input type="hidden" name="id" value="<?php echo (int) $post->ID; ?>">
 		<?php wp_nonce_field( 'memex_update_note_' . $post->ID ); ?>

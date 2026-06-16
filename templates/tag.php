@@ -39,7 +39,7 @@ $q = new WP_Query(
 );
 ?>
 <header class="memex-page-header">
-	<h1>#<?php echo esc_html( $term->name ); ?></h1>
+	<h1 id="tag-notes-heading">#<?php echo esc_html( $term->name ); ?></h1>
 	<p class="memex-muted">
 		<?php
 		printf(
@@ -51,18 +51,20 @@ $q = new WP_Query(
 	</p>
 </header>
 
-<ul class="memex-note-list">
-	<?php
-	while ( $q->have_posts() ) :
-		$q->the_post();
-		$post = get_post();
-		?>
-		<li class="memex-note-list-item">
-			<a class="memex-note-list-title" href="<?php echo esc_url( CPT::url( $post ) ); ?>"><?php echo esc_html( $post->post_title ); ?></a>
-			<p class="memex-note-list-excerpt"><?php echo esc_html( wp_trim_words( wp_strip_all_tags( $post->post_content ), 30, '…' ) ); ?></p>
-		</li>
-	<?php endwhile; ?>
-</ul>
+<section id="tag-notes" aria-labelledby="tag-notes-heading" data-ai-assistant-important>
+	<ul class="memex-note-list">
+		<?php
+		while ( $q->have_posts() ) :
+			$q->the_post();
+			$post = get_post();
+			?>
+			<li class="memex-note-list-item">
+				<a class="memex-note-list-title" href="<?php echo esc_url( CPT::url( $post ) ); ?>"><?php echo esc_html( $post->post_title ); ?></a>
+				<p class="memex-note-list-excerpt"><?php echo esc_html( wp_trim_words( wp_strip_all_tags( $post->post_content ), 30, '…' ) ); ?></p>
+			</li>
+		<?php endwhile; ?>
+	</ul>
+</section>
 
 <?php
 wp_reset_postdata();

@@ -27,6 +27,8 @@
 		var height = host.clientHeight;
 		var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
 		svg.setAttribute('viewBox', '0 0 ' + width + ' ' + height);
+		svg.setAttribute('role', 'img');
+		svg.setAttribute('aria-label', host.getAttribute('aria-label') || 'Note graph');
 		host.innerHTML = '';
 		host.appendChild(svg);
 
@@ -102,6 +104,9 @@
 			var g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
 			g.setAttribute('class', 'memex-graph-node' + (n.stub ? ' is-stub' : ''));
 			g.setAttribute('transform', 'translate(' + n.x + ',' + n.y + ')');
+			g.setAttribute('tabindex', '0');
+			g.setAttribute('role', 'link');
+			g.setAttribute('aria-label', n.title);
 
 			var degree = 0;
 			edges.forEach(function (e) {
@@ -120,6 +125,12 @@
 			g.appendChild(text);
 
 			g.addEventListener('click', function () { window.location.href = n.url; });
+			g.addEventListener('keydown', function (ev) {
+				if (ev.key === 'Enter' || ev.key === ' ') {
+					ev.preventDefault();
+					window.location.href = n.url;
+				}
+			});
 			var title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
 			title.textContent = n.title;
 			g.appendChild(title);
@@ -214,6 +225,39 @@
 		}
 	}
 
+	// --- AI Assistant ability callbacks ------------------------------------
+
+	function setupAiAssistantRefresh() {
+		var abilities = {
+			'memex/save-note': true,
+			'memex/capture': true,
+			'memex/save-reminder': true,
+		};
+		var subscription = {
+			criteria: function (context) {
+				var input = context && (context.input || context.arguments);
+				return !!(
+					context &&
+					context.success &&
+					input &&
+					abilities[input.ability]
+				);
+			},
+			callback: function () {
+				if (window.location.pathname.indexOf('/memex') === 0) {
+					window.location.reload();
+				}
+			},
+		};
+
+		if (window.aiAssistant && typeof window.aiAssistant.onToolCall === 'function') {
+			window.aiAssistant.onToolCall(subscription.criteria, subscription.callback);
+		} else {
+			window.aiAssistantToolCallbacks = window.aiAssistantToolCallbacks || [];
+			window.aiAssistantToolCallbacks.push(subscription);
+		}
+	}
+
 	// --- [[ autocomplete in textareas --------------------------------------
 
 	function setupAutocomplete() {
@@ -304,6 +348,7 @@
 		var graph = document.getElementById('memex-graph');
 		if (graph) renderGraph(graph);
 		initQuickDue();
+		setupAiAssistantRefresh();
 		setupAutocomplete();
 	});
 })();

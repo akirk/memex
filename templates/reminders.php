@@ -16,24 +16,27 @@ $groups = Reminder::for_current_user();
 $error  = isset( $_GET['error'] ) ? sanitize_key( $_GET['error'] ) : '';
 ?>
 <header class="memex-page-header">
-	<h1><?php esc_html_e( 'Reminders', 'memex' ); ?></h1>
+	<h1 id="reminders-heading"><?php esc_html_e( 'Reminders', 'memex' ); ?></h1>
 	<p class="memex-muted"><?php esc_html_e( "You'll get an email when each reminder is due.", 'memex' ); ?></p>
 </header>
 
 <?php if ( 'missing' === $error ) : ?>
-	<p class="memex-error"><?php esc_html_e( 'Please give the reminder both a label and a due date.', 'memex' ); ?></p>
+	<p class="memex-error" role="alert"><?php esc_html_e( 'Please give the reminder both a label and a due date.', 'memex' ); ?></p>
 <?php elseif ( 'baddate' === $error ) : ?>
-	<p class="memex-error"><?php esc_html_e( 'Could not parse that due date.', 'memex' ); ?></p>
+	<p class="memex-error" role="alert"><?php esc_html_e( 'Could not parse that due date.', 'memex' ); ?></p>
 <?php endif; ?>
 
-<form class="memex-reminder-form" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+<form class="memex-reminder-form" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" aria-labelledby="new-reminder-heading" data-ai-assistant-important>
+	<h2 id="new-reminder-heading" class="screen-reader-text"><?php esc_html_e( 'New reminder', 'memex' ); ?></h2>
 	<input type="hidden" name="action" value="memex_create_reminder">
 	<?php wp_nonce_field( 'memex_create_reminder' ); ?>
-	<input class="memex-reminder-form-title" type="text" name="title" placeholder="<?php esc_attr_e( 'Remind me to…', 'memex' ); ?>" required>
-	<input class="memex-reminder-form-due" type="datetime-local" name="due" required>
+	<label class="screen-reader-text" for="memex-reminder-title"><?php esc_html_e( 'Reminder title', 'memex' ); ?></label>
+	<input id="memex-reminder-title" class="memex-reminder-form-title" type="text" name="title" placeholder="<?php esc_attr_e( 'Remind me to…', 'memex' ); ?>" required>
+	<label class="screen-reader-text" for="memex-reminder-due"><?php esc_html_e( 'Due date and time', 'memex' ); ?></label>
+	<input id="memex-reminder-due" class="memex-reminder-form-due" type="datetime-local" name="due" required>
 	<button type="submit" class="memex-button memex-button-primary"><?php esc_html_e( 'Add reminder', 'memex' ); ?></button>
-	<div class="memex-reminder-quick">
-		<span class="memex-muted"><?php esc_html_e( 'Quick set:', 'memex' ); ?></span>
+	<fieldset class="memex-reminder-quick">
+		<legend class="memex-muted"><?php esc_html_e( 'Quick set', 'memex' ); ?></legend>
 		<button type="button" data-quick-due="+15min"><?php esc_html_e( '+15 min', 'memex' ); ?></button>
 		<button type="button" data-quick-due="+1hour"><?php esc_html_e( '+1 hour', 'memex' ); ?></button>
 		<button type="button" data-quick-due="+3hour"><?php esc_html_e( '+3 hours', 'memex' ); ?></button>
@@ -42,8 +45,8 @@ $error  = isset( $_GET['error'] ) ? sanitize_key( $_GET['error'] ) : '';
 		<button type="button" data-quick-due="weekend 09:00"><?php esc_html_e( 'This weekend', 'memex' ); ?></button>
 		<button type="button" data-quick-due="monday 09:00"><?php esc_html_e( 'Next Monday', 'memex' ); ?></button>
 		<button type="button" data-quick-due="+7day 09:00"><?php esc_html_e( 'Next week', 'memex' ); ?></button>
-	</div>
-	<p class="memex-reminder-readout memex-muted" data-quick-readout></p>
+	</fieldset>
+	<p class="memex-reminder-readout memex-muted" data-quick-readout role="status" aria-live="polite"></p>
 </form>
 
 <?php
@@ -52,7 +55,9 @@ $render_group = static function ( array $items, string $heading, bool $is_done =
 		return;
 	}
 	?>
-	<h2 class="memex-reminder-heading"><?php echo esc_html( $heading ); ?></h2>
+	<?php $heading_id = 'reminders-' . sanitize_title( $heading ); ?>
+	<section class="memex-reminder-group" aria-labelledby="<?php echo esc_attr( $heading_id ); ?>" data-ai-assistant-important>
+	<h2 id="<?php echo esc_attr( $heading_id ); ?>" class="memex-reminder-heading"><?php echo esc_html( $heading ); ?></h2>
 	<ul class="memex-reminder-list <?php echo $is_done ? 'is-done' : ''; ?>">
 		<?php
 		foreach ( $items as $r ) :
@@ -73,12 +78,13 @@ $render_group = static function ( array $items, string $heading, bool $is_done =
 						<input type="hidden" name="action" value="memex_complete_reminder">
 						<input type="hidden" name="id" value="<?php echo (int) $r->ID; ?>">
 						<?php wp_nonce_field( 'memex_complete_reminder_' . $r->ID ); ?>
-						<button type="submit"><?php esc_html_e( 'Done', 'memex' ); ?></button>
+						<button type="submit" aria-label="<?php echo esc_attr( sprintf( /* translators: %s: reminder title */ __( 'Mark "%s" done', 'memex' ), $r->post_title ) ); ?>"><?php esc_html_e( 'Done', 'memex' ); ?></button>
 					</form>
 				<?php endif; ?>
 			</li>
 		<?php endforeach; ?>
 	</ul>
+	</section>
 	<?php
 };
 

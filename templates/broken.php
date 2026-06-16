@@ -31,7 +31,7 @@ $stubs = get_posts(
 ?>
 
 <header class="memex-page-header">
-	<h1><?php esc_html_e( 'Broken links', 'memex' ); ?></h1>
+	<h1 id="broken-links-heading"><?php esc_html_e( 'Broken links', 'memex' ); ?></h1>
 	<p class="memex-muted">
 		<?php esc_html_e( 'Stub notes that other notes reference but that you have not written yet.', 'memex' ); ?>
 	</p>
@@ -40,23 +40,25 @@ $stubs = get_posts(
 <?php if ( ! $stubs ) : ?>
 	<p><?php esc_html_e( 'No broken links — every wiki-link has a home.', 'memex' ); ?></p>
 <?php else : ?>
-	<ul class="memex-note-list">
-		<?php foreach ( $stubs as $s ) : ?>
-			<?php $backlinks = Links::get_backlinks( (int) $s->ID ); ?>
-			<li class="memex-note-list-item is-stub">
-				<a class="memex-note-list-title" href="<?php echo esc_url( CPT::url( $s ) ); ?>"><?php echo esc_html( $s->post_title ); ?></a>
-				<p class="memex-note-list-excerpt">
-					<?php
-					printf(
-						/* translators: %d: number of referring notes */
-						esc_html( _n( 'referenced by %d note', 'referenced by %d notes', count( $backlinks ), 'memex' ) ),
-						count( $backlinks )
-					);
-					?>
-				</p>
-			</li>
-		<?php endforeach; ?>
-	</ul>
+	<section id="broken-link-notes" aria-labelledby="broken-links-heading" data-ai-assistant-important>
+		<ul class="memex-note-list">
+			<?php foreach ( $stubs as $s ) : ?>
+				<?php $backlinks = Links::get_backlinks( (int) $s->ID ); ?>
+				<li class="memex-note-list-item is-stub">
+					<a class="memex-note-list-title" href="<?php echo esc_url( CPT::url( $s ) ); ?>"><?php echo esc_html( $s->post_title ); ?></a>
+					<p class="memex-note-list-excerpt">
+						<?php
+						printf(
+							/* translators: %d: number of referring notes */
+							esc_html( _n( 'referenced by %d note', 'referenced by %d notes', count( $backlinks ), 'memex' ) ),
+							count( $backlinks )
+						);
+						?>
+					</p>
+				</li>
+			<?php endforeach; ?>
+		</ul>
+	</section>
 <?php endif; ?>
 
 <?php include __DIR__ . '/_footer.php'; ?>

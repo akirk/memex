@@ -21,17 +21,17 @@ if ( ! defined( 'ABSPATH' ) ) {
 	<?php wp_app_body_open(); ?>
 
 	<div class="memex-layout">
-		<aside class="memex-sidebar">
+		<aside class="memex-sidebar" aria-labelledby="memex-sidebar-heading">
 			<div class="memex-brand">
-				<a href="<?php echo esc_url( home_url( '/memex/' ) ); ?>">Memex</a>
+				<a id="memex-sidebar-heading" href="<?php echo esc_url( home_url( '/memex/' ) ); ?>">Memex</a>
 			</div>
-			<form class="memex-quick-capture" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<form class="memex-quick-capture" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" aria-label="<?php esc_attr_e( 'Quick capture', 'memex' ); ?>">
 				<input type="hidden" name="action" value="memex_quick_capture">
 				<?php wp_nonce_field( 'memex_quick_capture' ); ?>
-				<textarea name="content" rows="2" placeholder="<?php esc_attr_e( 'Quick capture — appends to today', 'memex' ); ?>"></textarea>
+				<textarea name="content" rows="2" aria-label="<?php esc_attr_e( 'Quick capture text', 'memex' ); ?>" placeholder="<?php esc_attr_e( 'Quick capture — appends to today', 'memex' ); ?>"></textarea>
 				<button type="submit"><?php esc_html_e( 'Capture', 'memex' ); ?></button>
 			</form>
-			<nav class="memex-nav">
+			<nav class="memex-nav" aria-label="<?php esc_attr_e( 'Memex sections', 'memex' ); ?>">
 				<a href="<?php echo esc_url( home_url( '/memex/' ) ); ?>"><?php esc_html_e( 'All notes', 'memex' ); ?></a>
 				<a href="<?php echo esc_url( home_url( '/memex/daily' ) ); ?>"><?php esc_html_e( 'Today', 'memex' ); ?></a>
 				<a href="<?php echo esc_url( home_url( '/memex/reminders' ) ); ?>"><?php esc_html_e( 'Reminders', 'memex' ); ?></a>
@@ -41,11 +41,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 				<a href="<?php echo esc_url( home_url( '/memex/broken' ) ); ?>"><?php esc_html_e( 'Broken links', 'memex' ); ?></a>
 				<a href="<?php echo esc_url( home_url( '/memex/import' ) ); ?>"><?php esc_html_e( 'Import', 'memex' ); ?></a>
 			</nav>
-			<form class="memex-create" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<form class="memex-create" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" aria-label="<?php esc_attr_e( 'Create note', 'memex' ); ?>">
 				<input type="hidden" name="action" value="memex_create_note">
 				<?php wp_nonce_field( 'memex_create_note' ); ?>
-				<input type="text" name="title" placeholder="<?php esc_attr_e( 'New note title…', 'memex' ); ?>" autocomplete="off" required>
+				<input type="text" name="title" aria-label="<?php esc_attr_e( 'New note title', 'memex' ); ?>" placeholder="<?php esc_attr_e( 'New note title…', 'memex' ); ?>" autocomplete="off" required>
 				<button type="submit"><?php esc_html_e( 'Create', 'memex' ); ?></button>
 			</form>
 		</aside>
-		<main class="memex-main">
+		<main id="memex-main" class="memex-main">

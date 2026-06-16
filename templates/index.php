@@ -52,7 +52,9 @@ $total_notes   = (int) ( $counts->publish ?? 0 ) + (int) ( $counts->draft ?? 0 )
 		</p>
 	</div>
 <?php else : ?>
-	<ul class="memex-note-list">
+	<section id="recent-notes" aria-labelledby="recent-notes-heading" data-ai-assistant-important>
+		<h2 id="recent-notes-heading" class="screen-reader-text"><?php esc_html_e( 'Recent notes', 'memex' ); ?></h2>
+		<ul class="memex-note-list">
 		<?php
 		while ( $q->have_posts() ) :
 			$q->the_post();
@@ -87,7 +89,8 @@ $total_notes   = (int) ( $counts->publish ?? 0 ) + (int) ( $counts->draft ?? 0 )
 				</div>
 			</li>
 		<?php endwhile; ?>
-	</ul>
+		</ul>
+	</section>
 
 	<?php if ( $q->max_num_pages > 1 ) : ?>
 		<nav class="memex-pagination">

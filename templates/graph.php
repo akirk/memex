@@ -42,7 +42,7 @@ foreach ( $all as $id ) {
 ?>
 
 <header class="memex-page-header">
-	<h1><?php esc_html_e( 'Graph', 'memex' ); ?></h1>
+	<h1 id="note-graph-heading"><?php esc_html_e( 'Graph', 'memex' ); ?></h1>
 	<p class="memex-muted">
 		<?php
 		printf(
@@ -55,6 +55,8 @@ foreach ( $all as $id ) {
 	</p>
 </header>
 
-<div id="memex-graph" data-graph="<?php echo esc_attr( wp_json_encode( array( 'nodes' => $nodes_data, 'edges' => $edges_data ) ) ); ?>" style="height: 70vh;"></div>
+<section id="note-graph" aria-labelledby="note-graph-heading" data-ai-assistant-important>
+	<div id="memex-graph" role="img" aria-label="<?php esc_attr_e( 'Note graph', 'memex' ); ?>" data-graph="<?php echo esc_attr( wp_json_encode( array( 'nodes' => $nodes_data, 'edges' => $edges_data ) ) ); ?>" style="height: 70vh;"></div>
+</section>
 
 <?php include __DIR__ . '/_footer.php'; ?>
