@@ -55,6 +55,7 @@ if ( ! function_exists( 'wp_text_diff' ) ) {
 if ( ! function_exists( 'memex_prepare_revision_diff' ) ) {
 	function memex_prepare_revision_diff( string $diff, int $revision_number ): string {
 		$diff = preg_replace( '/<caption class="diff-title">.*?<\/caption>\s*/s', '', $diff );
+		$diff = preg_replace( '/<span\b[^>]*(?:dashicons-(?:minus|plus)|screen-reader-text)[^>]*>.*?<\/span>/s', '', $diff );
 		$diff = preg_replace(
 			'/(<tr\b[^>]*class="[^"]*\bdiff-sub-title\b[^"]*"[^>]*>\s*)<td\b[^>]*>\s*<\/td>/i',
 			'$1<td class="memex-revision-diff-number">' . (int) $revision_number . '</td>',
@@ -121,29 +122,55 @@ include __DIR__ . '/_header.php';
 
 			<aside class="memex-edit-revisions" aria-labelledby="memex-edit-revisions-heading" data-memex-revisions>
 				<h2 id="memex-edit-revisions-heading"><?php esc_html_e( 'Revisions', 'memex' ); ?></h2>
-				<?php if ( ! $revisions ) : ?>
-					<p class="memex-muted"><?php esc_html_e( 'No revisions yet.', 'memex' ); ?></p>
-				<?php else : ?>
-					<ol class="memex-edit-revision-list">
-						<?php foreach ( $revisions as $revision ) : ?>
-							<?php
-							$author = get_the_author_meta( 'display_name', (int) $revision->post_author );
-							$date   = mysql2date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $revision->post_modified );
-							?>
-							<li>
-								<button type="button" data-memex-revision-trigger="<?php echo (int) $revision->ID; ?>" aria-controls="memex-revision-diff-<?php echo (int) $revision->ID; ?>" aria-expanded="false">
-									<span><?php echo esc_html( $date ); ?></span>
-									<?php if ( $author ) : ?>
-										<small><?php echo esc_html( $author ); ?></small>
-									<?php endif; ?>
-								</button>
-							</li>
-						<?php endforeach; ?>
-					</ol>
+					<?php if ( ! $revisions ) : ?>
+						<p class="memex-muted"><?php esc_html_e( 'No revisions yet.', 'memex' ); ?></p>
+					<?php else : ?>
+						<ol class="memex-edit-revision-list">
+							<?php foreach ( $revisions as $revision ) : ?>
+								<?php
+								$title_diff   = memex_prepare_revision_diff(
+									wp_text_diff(
+										(string) $revision->post_title,
+										(string) $post->post_title,
+										array(
+											'title'       => __( 'Revision title', 'memex' ),
+											'title_right' => __( 'Current title', 'memex' ),
+										)
+									),
+									(int) $revision->ID
+								);
+								$content_diff = memex_prepare_revision_diff(
+									wp_text_diff(
+										App::content_to_editor_text( (string) $revision->post_content ),
+										App::content_to_editor_text( (string) $post->post_content ),
+										array(
+											'title'       => __( 'Revision note', 'memex' ),
+											'title_right' => __( 'Current note', 'memex' ),
+										)
+									),
+									(int) $revision->ID
+								);
+								if ( ! $title_diff && ! $content_diff ) {
+									continue;
+								}
+								$date          = mysql2date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $revision->post_modified );
+								$relative_date = sprintf(
+									/* translators: %s: human-readable time difference */
+									__( '%s ago', 'memex' ),
+									human_time_diff( mysql2date( 'U', $revision->post_modified ), current_time( 'timestamp' ) )
+								);
+								?>
+								<li>
+									<button type="button" data-memex-revision-trigger="<?php echo (int) $revision->ID; ?>" aria-controls="memex-revision-diff-<?php echo (int) $revision->ID; ?>" aria-expanded="false" title="<?php echo esc_attr( $date ); ?>">
+										<span><?php echo esc_html( $relative_date ); ?></span>
+									</button>
+								</li>
+							<?php endforeach; ?>
+						</ol>
 
-					<div class="memex-revision-diffs" data-memex-revision-diffs>
-						<p class="memex-muted" data-memex-revision-empty><?php esc_html_e( 'Select a revision to see its diff.', 'memex' ); ?></p>
-						<?php foreach ( $revisions as $revision ) : ?>
+						<div class="memex-revision-diffs" data-memex-revision-diffs>
+							<p class="memex-muted" data-memex-revision-empty><?php esc_html_e( 'Select a revision to see its diff.', 'memex' ); ?></p>
+							<?php foreach ( $revisions as $revision ) : ?>
 							<?php
 							$title_diff      = memex_prepare_revision_diff(
 								wp_text_diff(
@@ -174,9 +201,6 @@ include __DIR__ . '/_header.php';
 								<?php endif; ?>
 								<?php if ( $content_diff ) : ?>
 									<div class="memex-diff-block"><?php echo $content_diff; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></div>
-								<?php endif; ?>
-								<?php if ( ! $title_diff && ! $content_diff ) : ?>
-									<p class="memex-muted"><?php esc_html_e( 'No differences from the current note.', 'memex' ); ?></p>
 								<?php endif; ?>
 							</div>
 						<?php endforeach; ?>

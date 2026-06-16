@@ -359,6 +359,7 @@
 			source.setAttribute('tabindex', '-1');
 			source.setAttribute('aria-hidden', 'true');
 			editor.textarea._memexOvertypeEditor = editor;
+			source._memexOvertypeEditor = editor;
 			keepToolbarOutOfTabOrder(host);
 
 			form.addEventListener('submit', function () {
@@ -554,10 +555,38 @@
 	function setupRevisionDiffs() {
 		var hosts = document.querySelectorAll('[data-memex-revisions]');
 		if (!hosts.length) return;
+		var editorSource = document.querySelector('[data-memex-markdown-source]');
 		Array.prototype.forEach.call(hosts, function (host) {
 			var empty = host.querySelector('[data-memex-revision-empty]');
 			var triggers = host.querySelectorAll('[data-memex-revision-trigger]');
 			var panels = host.querySelectorAll('[data-memex-revision-panel]');
+
+			Array.prototype.forEach.call(host.querySelectorAll('.diff-deletedline'), function (cell) {
+				cell.setAttribute('role', 'button');
+				cell.setAttribute('tabindex', '0');
+				cell.addEventListener('click', function () {
+					insertRevisionLine(editorSource, getDiffCellText(cell));
+				});
+				cell.addEventListener('keydown', function (ev) {
+					if (ev.key === 'Enter' || ev.key === ' ') {
+						ev.preventDefault();
+						insertRevisionLine(editorSource, getDiffCellText(cell));
+					}
+				});
+			});
+			Array.prototype.forEach.call(host.querySelectorAll('.diff-addedline'), function (cell) {
+				cell.setAttribute('role', 'button');
+				cell.setAttribute('tabindex', '0');
+				cell.addEventListener('click', function () {
+					removeCurrentLine(editorSource, getDiffCellText(cell));
+				});
+				cell.addEventListener('keydown', function (ev) {
+					if (ev.key === 'Enter' || ev.key === ' ') {
+						ev.preventDefault();
+						removeCurrentLine(editorSource, getDiffCellText(cell));
+					}
+				});
+			});
 
 			function select(id) {
 				Array.prototype.forEach.call(triggers, function (trigger) {
@@ -577,6 +606,79 @@
 				});
 			});
 		});
+	}
+
+	function getDiffCellText(cell) {
+		var clone = cell.cloneNode(true);
+		Array.prototype.forEach.call(clone.querySelectorAll('.screen-reader-text'), function (node) {
+			node.remove();
+		});
+		var deleted = clone.querySelectorAll('del');
+		var text = deleted.length
+			? Array.prototype.map.call(deleted, function (node) { return node.textContent; }).join('')
+			: clone.textContent;
+			return text
+				.replace(/\u00a0/g, ' ')
+				.replace(/^\s*Deleted:\s*/i, '')
+				.replace(/^\s*Added:\s*/i, '')
+				.replace(/^\s*-\s?/, '')
+				.replace(/^\s*\+\s?/, '')
+				.replace(/\n+$/g, '');
+		}
+
+	function insertRevisionLine(textarea, text) {
+		if (!textarea || !text) return;
+		var editor = textarea._memexOvertypeEditor;
+		var target = editor && editor.textarea ? editor.textarea : textarea;
+		var value = editor && typeof editor.getValue === 'function' ? editor.getValue() : target.value;
+		var insert = text;
+		var start = target.selectionStart;
+		var end = target.selectionEnd;
+		if (typeof start !== 'number' || typeof end !== 'number') {
+			start = end = value.length;
+		}
+		if (start === end) {
+			var prefix = start > 0 && value.charAt(start - 1) !== '\n' ? '\n' : '';
+			var suffix = start < value.length && value.charAt(start) !== '\n' ? '\n' : '';
+			insert = prefix + insert + suffix;
+		}
+		value = value.slice(0, start) + insert + value.slice(end);
+		if (editor && typeof editor.setValue === 'function') {
+			editor.setValue(value);
+			textarea.value = value;
+		} else {
+			textarea.value = value;
+		}
+		target.selectionStart = start + insert.length;
+		target.selectionEnd = start + insert.length;
+		textarea.dispatchEvent(new Event('input', { bubbles: true }));
+		if (textarea._memexOvertypeEditor && typeof textarea._memexOvertypeEditor.updatePreview === 'function') {
+			textarea._memexOvertypeEditor.updatePreview();
+		}
+	}
+
+	function removeCurrentLine(textarea, text) {
+		if (!textarea || !text) return;
+		var editor = textarea._memexOvertypeEditor;
+		var target = editor && editor.textarea ? editor.textarea : textarea;
+		var value = editor && typeof editor.getValue === 'function' ? editor.getValue() : target.value;
+		var lines = value.split('\n');
+		var index = lines.indexOf(text);
+		if (index === -1) return;
+		lines.splice(index, 1);
+		value = lines.join('\n');
+		if (editor && typeof editor.setValue === 'function') {
+			editor.setValue(value);
+			textarea.value = value;
+		} else {
+			textarea.value = value;
+		}
+		target.selectionStart = 0;
+		target.selectionEnd = 0;
+		textarea.dispatchEvent(new Event('input', { bubbles: true }));
+		if (textarea._memexOvertypeEditor && typeof textarea._memexOvertypeEditor.updatePreview === 'function') {
+			textarea._memexOvertypeEditor.updatePreview();
+		}
 	}
 
 	// --- Bootstrap ---------------------------------------------------------

@@ -583,11 +583,13 @@ body.memex {
 .memex-diff-block .diff-deletedline {
 	background: #fef2f2;
 	color: #991b1b;
+	cursor: pointer;
 }
 
 .memex-diff-block .diff-addedline {
 	background: #f0fdf4;
 	color: #166534;
+	cursor: pointer;
 }
 
 .memex-quick-capture-full textarea {
