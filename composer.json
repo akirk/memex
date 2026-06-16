@@ -8,6 +8,12 @@
         "akirk/wp-app": "^1.2",
         "erusev/parsedown": "^1.7"
     },
+    "require-dev": {
+        "phpunit/phpunit": "^9.6"
+    },
+    "scripts": {
+        "test": "phpunit"
+    },
     "autoload": {
         "psr-4": {
             "Memex\\": "src/"
