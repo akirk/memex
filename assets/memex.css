@@ -536,6 +536,11 @@ body.memex {
 	color: var(--wp-app-color-muted);
 }
 
+.memex-revision-number {
+	font-size: 0.92rem;
+	line-height: 1.25;
+}
+
 .memex-revision-diffs {
 	margin-top: 1rem;
 }
