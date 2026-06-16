@@ -344,6 +344,7 @@
 			source.setAttribute('tabindex', '-1');
 			source.setAttribute('aria-hidden', 'true');
 			editor.textarea._memexOvertypeEditor = editor;
+			keepToolbarOutOfTabOrder(host);
 
 			form.addEventListener('submit', function () {
 				source.value = editor.getValue();
@@ -354,6 +355,13 @@
 			} else if (source.defaultValue === source.value) {
 				setTimeout(function () { editor.focus(); }, 0);
 			}
+		});
+	}
+
+	function keepToolbarOutOfTabOrder(host) {
+		var buttons = host.querySelectorAll('.overtype-toolbar button, .overtype-toolbar [tabindex]');
+		Array.prototype.forEach.call(buttons, function (button) {
+			button.setAttribute('tabindex', '-1');
 		});
 	}
 
