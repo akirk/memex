@@ -278,6 +278,20 @@
 		window.OverType._memexWikiSyntaxReady = true;
 	}
 
+	function markdownToolbarButtons() {
+		if (!window.defaultToolbarButtons || !window.defaultToolbarButtons.length) return null;
+
+		var buttons = window.defaultToolbarButtons.filter(function (button) {
+			return button && button.name !== 'viewMode';
+		});
+
+		while (buttons.length && buttons[buttons.length - 1].name === 'separator') {
+			buttons.pop();
+		}
+
+		return buttons;
+	}
+
 	function setupMarkdownEditor() {
 		if (!window.OverType) return;
 		setupMarkdownSyntax();
@@ -320,6 +334,7 @@
 				value: source.value.replace(/\s*$/, "\n\n"),
 				theme: theme,
 				toolbar: true,
+				toolbarButtons: markdownToolbarButtons(),
 				showStats: true,
 				smartLists: true,
 				spellcheck: true,
