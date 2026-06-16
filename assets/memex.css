@@ -278,6 +278,11 @@ body.memex {
 	padding: 0.1em 0.35em;
 	border-radius: 3px;
 }
+.memex-note-body pre code {
+	background: transparent;
+	padding: 0;
+	border-radius: 0;
+}
 .memex-note-body blockquote {
 	border-left: 3px solid var(--wp-app-color-primary);
 	margin-left: 0;
