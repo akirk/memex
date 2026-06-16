@@ -317,7 +317,7 @@
 			};
 
 			var editors = new window.OverType(host, {
-				value: source.value,
+				value: source.value.replace(/\s*$/, "\n\n"),
 				theme: theme,
 				toolbar: true,
 				showStats: true,
@@ -404,12 +404,12 @@
 
 			var pairs = {
 				'`': ['`', '`'],
-				'*': ['*', '*'],
+				'*': ['**', '**'],
 				'_': ['_', '_'],
 				'(': ['(', ')'],
 				')': ['(', ')'],
-				'[': ['[', ']'],
-				']': ['[', ']'],
+				'[': ['[[', ']]'],
+				']': ['[[', ']]'],
 			};
 			var pair = pairs[ev.key];
 			if (!pair) return;
