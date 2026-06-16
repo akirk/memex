@@ -536,11 +536,6 @@ body.memex {
 	color: var(--wp-app-color-muted);
 }
 
-.memex-revision-number {
-	font-size: 0.92rem;
-	line-height: 1.25;
-}
-
 .memex-revision-diffs {
 	margin-top: 1rem;
 }
@@ -568,6 +563,13 @@ body.memex {
 	background: var(--wp-app-color-surface-alt);
 	color: var(--wp-app-color-muted);
 	text-align: left;
+}
+
+.memex-diff-block .memex-revision-diff-number {
+	padding: 0.35rem 0.45rem;
+	background: var(--wp-app-color-surface-alt);
+	color: var(--wp-app-color-muted);
+	font-weight: 600;
 }
 
 .memex-diff-block table.diff td {
