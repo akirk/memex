@@ -361,6 +361,18 @@
 		return /^(https?:\/\/|mailto:|ftp:\/\/|\/|#|\?|\.)\S+$/i.test(text.trim());
 	}
 
+	function replaceSelection(ta, replacement, selectionStart, selectionEnd) {
+		var start = ta.selectionStart;
+		var end = ta.selectionEnd;
+		ta.value = ta.value.slice(0, start) + replacement + ta.value.slice(end);
+		ta.selectionStart = start + selectionStart;
+		ta.selectionEnd = start + selectionEnd;
+		ta.dispatchEvent(new Event('input', { bubbles: true }));
+		if (ta._memexOvertypeEditor && typeof ta._memexOvertypeEditor.updatePreview === 'function') {
+			ta._memexOvertypeEditor.updatePreview();
+		}
+	}
+
 	function setupPasteLinkWrapping(ta) {
 		if (ta._memexPasteLinkWrappingReady) return;
 		ta._memexPasteLinkWrappingReady = true;
@@ -379,13 +391,37 @@
 
 			ev.preventDefault();
 			var replacement = '[' + selected + '](' + url + ')';
-			ta.value = ta.value.slice(0, start) + replacement + ta.value.slice(end);
-			ta.selectionStart = start;
-			ta.selectionEnd = start + replacement.length;
-			ta.dispatchEvent(new Event('input', { bubbles: true }));
-			if (ta._memexOvertypeEditor && typeof ta._memexOvertypeEditor.updatePreview === 'function') {
-				ta._memexOvertypeEditor.updatePreview();
-			}
+			replaceSelection(ta, replacement, 0, replacement.length);
+		});
+	}
+
+	function setupSelectionWrapping(ta) {
+		if (ta._memexSelectionWrappingReady) return;
+		ta._memexSelectionWrappingReady = true;
+
+		ta.addEventListener('keydown', function (ev) {
+			if (ev.altKey || ev.ctrlKey || ev.metaKey) return;
+
+			var pairs = {
+				'`': ['`', '`'],
+				'*': ['*', '*'],
+				'_': ['_', '_'],
+				'(': ['(', ')'],
+				')': ['(', ')'],
+				'[': ['[', ']'],
+				']': ['[', ']'],
+			};
+			var pair = pairs[ev.key];
+			if (!pair) return;
+
+			var start = ta.selectionStart;
+			var end = ta.selectionEnd;
+			if (typeof start !== 'number' || typeof end !== 'number' || start === end) return;
+
+			ev.preventDefault();
+			var selected = ta.value.slice(start, end);
+			var replacement = pair[0] + selected + pair[1];
+			replaceSelection(ta, replacement, pair[0].length, pair[0].length + selected.length);
 		});
 	}
 
@@ -396,6 +432,7 @@
 		Array.prototype.forEach.call(textareas, function (ta) {
 			if (ta.classList.contains('memex-markdown-source-hidden')) return;
 			setupPasteLinkWrapping(ta);
+			setupSelectionWrapping(ta);
 			var popover;
 
 			function close() {
