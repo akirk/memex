@@ -415,15 +415,22 @@ class App extends BaseApp {
 			return '';
 		}
 
-		$blocks = array();
-		if ( preg_match_all( '/<(h[1-6]|p|ul|ol|blockquote|pre|hr)\b([^>]*)>(.*?)<\/\1>|<hr\b[^>]*>/is', $content, $matches, PREG_SET_ORDER ) ) {
+		$blocks  = array();
+		$offset  = 0;
+		$pattern = '/<(h[1-6]|p|ul|ol|blockquote|pre)\b([^>]*)>(.*?)<\/\1>|<hr\b[^>]*>/is';
+		if ( preg_match_all( $pattern, $content, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE ) ) {
 			foreach ( $matches as $m ) {
-				$tag = isset( $m[1] ) ? strtolower( $m[1] ) : '';
-				if ( '' === $tag && 0 === stripos( $m[0], '<hr' ) ) {
+				$raw_match = $m[0][0];
+				$position  = $m[0][1];
+				self::append_editor_html_fragment( $blocks, substr( $content, $offset, $position - $offset ) );
+				$offset = $position + strlen( $raw_match );
+
+				$tag = isset( $m[1][0] ) ? strtolower( $m[1][0] ) : '';
+				if ( '' === $tag && 0 === stripos( $raw_match, '<hr' ) ) {
 					$blocks[] = '---';
 					continue;
 				}
-				$inner = $m[3] ?? '';
+				$inner = $m[3][0] ?? '';
 				if ( preg_match( '/^h([1-6])$/', $tag, $h ) ) {
 					$text = self::html_inline_to_markdown( $inner );
 					if ( '' !== $text ) {
@@ -466,10 +473,18 @@ class App extends BaseApp {
 				}
 			}
 		}
+		self::append_editor_html_fragment( $blocks, substr( $content, $offset ) );
 
 		$markdown = trim( preg_replace( "/\n{3,}/", "\n\n", implode( "\n\n", $blocks ) ) );
 		$markdown = preg_replace( '/^([ \t]*)[–—][ \t]+/mu', '$1- ', $markdown );
 		return $markdown;
+	}
+
+	private static function append_editor_html_fragment( array &$blocks, string $html ): void {
+		$html = trim( $html );
+		if ( '' !== $html ) {
+			$blocks[] = $html;
+		}
 	}
 
 	private static function html_inline_to_markdown( string $html ): string {
