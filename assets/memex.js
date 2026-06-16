@@ -400,6 +400,18 @@
 		ta._memexSelectionWrappingReady = true;
 
 		ta.addEventListener('keydown', function (ev) {
+			if ((ev.metaKey || ev.ctrlKey) && ev.key === 'Enter') {
+				var form = ta.form || ta.closest('form');
+				if (!form) return;
+				ev.preventDefault();
+				if (typeof form.requestSubmit === 'function') {
+					form.requestSubmit();
+				} else {
+					form.submit();
+				}
+				return;
+			}
+
 			if (ev.altKey || ev.ctrlKey || ev.metaKey) return;
 
 			var pairs = {
