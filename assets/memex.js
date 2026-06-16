@@ -341,6 +341,8 @@
 			host.classList.add('is-ready');
 			source.classList.add('memex-markdown-source-hidden');
 			source.removeAttribute('autofocus');
+			source.setAttribute('tabindex', '-1');
+			source.setAttribute('aria-hidden', 'true');
 			editor.textarea._memexOvertypeEditor = editor;
 
 			form.addEventListener('submit', function () {
