@@ -42,7 +42,7 @@ if ( $slug ) {
 		array(
 			'post_type'        => CPT::POST_TYPE,
 			'name'             => $slug,
-			'post_status'      => array( 'publish', 'draft', 'private' ),
+			'post_status'      => CPT::readable_statuses(),
 			'posts_per_page'   => 1,
 			'suppress_filters' => false,
 		)
@@ -69,6 +69,10 @@ if ( $slug ) {
 if ( ! $post ) {
 	status_header( 404 );
 	$memex_title = __( 'Note not found', 'memex' );
+	$create_title = rawurldecode( (string) $slug );
+	if ( $create_title && false === strpos( $create_title, ' ' ) ) {
+		$create_title = ucwords( str_replace( array( '-', '_' ), ' ', $create_title ) );
+	}
 	include __DIR__ . '/_header.php';
 	?>
 	<header class="memex-page-header"><h1><?php esc_html_e( 'Note not found', 'memex' ); ?></h1></header>
@@ -82,7 +86,7 @@ if ( ! $post ) {
 		?>
 	</p>
 	<p>
-		<a class="memex-button" href="<?php echo esc_url( add_query_arg( 'title', rawurlencode( (string) $slug ), home_url( '/memex/new' ) ) ); ?>">
+		<a class="memex-button" href="<?php echo esc_url( add_query_arg( 'title', rawurlencode( $create_title ), home_url( '/memex/new' ) ) ); ?>">
 			<?php esc_html_e( 'Create this note', 'memex' ); ?>
 		</a>
 	</p>
@@ -104,7 +108,7 @@ $children     = get_posts(
 		'posts_per_page' => 50,
 		'orderby'        => 'title',
 		'order'          => 'ASC',
-		'post_status'    => array( 'publish', 'draft', 'private' ),
+		'post_status'    => CPT::readable_statuses(),
 	)
 );
 $backlinks    = Links::get_backlinks( (int) $post->ID );
