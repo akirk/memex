@@ -551,6 +551,34 @@
 		return window.ajaxurl || (window.location.origin + '/wp-admin/admin-ajax.php');
 	}
 
+	function setupRevisionDiffs() {
+		var hosts = document.querySelectorAll('[data-memex-revisions]');
+		if (!hosts.length) return;
+		Array.prototype.forEach.call(hosts, function (host) {
+			var empty = host.querySelector('[data-memex-revision-empty]');
+			var triggers = host.querySelectorAll('[data-memex-revision-trigger]');
+			var panels = host.querySelectorAll('[data-memex-revision-panel]');
+
+			function select(id) {
+				Array.prototype.forEach.call(triggers, function (trigger) {
+					var active = trigger.getAttribute('data-memex-revision-trigger') === id;
+					trigger.classList.toggle('is-selected', active);
+					trigger.setAttribute('aria-expanded', active ? 'true' : 'false');
+				});
+				Array.prototype.forEach.call(panels, function (panel) {
+					panel.hidden = panel.getAttribute('data-memex-revision-panel') !== id;
+				});
+				if (empty) empty.hidden = true;
+			}
+
+			Array.prototype.forEach.call(triggers, function (trigger) {
+				trigger.addEventListener('click', function () {
+					select(trigger.getAttribute('data-memex-revision-trigger'));
+				});
+			});
+		});
+	}
+
 	// --- Bootstrap ---------------------------------------------------------
 
 	document.addEventListener('DOMContentLoaded', function () {
@@ -560,5 +588,6 @@
 		setupAiAssistantRefresh();
 		setupMarkdownEditor();
 		setupAutocomplete();
+		setupRevisionDiffs();
 	});
 })();
