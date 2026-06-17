@@ -149,7 +149,7 @@ class AI {
 	}
 
 	public static function register_ability_domains( array $domains ): array {
-		$domains[ self::CATEGORY ] = 'Memex notes and reminders. Notes use content as editable plain text; [[Title]] creates wiki links. save-note replaces content; capture appends to today. Use view_url when presenting notes.';
+		$domains[ self::CATEGORY ] = 'Memex notes and reminders. Note content is editable Markdown-like text; use Markdown links, headings, lists, and emphasis when saving full notes. [[Title]] creates wiki links. save-note replaces content; capture appends plain quick text to today. Use view_url when presenting notes.';
 		return $domains;
 	}
 
@@ -268,14 +268,16 @@ class AI {
 
 	private static function create_note_from_input( array $input ) {
 		$title   = sanitize_text_field( (string) $input['title'] );
-		$content = isset( $input['content'] ) ? self::plain_text_to_paragraph_blocks( (string) $input['content'] ) : '';
+		$content = isset( $input['content'] ) ? Content::markdown_to_html( (string) $input['content'] ) : '';
 		$id      = wp_insert_post(
-			array(
-				'post_type'    => CPT::POST_TYPE,
-				'post_title'   => $title,
-				'post_content' => $content,
-				'post_status'  => 'publish',
-				'post_author'  => get_current_user_id(),
+			wp_slash(
+				array(
+					'post_type'    => CPT::POST_TYPE,
+					'post_title'   => $title,
+					'post_content' => $content,
+					'post_status'  => 'publish',
+					'post_author'  => get_current_user_id(),
+				)
 			),
 			true
 		);
@@ -310,11 +312,11 @@ class AI {
 			$update['post_title'] = $title;
 		}
 		if ( array_key_exists( 'content', $input ) ) {
-			$update['post_content'] = self::plain_text_to_paragraph_blocks( (string) $input['content'] );
+			$update['post_content'] = Content::markdown_to_html( (string) $input['content'] );
 		}
 
 		if ( count( $update ) > 1 ) {
-			$result = wp_update_post( $update, true );
+			$result = wp_update_post( wp_slash( $update ), true );
 			if ( is_wp_error( $result ) ) {
 				return $result;
 			}
@@ -343,12 +345,14 @@ class AI {
 		}
 
 		$timestamp = wp_date( 'H:i' );
-		$new_block = self::plain_text_to_paragraph_blocks( $raw, $timestamp );
+		$new_block = Content::plain_text_to_blocks( $raw, $timestamp );
 		$existing  = trim( (string) $note->post_content );
 		$result    = wp_update_post(
-			array(
-				'ID'           => $note->ID,
-				'post_content' => ( '' === $existing ? '' : $existing . "\n\n" ) . $new_block,
+			wp_slash(
+				array(
+					'ID'           => $note->ID,
+					'post_content' => ( '' === $existing ? '' : $existing . "\n\n" ) . $new_block,
+				)
 			),
 			true
 		);
@@ -598,27 +602,6 @@ class AI {
 		wp_set_object_terms( $post_id, array_values( $tags ), CPT::TAXONOMY, false );
 	}
 
-	private static function plain_text_to_paragraph_blocks( string $text, string $timestamp = '' ): string {
-		$text  = str_replace( "\r\n", "\n", $text );
-		$paras = preg_split( '/\n\s*\n/', $text );
-		$out   = array();
-		$first = true;
-		foreach ( $paras as $p ) {
-			$p = trim( $p );
-			if ( '' === $p ) {
-				continue;
-			}
-			$lines = array_map( 'esc_html', explode( "\n", $p ) );
-			$inner = implode( '<br>', $lines );
-			if ( $first && '' !== $timestamp ) {
-				$inner = '<strong>' . esc_html( $timestamp ) . '</strong> &middot; ' . $inner;
-				$first = false;
-			}
-			$out[] = "<!-- wp:paragraph -->\n<p>" . $inner . "</p>\n<!-- /wp:paragraph -->";
-		}
-		return implode( "\n\n", $out );
-	}
-
 	private static function limit( int $value, int $min, int $max ): int {
 		return max( $min, min( $max, $value ) );
 	}
@@ -683,7 +666,7 @@ class AI {
 				),
 				'content'      => array(
 					'type'        => 'string',
-					'description' => __( 'Plain text body. Replaces existing content.', 'memex' ),
+					'description' => __( 'Editable Markdown-like body. Replaces existing content.', 'memex' ),
 				),
 				'tags'         => array(
 					'type'        => 'array',
@@ -791,7 +774,7 @@ class AI {
 			'appended'   => array( 'type' => 'boolean', 'description' => __( 'Whether this ability call appended content to the note.', 'memex' ) ),
 		);
 		if ( $include_content ) {
-			$properties['content'] = array( 'type' => 'string', 'description' => __( 'Editable plain-text content.', 'memex' ) );
+			$properties['content'] = array( 'type' => 'string', 'description' => __( 'Editable Markdown-like content.', 'memex' ) );
 			$properties['content_html'] = array( 'type' => 'string', 'description' => __( 'Rendered HTML content.', 'memex' ) );
 			$properties['outgoing_links'] = array( 'type' => 'array', 'items' => self::linked_note_schema() );
 			$properties['backlinks'] = array( 'type' => 'array', 'items' => self::note_schema( false ) );
