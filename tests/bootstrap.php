@@ -2,9 +2,25 @@
 
 require dirname( __DIR__ ) . '/vendor/autoload.php';
 
+if ( ! defined( 'ABSPATH' ) ) {
+	define( 'ABSPATH', dirname( __DIR__ ) . '/' );
+}
+
 if ( ! function_exists( 'get_bloginfo' ) ) {
 	function get_bloginfo( $show = '' ) {
 		return 'charset' === $show ? 'UTF-8' : '';
+	}
+}
+
+if ( ! function_exists( '__' ) ) {
+	function __( $text, $domain = 'default' ) {
+		return $text;
+	}
+}
+
+if ( ! function_exists( 'esc_html' ) ) {
+	function esc_html( $text ) {
+		return htmlspecialchars( (string) $text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8' );
 	}
 }
 
