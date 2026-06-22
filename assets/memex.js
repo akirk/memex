@@ -225,6 +225,169 @@
 		}
 	}
 
+	// --- Site time ---------------------------------------------------------
+
+	function setupServerTime() {
+		var clocks = document.querySelectorAll('[data-memex-server-time]');
+		if (!clocks.length) return;
+
+		Array.prototype.forEach.call(clocks, function (clock) {
+			var timestamp = parseInt(clock.getAttribute('data-server-timestamp'), 10);
+			if (!timestamp) return;
+
+			var offset = timestamp * 1000 - Date.now();
+			var timezone = clock.getAttribute('data-timezone') || 'UTC';
+			var format = clock.getAttribute('data-format') || 'H:i';
+
+			function update() {
+				var date = new Date(Date.now() + offset);
+				var parts = getTimezoneParts(date, timezone);
+				if (!parts) return;
+				clock.textContent = formatWpDate(format, parts);
+				clock.setAttribute('datetime', parts.iso);
+			}
+
+			update();
+			window.setInterval(update, 1000);
+		});
+	}
+
+	function getTimezoneParts(date, timezone) {
+		var offsetMatch = timezone.match(/^([+-])(\d{2}):(\d{2})$/);
+		if (offsetMatch) {
+			var direction = offsetMatch[1] === '-' ? -1 : 1;
+			var offsetMinutes = direction * (parseInt(offsetMatch[2], 10) * 60 + parseInt(offsetMatch[3], 10));
+			return getUtcParts(new Date(date.getTime() + offsetMinutes * 60000), timezone, offsetMinutes, 'UTC' + timezone);
+		}
+
+		try {
+			var formatter = new Intl.DateTimeFormat('en-US', {
+				timeZone: timezone,
+				year: 'numeric',
+				month: '2-digit',
+				day: '2-digit',
+				hour: '2-digit',
+				minute: '2-digit',
+				second: '2-digit',
+				hour12: false,
+			});
+			var values = {};
+			formatter.formatToParts(date).forEach(function (part) {
+				values[part.type] = part.value;
+			});
+			var hour = parseInt(values.hour, 10);
+			if (hour === 24) hour = 0;
+			var minute = parseInt(values.minute, 10);
+			var second = parseInt(values.second, 10);
+			var year = parseInt(values.year, 10);
+			var month = parseInt(values.month, 10);
+			var day = parseInt(values.day, 10);
+			var offsetMinutesNamed = Math.round((Date.UTC(year, month - 1, day, hour, minute, second) - date.getTime()) / 60000);
+			return {
+				year: year,
+				month: month,
+				day: day,
+				hour: hour,
+				minute: minute,
+				second: second,
+				timezone: timezone,
+				timezoneName: getTimezoneName(date, timezone),
+				offsetMinutes: offsetMinutesNamed,
+				iso: pad(year, 4) + '-' + pad(month, 2) + '-' + pad(day, 2) + 'T' + pad(hour, 2) + ':' + pad(minute, 2) + ':' + pad(second, 2),
+			};
+		} catch (e) {
+			return null;
+		}
+	}
+
+	function getUtcParts(date, timezone, offsetMinutes, timezoneName) {
+		var year = date.getUTCFullYear();
+		var month = date.getUTCMonth() + 1;
+		var day = date.getUTCDate();
+		var hour = date.getUTCHours();
+		var minute = date.getUTCMinutes();
+		var second = date.getUTCSeconds();
+		return {
+			year: year,
+			month: month,
+			day: day,
+			hour: hour,
+			minute: minute,
+			second: second,
+			timezone: timezone,
+			timezoneName: timezoneName,
+			offsetMinutes: offsetMinutes,
+			iso: pad(year, 4) + '-' + pad(month, 2) + '-' + pad(day, 2) + 'T' + pad(hour, 2) + ':' + pad(minute, 2) + ':' + pad(second, 2),
+		};
+	}
+
+	function getTimezoneName(date, timezone) {
+		try {
+			var formatter = new Intl.DateTimeFormat('en-US', {
+				timeZone: timezone,
+				timeZoneName: 'short',
+			});
+			var parts = formatter.formatToParts(date);
+			for (var i = 0; i < parts.length; i++) {
+				if (parts[i].type === 'timeZoneName') return parts[i].value;
+			}
+		} catch (e) {}
+		return timezone;
+	}
+
+	function formatWpDate(format, parts) {
+		var replacements = {
+			H: pad(parts.hour, 2),
+			G: String(parts.hour),
+			h: pad(toTwelveHour(parts.hour), 2),
+			g: String(toTwelveHour(parts.hour)),
+			i: pad(parts.minute, 2),
+			s: pad(parts.second, 2),
+			a: parts.hour < 12 ? 'am' : 'pm',
+			A: parts.hour < 12 ? 'AM' : 'PM',
+			O: formatTimezoneOffset(parts.offsetMinutes, false),
+			P: formatTimezoneOffset(parts.offsetMinutes, true),
+			T: parts.timezoneName || '',
+			e: parts.timezone || '',
+		};
+		var output = '';
+		var escaped = false;
+		for (var i = 0; i < format.length; i++) {
+			var character = format.charAt(i);
+			if (escaped) {
+				output += character;
+				escaped = false;
+				continue;
+			}
+			if (character === '\\') {
+				escaped = true;
+				continue;
+			}
+			output += Object.prototype.hasOwnProperty.call(replacements, character) ? replacements[character] : character;
+		}
+		return output;
+	}
+
+	function formatTimezoneOffset(offsetMinutes, includeColon) {
+		if (typeof offsetMinutes !== 'number' || isNaN(offsetMinutes)) return '';
+		var sign = offsetMinutes < 0 ? '-' : '+';
+		var absolute = Math.abs(offsetMinutes);
+		var hours = pad(Math.floor(absolute / 60), 2);
+		var minutes = pad(absolute % 60, 2);
+		return sign + hours + (includeColon ? ':' : '') + minutes;
+	}
+
+	function toTwelveHour(hour) {
+		var value = hour % 12;
+		return value || 12;
+	}
+
+	function pad(value, length) {
+		var output = String(value);
+		while (output.length < length) output = '0' + output;
+		return output;
+	}
+
 	// --- AI Assistant ability callbacks ------------------------------------
 
 	function setupAiAssistantRefresh() {
@@ -687,6 +850,7 @@
 		var graph = document.getElementById('memex-graph');
 		if (graph) renderGraph(graph);
 		initQuickDue();
+		setupServerTime();
 		setupAiAssistantRefresh();
 		setupMarkdownEditor();
 		setupAutocomplete();
