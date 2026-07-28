@@ -1,0 +1,41 @@
+<?php return array(
+    'root' => array(
+        'name' => 'akirk/memex',
+        'pretty_version' => 'dev-fix/node24-actions-20260728',
+        'version' => 'dev-fix/node24-actions-20260728',
+        'reference' => '8ed7b6ada87185bf26f1bdc26729dc71500fbae5',
+        'type' => 'wordpress-plugin',
+        'install_path' => __DIR__ . '/../../',
+        'aliases' => array(),
+        'dev' => false,
+    ),
+    'versions' => array(
+        'akirk/memex' => array(
+            'pretty_version' => 'dev-fix/node24-actions-20260728',
+            'version' => 'dev-fix/node24-actions-20260728',
+            'reference' => '8ed7b6ada87185bf26f1bdc26729dc71500fbae5',
+            'type' => 'wordpress-plugin',
+            'install_path' => __DIR__ . '/../../',
+            'aliases' => array(),
+            'dev_requirement' => false,
+        ),
+        'akirk/wp-app' => array(
+            'pretty_version' => 'v1.3.2',
+            'version' => '1.3.2.0',
+            'reference' => 'c95c45e4caae9ca6199c1e0f861b7e4a076cfd2f',
+            'type' => 'library',
+            'install_path' => __DIR__ . '/../akirk/wp-app',
+            'aliases' => array(),
+            'dev_requirement' => false,
+        ),
+        'erusev/parsedown' => array(
+            'pretty_version' => '1.8.0',
+            'version' => '1.8.0.0',
+            'reference' => '96baaad00f71ba04d76e45b4620f54d3beabd6f7',
+            'type' => 'library',
+            'install_path' => __DIR__ . '/../erusev/parsedown',
+            'aliases' => array(),
+            'dev_requirement' => false,
+        ),
+    ),
+);
