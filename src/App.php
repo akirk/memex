@@ -126,6 +126,7 @@ class App extends BaseApp {
 		add_action( 'admin_post_memex_update_note', array( $this, 'handle_update_note' ) );
 		add_action( 'admin_post_memex_import', array( $this, 'handle_import' ) );
 		add_action( 'wp_ajax_memex_title_suggest', array( $this, 'ajax_title_suggest' ) );
+		add_action( 'wp_ajax_memex_toggle_task', array( $this, 'ajax_toggle_task' ) );
 	}
 
 	public function enqueue_block_editor_assets() {
@@ -367,6 +368,50 @@ class App extends BaseApp {
 		$q       = isset( $_GET['q'] ) ? sanitize_text_field( wp_unslash( $_GET['q'] ) ) : '';
 		$results = Search::title_suggest( $q, 10 );
 		wp_send_json_success( $results );
+	}
+
+	/**
+	 * Toggle a task list checkbox from the note view.
+	 *
+	 * The checkbox is addressed by its position among all checkboxes in the
+	 * stored content, which matches DOM order in the rendered note.
+	 */
+	public function ajax_toggle_task() {
+		$id = isset( $_POST['id'] ) ? (int) $_POST['id'] : 0;
+		check_ajax_referer( 'memex_toggle_task_' . $id );
+
+		$post = get_post( $id );
+		if ( ! $post || CPT::POST_TYPE !== $post->post_type ) {
+			wp_send_json_error( array( 'message' => 'not-found' ), 404 );
+		}
+		if ( ! current_user_can( 'edit_post', $id ) ) {
+			wp_send_json_error( array( 'message' => 'forbidden' ), 403 );
+		}
+		$index   = isset( $_POST['index'] ) ? (int) $_POST['index'] : -1;
+		$checked = ! empty( $_POST['checked'] ) && '0' !== $_POST['checked'] && 'false' !== $_POST['checked'];
+		$content = Content::set_task_checked( (string) $post->post_content, $index, $checked );
+		if ( null === $content ) {
+			wp_send_json_error( array( 'message' => 'no-such-task' ), 409 );
+		}
+		if ( $content === $post->post_content ) {
+			wp_send_json_success( array( 'checked' => $checked ) );
+		}
+
+		remove_action( 'save_post_' . CPT::POST_TYPE, array( Reminder::class, 'on_save_note' ), 25 );
+		$result = wp_update_post(
+			wp_slash(
+				array(
+					'ID'           => $id,
+					'post_content' => $content,
+				)
+			),
+			true
+		);
+		add_action( 'save_post_' . CPT::POST_TYPE, array( Reminder::class, 'on_save_note' ), 25, 2 );
+		if ( is_wp_error( $result ) ) {
+			wp_send_json_error( array( 'message' => $result->get_error_message() ), 500 );
+		}
+		wp_send_json_success( array( 'checked' => $checked ) );
 	}
 
 }

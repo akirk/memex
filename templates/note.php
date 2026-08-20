@@ -5,6 +5,7 @@
  * Route var: `slug` (resolved by WpApp from /memex/note/{slug}).
  */
 
+use Memex\Content;
 use Memex\CPT;
 use Memex\Links;
 
@@ -152,12 +153,17 @@ $import_src   = (string) get_post_meta( $post->ID, CPT::META_IMPORT_SOURCE, true
 		</div>
 	</header>
 
-	<section id="selected-note-content" class="memex-note-body" aria-label="<?php esc_attr_e( 'Selected note content', 'memex' ); ?>" data-ai-assistant-important>
+	<?php $can_edit_note = current_user_can( 'edit_post', $post->ID ); ?>
+	<section id="selected-note-content" class="memex-note-body" aria-label="<?php esc_attr_e( 'Selected note content', 'memex' ); ?>" data-ai-assistant-important
+		<?php if ( $can_edit_note ) : ?>
+			data-memex-task-post="<?php echo (int) $post->ID; ?>" data-memex-task-nonce="<?php echo esc_attr( wp_create_nonce( 'memex_toggle_task_' . $post->ID ) ); ?>"
+		<?php endif; ?>
+	>
 		<?php
 		if ( '' === trim( $post->post_content ) ) {
 			echo '<p class="memex-muted"><em>' . esc_html__( 'This note is empty.', 'memex' ) . '</em> <a href="' . esc_url( $edit_link ) . '">' . esc_html__( 'Start writing →', 'memex' ) . '</a></p>';
 		} else {
-			echo apply_filters( 'the_content', $post->post_content ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+			echo Content::filter_task_checkboxes( apply_filters( 'the_content', $post->post_content ), $can_edit_note ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 		}
 		?>
 	</section>

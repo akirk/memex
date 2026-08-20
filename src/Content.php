@@ -3,6 +3,10 @@
 namespace Memex;
 
 class Content {
+	const TASK_ITEM_CLASS     = 'memex-task-item';
+	const TASK_CHECKBOX_CLASS = 'memex-task-checkbox';
+	const CHECKBOX_PATTERN    = '/<input\b((?=[^>]*\btype\s*=\s*["\']?checkbox["\']?)[^>]*)>/i';
+
 	public static function plain_text_to_blocks( string $text, string $timestamp = '' ): string {
 		$text  = str_replace( "\r\n", "\n", $text );
 		$paras = preg_split( '/\n\s*\n/', $text );
@@ -47,6 +51,7 @@ class Content {
 			$parser->setSafeMode( false );
 		}
 		$html = $parser->text( $markdown );
+		$html = self::render_task_list_items( $html );
 		$html = preg_replace_callback(
 			'/MEMEXLINKTOKEN([A-Za-z0-9+\/=]+)ENDMEMEXLINKTOKEN/',
 			static function ( $m ) {
@@ -63,6 +68,69 @@ class Content {
 			$html
 		);
 		return (string) $html;
+	}
+
+	/**
+	 * Turn GitHub-style task list items into checkboxes.
+	 *
+	 * Parsedown has no task list support, so `- [ ] foo` comes out as
+	 * `<li>[ ] foo</li>`. Runs before escaped characters are restored, so
+	 * `\[ \]` stays literal.
+	 */
+	private static function render_task_list_items( string $html ): string {
+		return (string) preg_replace_callback(
+			'/<li>(\s*(?:<p>)?)\[( |x|X)\](?=\s|<|$)\s*/',
+			static function ( $m ) {
+				$checked = ' ' !== $m[2] ? ' checked' : '';
+				return '<li class="' . self::TASK_ITEM_CLASS . '">' . $m[1] . '<input type="checkbox" class="' . self::TASK_CHECKBOX_CLASS . '"' . $checked . '> ';
+			},
+			$html
+		);
+	}
+
+	/**
+	 * Toggle the nth checkbox in stored note HTML. Returns null if there is no
+	 * checkbox at that index.
+	 */
+	public static function set_task_checked( string $content, int $index, bool $checked ): ?string {
+		$i     = 0;
+		$found = false;
+		$out   = preg_replace_callback(
+			self::CHECKBOX_PATTERN,
+			static function ( $m ) use ( &$i, &$found, $index, $checked ) {
+				if ( $i++ !== $index ) {
+					return $m[0];
+				}
+				$found = true;
+				$tag   = preg_replace( '/\s+checked(\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]*))?/i', '', $m[1] );
+				$tag   = rtrim( $tag, '/ ' );
+				return '<input' . $tag . ( $checked ? ' checked' : '' ) . '>';
+			},
+			$content
+		);
+		return $found ? $out : null;
+	}
+
+	/**
+	 * Checkboxes are stored without `disabled` so the editor round-trips them;
+	 * only viewers who can edit the note get live checkboxes.
+	 */
+	public static function filter_task_checkboxes( string $content, bool $can_edit ): string {
+		if ( false === stripos( $content, 'checkbox' ) ) {
+			return $content;
+		}
+		return (string) preg_replace_callback(
+			self::CHECKBOX_PATTERN,
+			static function ( $m ) use ( $can_edit ) {
+				$tag = preg_replace( '/\s+disabled(\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]*))?/i', '', $m[1] );
+				if ( false === stripos( $tag, self::TASK_CHECKBOX_CLASS ) ) {
+					$tag .= ' class="' . self::TASK_CHECKBOX_CLASS . '"';
+				}
+				$tag = rtrim( $tag, '/ ' );
+				return '<input' . $tag . ( $can_edit ? '' : ' disabled' ) . '>';
+			},
+			$content
+		);
 	}
 
 	public static function editor_text_from_html( string $content ): string {
@@ -162,6 +230,13 @@ class Content {
 
 	private static function html_inline_to_markdown( string $html ): string {
 		$html = preg_replace( '/<br\s*\/?>/i', "\n", $html );
+		$html = preg_replace_callback(
+			'/<input\b((?=[^>]*\btype\s*=\s*["\']?checkbox["\']?)[^>]*)>\s*/i',
+			static function ( $m ) {
+				return preg_match( '/\schecked\b/i', $m[1] ) ? '[x] ' : '[ ] ';
+			},
+			$html
+		);
 		$html = preg_replace( '/<code\b[^>]*>(.*?)<\/code>/is', '`$1`', $html );
 		$html = preg_replace( '/<(strong|b)\b[^>]*>(.*?)<\/\1>/is', '**$2**', $html );
 		$html = preg_replace( '/<(em|i)\b[^>]*>(.*?)<\/\1>/is', '*$2*', $html );
