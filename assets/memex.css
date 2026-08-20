@@ -297,6 +297,17 @@ body.memex {
 .memex-note-body ol {
 	padding-left: 1.4rem;
 }
+.memex-note-body li.memex-task-item {
+	list-style: none;
+	margin-left: -1.4rem;
+}
+.memex-note-body .memex-task-checkbox {
+	margin: 0 0.4rem 0 0;
+	vertical-align: -0.1em;
+}
+.memex-note-body .memex-task-checkbox:not(:disabled) {
+	cursor: pointer;
+}
 .memex-note-body pre {
 	background: var(--wp-app-color-surface-alt);
 	border: 1px solid var(--wp-app-color-border);

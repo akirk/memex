@@ -844,6 +844,49 @@
 		}
 	}
 
+	// --- Task list checkboxes ---------------------------------------------
+
+	function setupTaskCheckboxes() {
+		var body = document.querySelector('.memex-note-body[data-memex-task-post]');
+		if (!body) return;
+		var postId = body.getAttribute('data-memex-task-post');
+		var nonce = body.getAttribute('data-memex-task-nonce');
+
+		body.addEventListener('change', function (ev) {
+			var box = ev.target;
+			if (!box || box.type !== 'checkbox') return;
+			var all = body.querySelectorAll('input[type="checkbox"]');
+			var index = Array.prototype.indexOf.call(all, box);
+			if (index < 0) return;
+
+			var checked = box.checked;
+			box.disabled = true;
+			var params = new URLSearchParams();
+			params.set('action', 'memex_toggle_task');
+			params.set('_ajax_nonce', nonce);
+			params.set('id', postId);
+			params.set('index', String(index));
+			params.set('checked', checked ? '1' : '0');
+
+			fetch(ajaxurl(), {
+				method: 'POST',
+				credentials: 'same-origin',
+				headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+				body: params.toString(),
+			})
+				.then(function (r) { return r.json(); })
+				.then(function (json) {
+					if (!json || !json.success) throw new Error('toggle failed');
+				})
+				.catch(function () {
+					box.checked = !checked;
+				})
+				.then(function () {
+					box.disabled = false;
+				});
+		});
+	}
+
 	// --- Bootstrap ---------------------------------------------------------
 
 	document.addEventListener('DOMContentLoaded', function () {
@@ -855,5 +898,6 @@
 		setupMarkdownEditor();
 		setupAutocomplete();
 		setupRevisionDiffs();
+		setupTaskCheckboxes();
 	});
 })();
