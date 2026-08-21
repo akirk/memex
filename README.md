@@ -2,6 +2,8 @@
 
 Turns WordPress into a note-taking app: bi-directional links, automatic backlinks, daily notes, tags, reminders, and one-click import from Obsidian, Notion, Evernote, and Roam Research.
 
+[Try Memex in WordPress Playground](https://playground.wordpress.net/?blueprint-url=https://raw.githubusercontent.com/akirk/memex/main/blueprint.json) · [Try it with demo data](https://playground.wordpress.net/?blueprint-url=https://raw.githubusercontent.com/akirk/memex/main/demo.json)
+
 Notes live as a custom post type, so you keep WordPress revisions, search, media library, and permissions — but authoring happens in a dedicated note-taking UI mounted at `/memex/`.
 
 ## Highlights
