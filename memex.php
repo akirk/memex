@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Memex
  * Description: Turns WordPress into a note-taking app — bi-directional links, automatic backlinks, daily notes, tags, reminders, and one-click import from Obsidian, Notion, Evernote, and Roam Research.
- * Version: 0.1.0
+ * Version: 0.1.0+9177fcfb4866
  * Author: Alex Kirk
  * Author URI: https://alex.kirk.at/
  * Text Domain: memex
