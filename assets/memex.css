@@ -78,6 +78,94 @@ body.memex {
 }
 
 .memex-quick-capture,
+.memex-folders {
+	margin: 0 0 1rem;
+	font-size: 0.92rem;
+}
+
+.memex-folders h2 {
+	font-size: 0.75rem;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: var(--wp-app-color-muted);
+	margin: 0 0.6rem 0.25rem;
+}
+
+.memex-folders ul {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.memex-folders ul ul {
+	padding-left: 1rem;
+}
+
+.memex-folders li > a,
+.memex-folders summary {
+	display: block;
+	padding: 0.25rem 0.6rem;
+	border-radius: 4px;
+	color: var(--wp-app-color-muted);
+	cursor: pointer;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.memex-folders summary {
+	padding-left: 0.6rem;
+	list-style: none;
+	position: relative;
+}
+
+.memex-folders summary::-webkit-details-marker {
+	display: none;
+}
+
+.memex-folders summary::before {
+	content: '▸';
+	display: inline-block;
+	width: 1em;
+	margin-left: -1em;
+	font-size: 0.8em;
+	color: var(--wp-app-color-muted);
+}
+
+.memex-folders details[open] > summary::before {
+	content: '▾';
+}
+
+.memex-folders summary a {
+	color: inherit;
+}
+
+.memex-folders li > a:hover,
+.memex-folders summary:hover {
+	background: var(--wp-app-color-surface);
+	color: var(--wp-app-color-link-hover);
+}
+
+.memex-folders a[aria-current="page"] {
+	color: var(--wp-app-color-link);
+	font-weight: 600;
+}
+
+/* Inline "new nested note" form on a note page */
+.memex-create.memex-create-nested {
+	flex-direction: row;
+	align-items: center;
+	margin: 0.5rem 0 0;
+}
+
+.memex-create.memex-create-nested input {
+	flex: 1;
+}
+
+.memex-create.memex-create-nested button {
+	align-self: auto;
+}
+
 .memex-create {
 	display: flex;
 	flex-direction: column;

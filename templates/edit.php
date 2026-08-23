@@ -109,6 +109,23 @@ include __DIR__ . '/_header.php';
 				</label>
 
 				<label>
+					<span><?php esc_html_e( 'Nested under', 'memex' ); ?></span>
+					<?php
+					wp_dropdown_pages( // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+						array(
+							'post_type'        => CPT::POST_TYPE,
+							'post_status'      => CPT::readable_statuses(),
+							'name'             => 'parent',
+							'selected'         => (int) $post->post_parent,
+							'exclude_tree'     => (int) $post->ID,
+							'show_option_none' => __( '— Top level —', 'memex' ),
+							'sort_column'      => 'post_title',
+						)
+					);
+					?>
+				</label>
+
+				<label>
 					<span><?php esc_html_e( 'Note', 'memex' ); ?></span>
 					<div class="memex-markdown-editor" data-memex-markdown-editor></div>
 					<textarea name="content" rows="24" autofocus data-memex-markdown-source><?php echo esc_textarea( App::content_to_editor_text( (string) $post->post_content ) ); ?></textarea>

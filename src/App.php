@@ -241,6 +241,7 @@ class App extends BaseApp {
 				'post_type'   => CPT::POST_TYPE,
 				'post_title'  => $title,
 				'post_status' => 'publish',
+				'post_parent' => isset( $_POST['parent'] ) ? self::valid_parent( (int) $_POST['parent'] ) : 0,
 			),
 			true
 		);
@@ -249,6 +250,22 @@ class App extends BaseApp {
 		}
 		wp_safe_redirect( home_url( '/memex/edit/' . rawurlencode( get_post_field( 'post_name', $id ) ?: (string) $id ) ) );
 		exit;
+	}
+
+	/**
+	 * Sanitize a requested parent: must be a readable note and must not be the
+	 * note itself or one of its descendants (which would create a cycle).
+	 *
+	 * @return int Parent ID, or 0 for top level.
+	 */
+	private static function valid_parent( int $parent, int $self = 0 ): int {
+		if ( ! $parent || ! CPT::is_note( $parent ) ) {
+			return 0;
+		}
+		if ( $self && in_array( $self, CPT::ancestor_ids( $parent ), true ) ) {
+			return 0;
+		}
+		return $parent;
 	}
 
 	public function handle_update_note() {
@@ -271,20 +288,19 @@ class App extends BaseApp {
 		}
 
 		$content = self::markdown_to_html( $text );
+		$update  = array(
+			'ID'           => $id,
+			'post_title'   => $title,
+			'post_content' => $content,
+			'post_status'  => 'publish',
+		);
+		if ( isset( $_POST['parent'] ) ) {
+			$update['post_parent'] = self::valid_parent( (int) $_POST['parent'], $id );
+		}
 		// The in-app editor does not manage reminder blocks; keep existing
 		// reminder records intact instead of reconciling against plain text.
 		remove_action( 'save_post_' . CPT::POST_TYPE, array( Reminder::class, 'on_save_note' ), 25 );
-		$result  = wp_update_post(
-			wp_slash(
-				array(
-					'ID'           => $id,
-					'post_title'   => $title,
-					'post_content' => $content,
-					'post_status'  => 'publish',
-				)
-			),
-			true
-		);
+		$result = wp_update_post( wp_slash( $update ), true );
 		add_action( 'save_post_' . CPT::POST_TYPE, array( Reminder::class, 'on_save_note' ), 25, 2 );
 		if ( is_wp_error( $result ) ) {
 			wp_die( esc_html__( 'Could not save note.', 'memex' ) );
