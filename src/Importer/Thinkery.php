@@ -47,40 +47,43 @@ class Thinkery extends Importer {
 		return false;
 	}
 
-	public function prepare( string $path, string $work_dir ): array {
-		$raw = @file_get_contents( $path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
-		if ( false === $raw ) {
-			return self::failure( 'Could not read Thinkery export.' );
+	public function prepare( string $path, string $work_dir, array &$state, callable $within ): array {
+		$fh = @fopen( $path, 'rb' ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		if ( ! $fh ) {
+			return self::failure( $state, 'Could not read Thinkery export.' );
+		}
+		$head = ltrim( (string) fread( $fh, 64 ), "\xEF\xBB\xBF \t\r\n" );
+		fclose( $fh );
+
+		if ( '[' !== substr( $head, 0, 1 ) ) {
+			// XML: stream `<thing>` elements, resuming after earlier calls.
+			$skip = (int) ( $state['prepared'] ?? 0 );
+			$r    = $this->stream_xml_elements( $path, 'thing', $work_dir, 'things', $skip, $within, $state );
+			if ( ! $r['opened'] || ( 0 === $skip && ! $r['items'] && $r['complete'] && $state['errors'] ) ) {
+				$state['errors'] = array( 'Failed to parse Thinkery export (invalid XML).' );
+				return self::prepared( array() );
+			}
+			$state['prepared'] = $skip + count( $r['items'] );
+			return self::prepared( $r['items'], $r['complete'] );
 		}
 
-		$trimmed = ltrim( $raw, "\xEF\xBB\xBF \t\r\n" );
-		if ( '[' === substr( $trimmed, 0, 1 ) ) {
-			$things = json_decode( $trimmed, true );
-			if ( ! is_array( $things ) ) {
-				return self::failure( 'Invalid JSON in Thinkery export.' );
-			}
-		} else {
-			$things = $this->parse_xml( $raw );
-			if ( null === $things ) {
-				return self::failure( 'Failed to parse Thinkery export (invalid XML).' );
-			}
+		$things = json_decode( ltrim( (string) file_get_contents( $path ), "\xEF\xBB\xBF \t\r\n" ), true ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+		if ( ! is_array( $things ) ) {
+			return self::failure( $state, 'Invalid JSON in Thinkery export.' );
 		}
-		unset( $raw, $trimmed );
-
-		$items   = array();
-		$skipped = 0;
+		$items = array();
 		foreach ( $things as $thing ) {
 			if ( ! is_array( $thing ) ) {
-				++$skipped;
+				++$state['skipped'];
 				continue;
 			}
 			$items[] = $this->stash( $work_dir, 'things', count( $items ), 'json', (string) wp_json_encode( $thing ) );
 		}
-		return self::prepared( $items, array( 'skipped' => $skipped ) );
+		return self::prepared( $items );
 	}
 
 	public function import_item( $item, array &$state ): int {
-		$thing = json_decode( (string) @file_get_contents( $item ), true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		$thing = $this->read_thing( $item );
 		if ( ! is_array( $thing ) ) {
 			++$state['skipped'];
 			return 0;
@@ -122,9 +125,19 @@ class Thinkery extends Importer {
 	}
 
 	/**
-	 * @return array<int,array<string,string>>|null
+	 * Read one stashed thing (a `<thing>` element or a JSON object).
+	 *
+	 * @return array<string,string>|null
 	 */
-	private function parse_xml( string $raw ): ?array {
+	private function read_thing( string $file ): ?array {
+		$raw = @file_get_contents( $file ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		if ( false === $raw ) {
+			return null;
+		}
+		if ( '.json' === substr( $file, -5 ) ) {
+			$thing = json_decode( $raw, true );
+			return is_array( $thing ) ? $thing : null;
+		}
 		$prev = libxml_use_internal_errors( true );
 		$xml  = simplexml_load_string( $raw, 'SimpleXMLElement', LIBXML_NOCDATA | LIBXML_NONET );
 		libxml_clear_errors();
@@ -132,15 +145,11 @@ class Thinkery extends Importer {
 		if ( false === $xml ) {
 			return null;
 		}
-		$things = array();
-		foreach ( $xml->thing as $thing ) {
-			$row = array();
-			foreach ( array( 'title', 'url', 'tags', 'date', 'html' ) as $field ) {
-				$row[ $field ] = isset( $thing->{$field} ) ? (string) $thing->{$field} : '';
-			}
-			$things[] = $row;
+		$row = array();
+		foreach ( array( 'title', 'url', 'tags', 'date', 'html' ) as $field ) {
+			$row[ $field ] = isset( $xml->{$field} ) ? (string) $xml->{$field} : '';
 		}
-		return $things;
+		return $row;
 	}
 
 	/**

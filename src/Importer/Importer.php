@@ -5,9 +5,11 @@
  * An import is a list of work items processed in chunks so big files do not
  * tie up a single request (see `Job`). Importers implement two steps:
  *
- *   1. `prepare()` inspects the uploaded file once and materialises it as a
- *      list of JSON-serialisable work items inside a work directory (extracted
- *      ZIP entries, one file per note, ...). Nothing is inserted here.
+ *   1. `prepare()` inspects the uploaded file and materialises it as a list
+ *      of JSON-serialisable work items inside a work directory (extracted ZIP
+ *      entries, one file per note, ...). Nothing is inserted here. It gets a
+ *      time budget and may return early with `complete => false`; it is then
+ *      called again with the same state and continues where it stopped.
  *   2. `import_item()` processes one item. Importers that need two passes
  *      (create every note first so `[[links]]` resolve by title, then fill in
  *      content) simply emit the items twice with a pass marker.
@@ -28,14 +30,18 @@ abstract class Importer {
 	abstract public function source(): string;
 
 	/**
-	 * Inspect the file and produce the list of work items.
+	 * Inspect the file and produce work items.
 	 *
 	 * The work directory exists, is private to this import, and is deleted when
-	 * the job finishes. Items must survive a JSON round-trip.
+	 * the job finishes. Items must survive a JSON round-trip. `$state` starts
+	 * as `initial_state()` and persists between calls and into `import_item()`;
+	 * `$within()` turns false when the time budget is used up — stop and return
+	 * `complete => false`, the next call continues. The items returned by each
+	 * call are appended.
 	 *
-	 * @return array{items:array,state:array,errors:string[]}
+	 * @return array{items:array,complete:bool}
 	 */
-	abstract public function prepare( string $path, string $work_dir ): array;
+	abstract public function prepare( string $path, string $work_dir, array &$state, callable $within ): array;
 
 	/**
 	 * Process one work item.
@@ -60,24 +66,22 @@ abstract class Importer {
 	}
 
 	/**
-	 * @return array{items:array,state:array,errors:string[]}
+	 * Abort preparation: record the error and report completion with no items.
+	 *
+	 * @return array{items:array,complete:bool}
 	 */
-	protected static function failure( string $message ): array {
-		return array(
-			'items'  => array(),
-			'state'  => self::initial_state(),
-			'errors' => array( $message ),
-		);
+	protected static function failure( array &$state, string $message ): array {
+		$state['errors'][] = $message;
+		return self::prepared( array() );
 	}
 
 	/**
-	 * @return array{items:array,state:array,errors:string[]}
+	 * @return array{items:array,complete:bool}
 	 */
-	protected static function prepared( array $items, array $state = array() ): array {
+	protected static function prepared( array $items, bool $complete = true ): array {
 		return array(
-			'items'  => array_values( $items ),
-			'state'  => array_merge( self::initial_state(), $state ),
-			'errors' => array(),
+			'items'    => array_values( $items ),
+			'complete' => $complete,
 		);
 	}
 
@@ -294,6 +298,66 @@ abstract class Importer {
 		$file = $dir . '/' . $index . '.' . $ext;
 		file_put_contents( $file, $payload ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
 		return $file;
+	}
+
+	/**
+	 * Stream `<$element>` children of an XML file, stashing each one as its own
+	 * file under `$subdir`, starting after the first `$skip` matches and stopping
+	 * when `$within()` turns false. Returns the stashed paths and whether the end
+	 * of the document was reached; `$state['errors']` gets a note if the XML was
+	 * invalid.
+	 *
+	 * @return array{items:string[],complete:bool,opened:bool}
+	 */
+	protected function stream_xml_elements( string $path, string $element, string $work_dir, string $subdir, int $skip, callable $within, array &$state ): array {
+		$items  = array();
+		$result = array(
+			'items'    => array(),
+			'complete' => true,
+			'opened'   => false,
+		);
+		if ( ! class_exists( '\\XMLReader' ) ) {
+			$state['errors'][] = 'XMLReader is not available.';
+			return $result;
+		}
+
+		$prev   = libxml_use_internal_errors( true );
+		$reader = new \XMLReader();
+		$opened = $reader->open( $path, null, LIBXML_NONET );
+		if ( $opened ) {
+			$seen = 0;
+			$more = $reader->read();
+			while ( $more ) {
+				if ( \XMLReader::ELEMENT !== $reader->nodeType || $element !== $reader->name ) {
+					$more = $reader->read();
+					continue;
+				}
+				if ( $seen >= $skip ) {
+					if ( ! $within() ) {
+						$result['complete'] = false;
+						break;
+					}
+					$xml = $reader->readOuterXml();
+					if ( '' === $xml ) {
+						break;
+					}
+					$items[] = $this->stash( $work_dir, $subdir, $seen, 'xml', $xml );
+				}
+				++$seen;
+				$more = $reader->next(); // Skip the subtree.
+			}
+			$reader->close();
+		}
+		$parse_errors = libxml_get_errors();
+		libxml_clear_errors();
+		libxml_use_internal_errors( $prev );
+
+		$result['items']  = $items;
+		$result['opened'] = (bool) $opened;
+		if ( $parse_errors && $result['complete'] ) {
+			$state['errors'][] = 'The file contained invalid XML; entries after the error were skipped.';
+		}
+		return $result;
 	}
 
 	/**

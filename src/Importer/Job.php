@@ -138,12 +138,17 @@ class Job {
 		};
 
 		if ( 'prepare' === $this->data['phase'] ) {
-			$prepared = $importer->prepare( $this->data['source'], $this->data['work_dir'] );
-			$this->data['items']  = $prepared['items'];
-			$this->data['state']  = $prepared['state'];
-			$this->data['errors'] = $prepared['errors'];
-			$this->data['phase']  = $prepared['errors'] && ! $prepared['items'] ? 'links' : 'import';
+			$prepared = $importer->prepare( $this->data['source'], $this->data['work_dir'], $this->data['state'], $within );
+			foreach ( $prepared['items'] as $item ) {
+				$this->data['items'][] = $item;
+			}
+			if ( $prepared['complete'] ) {
+				$this->data['phase'] = $this->data['items'] ? 'import' : 'links';
+			}
 			$this->save();
+			if ( ! $prepared['complete'] ) {
+				return $this->status();
+			}
 		}
 
 		if ( 'import' === $this->data['phase'] ) {
@@ -196,13 +201,21 @@ class Job {
 	public function status(): array {
 		$errors = array_merge( $this->data['errors'], $this->data['state']['errors'] ?? array() );
 		$links  = 'links' === $this->data['phase'] || 'done' === $this->data['phase'];
+		$total  = $links ? count( $this->data['ids'] ) : count( $this->data['items'] );
+		if ( 'prepare' === $this->data['phase'] ) {
+			// Total is unknown while reading; report what was found so far.
+			$done  = count( $this->data['items'] );
+			$total = 0;
+		} else {
+			$done = $links ? (int) $this->data['link_cursor'] : (int) $this->data['cursor'];
+		}
 		return array(
 			'job'     => $this->data['id'],
 			'type'    => $this->data['type'],
 			'file'    => $this->data['file'],
 			'phase'   => $this->data['phase'],
-			'done'    => $links ? (int) $this->data['link_cursor'] : (int) $this->data['cursor'],
-			'total'   => $links ? count( $this->data['ids'] ) : count( $this->data['items'] ),
+			'done'    => $done,
+			'total'   => $total,
 			'count'   => count( $this->data['ids'] ),
 			'skipped' => (int) ( $this->data['state']['skipped'] ?? 0 ),
 			'errors'  => array_values( $errors ),

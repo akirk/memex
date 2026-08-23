@@ -42,7 +42,7 @@ $max_upload = wp_max_upload_size();
 
 <?php if ( $active ) : ?>
 	<?php $status = $active->status(); ?>
-	<div class="memex-notice memex-notice-error memex-import-resume" id="memex-import-resume" role="status" data-job="<?php echo esc_attr( $status['job'] ); ?>">
+	<div class="memex-notice memex-notice-error memex-import-resume" id="memex-import-resume" role="status" data-job="<?php echo esc_attr( $status['job'] ); ?>" data-phase="<?php echo esc_attr( $status['phase'] ); ?>" data-done="<?php echo (int) $status['done']; ?>" data-total="<?php echo (int) $status['total']; ?>" data-file="<?php echo esc_attr( $status['file'] ); ?>">
 		<p>
 			<?php
 			printf(
@@ -66,7 +66,10 @@ $max_upload = wp_max_upload_size();
 	data-nonce="<?php echo esc_attr( wp_create_nonce( 'memex_import' ) ); ?>"
 	data-i18n-uploading="<?php esc_attr_e( 'Uploading %s…', 'memex' ); ?>"
 	data-i18n-preparing="<?php esc_attr_e( 'Reading %s…', 'memex' ); ?>"
+	data-i18n-found="<?php esc_attr_e( '%s notes found so far', 'memex' ); ?>"
 	data-i18n-importing="<?php esc_attr_e( 'Importing notes…', 'memex' ); ?>"
+	data-i18n-resuming="<?php esc_attr_e( 'Resuming…', 'memex' ); ?>"
+	data-i18n-retrying="<?php esc_attr_e( 'Connection lost, retrying (%1$s of %2$s)…', 'memex' ); ?>"
 	data-i18n-links="<?php esc_attr_e( 'Resolving links…', 'memex' ); ?>"
 	data-i18n-progress="<?php esc_attr_e( '%1$s of %2$s', 'memex' ); ?>"
 	data-i18n-done="<?php esc_attr_e( 'Imported %1$s notes from %2$s.', 'memex' ); ?>"

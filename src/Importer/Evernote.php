@@ -18,49 +18,22 @@ class Evernote extends Importer {
 	}
 
 	/**
-	 * Stream the export with XMLReader and stash every `<note>` as its own
-	 * file, so a multi-hundred-megabyte ENEX is never held in memory at once.
+	 * Stream the export and stash every `<note>` as its own file, so a
+	 * multi-hundred-megabyte ENEX is never held in memory at once. Resumes
+	 * after the notes stashed by earlier calls.
 	 */
-	public function prepare( string $path, string $work_dir ): array {
+	public function prepare( string $path, string $work_dir, array &$state, callable $within ): array {
 		if ( ! is_readable( $path ) ) {
-			return self::failure( 'ENEX file not readable.' );
+			return self::failure( $state, 'ENEX file not readable.' );
 		}
-		if ( ! class_exists( '\\XMLReader' ) ) {
-			return self::failure( 'XMLReader is not available.' );
+		$skip = (int) ( $state['prepared'] ?? 0 );
+		$r    = $this->stream_xml_elements( $path, 'note', $work_dir, 'notes', $skip, $within, $state );
+		if ( ! $r['opened'] || ( 0 === $skip && ! $r['items'] && $r['complete'] && $state['errors'] ) ) {
+			$state['errors'] = array( 'Failed to parse ENEX (invalid XML).' );
+			return self::prepared( array() );
 		}
-
-		$prev   = libxml_use_internal_errors( true );
-		$reader = new \XMLReader();
-		$items  = array();
-		$ok     = $reader->open( $path, null, LIBXML_NONET );
-		if ( $ok ) {
-			$more = $reader->read();
-			while ( $more ) {
-				if ( \XMLReader::ELEMENT !== $reader->nodeType || 'note' !== $reader->name ) {
-					$more = $reader->read();
-					continue;
-				}
-				$xml = $reader->readOuterXml();
-				if ( '' === $xml ) {
-					break;
-				}
-				$items[] = $this->stash( $work_dir, 'notes', count( $items ), 'xml', $xml );
-				$more    = $reader->next(); // Skip the subtree we just copied.
-			}
-			$reader->close();
-		}
-		$parse_errors = libxml_get_errors();
-		libxml_clear_errors();
-		libxml_use_internal_errors( $prev );
-
-		if ( ! $ok || ( ! $items && $parse_errors ) ) {
-			return self::failure( 'Failed to parse ENEX (invalid XML).' );
-		}
-		$result = self::prepared( $items );
-		if ( $parse_errors ) {
-			$result['state']['errors'][] = 'ENEX contained invalid XML; notes after the error were skipped.';
-		}
-		return $result;
+		$state['prepared'] = $skip + count( $r['items'] );
+		return self::prepared( $r['items'], $r['complete'] );
 	}
 
 	public function import_item( $item, array &$state ): int {

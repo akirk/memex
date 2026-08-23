@@ -21,10 +21,11 @@ class Notion extends Importer {
 		return 'notion';
 	}
 
-	public function prepare( string $path, string $work_dir ): array {
-		$root = trailingslashit( $work_dir ) . 'extracted';
+	public function prepare( string $path, string $work_dir, array &$state, callable $within ): array {
+		$state['title_map'] = array();
+		$root               = trailingslashit( $work_dir ) . 'extracted';
 		if ( ! $this->extract_zip( $path, $root ) ) {
-			return self::failure( 'Could not extract Notion export ZIP.' );
+			return self::failure( $state, 'Could not extract Notion export ZIP.' );
 		}
 
 		// Pass 1 inserts empty notes so [[links]] can resolve via title in pass 2.
@@ -42,7 +43,7 @@ class Notion extends Importer {
 				$items[] = array_merge( array( $pass ), $page );
 			}
 		}
-		return self::prepared( $items, array( 'title_map' => array() ) );
+		return self::prepared( $items );
 	}
 
 	public function import_item( $item, array &$state ): int {

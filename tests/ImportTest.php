@@ -45,10 +45,14 @@ class ImportTest extends TestCase {
 	private function run_importer( Importer $importer, string $path ): array {
 		$work = $this->dir . '/work-' . bin2hex( random_bytes( 3 ) );
 		mkdir( $work );
-		$prepared = $importer->prepare( $path, $work );
-		$state    = $prepared['state'];
-		$ids      = array();
-		foreach ( $prepared['items'] as $item ) {
+		$state = Importer::initial_state();
+		$items = array();
+		do {
+			$prepared = $importer->prepare( $path, $work, $state, static fn() => true );
+			$items    = array_merge( $items, $prepared['items'] );
+		} while ( ! $prepared['complete'] );
+		$ids = array();
+		foreach ( $items as $item ) {
 			$id = $importer->import_item( $item, $state );
 			if ( $id > 0 ) {
 				$ids[] = $id;
@@ -56,8 +60,8 @@ class ImportTest extends TestCase {
 		}
 		return array(
 			'ids'    => $ids,
-			'items'  => $prepared['items'],
-			'errors' => array_merge( $prepared['errors'], $state['errors'] ),
+			'items'  => $items,
+			'errors' => $state['errors'],
 			'state'  => $state,
 		);
 	}
@@ -112,8 +116,8 @@ class ImportTest extends TestCase {
 		$importer = new Markdown();
 		$work     = $this->dir . '/w';
 		mkdir( $work );
-		$prepared = $importer->prepare( $zip, $work );
-		$state    = $prepared['state'];
+		$state    = Importer::initial_state();
+		$prepared = $importer->prepare( $zip, $work, $state, static fn() => true );
 		$importer->import_item( $prepared['items'][0], $state );
 		$state = unserialize( serialize( $state ) );
 		$importer->import_item( $prepared['items'][1], $state );
@@ -225,6 +229,37 @@ class ImportTest extends TestCase {
 		$this->assertStringContainsString( '[attachment]', $this->content( 'Untitled note' ) );
 	}
 
+	public function test_evernote_prepare_resumes_after_a_time_budget(): void {
+		$path = $this->enex(
+			array(
+				array( 'title' => 'A', 'body' => 'a' ),
+				array( 'title' => 'B', 'body' => 'b' ),
+				array( 'title' => 'C', 'body' => 'c' ),
+			)
+		);
+		$importer = new Evernote();
+		$work     = $this->dir . '/w';
+		mkdir( $work );
+		$state = Importer::initial_state();
+		$calls = 0;
+		// Budget allows exactly one note per call.
+		$within = function () use ( &$calls ) {
+			return 0 === $calls++ % 2;
+		};
+
+		$rounds = array();
+		do {
+			$calls = 0;
+			$r     = $importer->prepare( $path, $work, $state, $within );
+			$state = unserialize( serialize( $state ) );
+			$rounds[] = array_map( 'basename', $r['items'] );
+		} while ( ! $r['complete'] );
+
+		$this->assertSame( array( array( '0.xml' ), array( '1.xml' ), array( '2.xml' ) ), $rounds );
+		$this->assertSame( 3, $state['prepared'] );
+		$this->assertSame( array(), $state['errors'] );
+	}
+
 	public function test_evernote_invalid_xml_fails_prepare(): void {
 		$r = $this->run_importer( new Evernote(), $this->file( 'bad.enex', '<en-export><note><title>x' ) );
 		$this->assertSame( array(), $r['ids'] );
@@ -258,6 +293,7 @@ class ImportTest extends TestCase {
 			$xml .= '</thing>';
 		}
 		$r = $this->run_importer( new Thinkery(), $this->file( 'things.xml', $xml . '</thinkery>' ) );
+		$this->assertStringEndsWith( '.xml', $r['items'][0] );
 		$this->assertCount( 1, $r['ids'] );
 		$this->assertSame( $json_content, $this->content( 'Bookmark' ) );
 	}

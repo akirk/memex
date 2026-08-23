@@ -908,7 +908,10 @@
 		var nonce = form.getAttribute('data-nonce');
 		var url = form.getAttribute('data-ajax-url') || ajaxurl();
 		var currentJob = null;
+		var lastStatus = null;
 		var running = false;
+		var retries = 0;
+		var MAX_RETRIES = 3;
 
 		function t(key, values) {
 			var str = form.getAttribute('data-i18n-' + key) || '';
@@ -940,8 +943,9 @@
 		}
 
 		function render(status) {
+			lastStatus = status;
 			if (status.phase === 'prepare') {
-				setProgress(t('preparing', [status.file]), 0, 0);
+				setProgress(t('preparing', [status.file]), 0, 0, status.done > 0 ? t('found', [fmt(status.done)]) : '');
 			} else if (status.phase === 'links') {
 				setProgress(t('links'), status.done, status.total);
 			} else {
@@ -980,6 +984,8 @@
 			errorBox.querySelector('p').textContent = t('failed', [message]);
 			show(errorBox.querySelector('[data-import-retry]').parentNode, !!currentJob);
 			show(errorBox, true);
+			// Without a resumable job there is nothing else to do but try again.
+			show(form, !currentJob);
 			submit.disabled = false;
 		}
 
@@ -1008,6 +1014,7 @@
 			running = true;
 			post('memex_import_step', { job: currentJob })
 				.then(function (status) {
+					retries = 0;
 					render(status);
 					if (status.phase === 'done') {
 						finish(status);
@@ -1016,16 +1023,28 @@
 					}
 				})
 				.catch(function (err) {
+					// A dropped connection (proxy timeout, flaky network) leaves the
+					// job intact on the server; retry a few times before giving up.
+					if (!err.data && retries < MAX_RETRIES) {
+						retries++;
+						label.textContent = t('retrying', [retries, MAX_RETRIES]);
+						setTimeout(loop, 2000 * retries);
+						return;
+					}
 					fail(err.message);
 				});
 		}
 
 		function start(job) {
 			currentJob = job;
+			retries = 0;
 			show(result, false);
 			show(errorBox, false);
 			if (resumeBox) show(resumeBox, false);
 			show(form, false);
+			// Show something right away; the first step can take several seconds.
+			var known = lastStatus && lastStatus.total > 0;
+			setProgress(t('resuming'), known ? lastStatus.done : 0, known ? lastStatus.total : 0);
 			loop();
 		}
 
@@ -1033,6 +1052,7 @@
 			submit.disabled = true;
 			show(result, false);
 			show(errorBox, false);
+			show(form, false);
 			running = true;
 			var file = form.querySelector('input[type="file"]').files[0];
 			setProgress(t('uploading', [file ? file.name : '']), 0, 0);
@@ -1048,7 +1068,7 @@
 				}
 			};
 			xhr.onerror = function () {
-				fail('network');
+				fail('network error');
 			};
 			xhr.onload = function () {
 				var json = null;
@@ -1081,6 +1101,12 @@
 
 		if (resumeBox) {
 			resumeBox.querySelector('[data-import-resume]').addEventListener('click', function () {
+				lastStatus = {
+					phase: resumeBox.getAttribute('data-phase'),
+					done: Number(resumeBox.getAttribute('data-done')),
+					total: Number(resumeBox.getAttribute('data-total')),
+					file: resumeBox.getAttribute('data-file'),
+				};
 				start(resumeBox.getAttribute('data-job'));
 			});
 			resumeBox.querySelector('[data-import-discard]').addEventListener('click', function () {

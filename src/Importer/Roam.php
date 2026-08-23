@@ -19,15 +19,16 @@ class Roam extends Importer {
 		return 'roam';
 	}
 
-	public function prepare( string $path, string $work_dir ): array {
-		$raw = @file_get_contents( $path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+	public function prepare( string $path, string $work_dir, array &$state, callable $within ): array {
+		$state['title_ids'] = array();
+		$raw                = @file_get_contents( $path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 		if ( false === $raw ) {
-			return self::failure( 'Could not read Roam JSON file.' );
+			return self::failure( $state, 'Could not read Roam JSON file.' );
 		}
 		$data = json_decode( $raw, true );
 		unset( $raw );
 		if ( ! is_array( $data ) ) {
-			return self::failure( 'Invalid JSON in Roam export.' );
+			return self::failure( $state, 'Invalid JSON in Roam export.' );
 		}
 
 		// One file per page so a later request can fill one page without
@@ -52,7 +53,7 @@ class Roam extends Importer {
 				$items[] = array_merge( array( $pass ), $page );
 			}
 		}
-		return self::prepared( $items, array( 'title_ids' => array() ) );
+		return self::prepared( $items );
 	}
 
 	public function import_item( $item, array &$state ): int {

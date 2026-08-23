@@ -20,23 +20,24 @@ class Markdown extends Importer {
 		return 'markdown';
 	}
 
-	public function prepare( string $path, string $work_dir ): array {
+	public function prepare( string $path, string $work_dir, array &$state, callable $within ): array {
+		$state['folder_parents'] = array();
 		if ( is_dir( $path ) ) {
 			$root = $path;
 		} elseif ( preg_match( '/\.zip$/i', $path ) ) {
 			$root = trailingslashit( $work_dir ) . 'extracted';
 			if ( ! $this->extract_zip( $path, $root ) ) {
-				return self::failure( 'Could not extract ZIP archive.' );
+				return self::failure( $state, 'Could not extract ZIP archive.' );
 			}
 		} else {
-			return self::prepared( array( array( $path, basename( $path ) ) ), array( 'folder_parents' => array() ) );
+			return self::prepared( array( array( $path, basename( $path ) ) ) );
 		}
 
 		$items = array();
 		foreach ( $this->walk( $root, array( 'md', 'markdown', 'txt' ) ) as $file => $rel ) {
 			$items[] = array( $file, $rel );
 		}
-		return self::prepared( $items, array( 'folder_parents' => array() ) );
+		return self::prepared( $items );
 	}
 
 	public function import_item( $item, array &$state ): int {
