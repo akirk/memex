@@ -82,16 +82,18 @@ if ( $linked_ids ) {
 		);
 	}
 }
-$unlinked = get_posts(
+$unlinked_count = $total_notes - count( $nodes_data );
+// The ten most recent unlinked notes; the full set could be most of the corpus.
+$unlinked = $unlinked_count ? get_posts(
 	array(
 		'post_type'      => CPT::POST_TYPE,
 		'post_status'    => array( 'publish', 'draft', 'private' ),
 		'post__not_in'   => array_keys( $linked_ids ),
-		'posts_per_page' => -1,
-		'orderby'        => 'title',
-		'order'          => 'ASC',
+		'posts_per_page' => 10,
+		'orderby'        => 'date',
+		'order'          => 'DESC',
 	)
-);
+) : array();
 ?>
 
 <header class="memex-page-header">
@@ -103,7 +105,7 @@ $unlinked = get_posts(
 			esc_html__( '%1$d linked notes, %2$d links; %3$d notes without links are not shown.', 'memex' ),
 			count( $nodes_data ),
 			count( $edges_data ),
-			count( $unlinked )
+			$unlinked_count
 		);
 		?>
 	</p>
@@ -133,11 +135,20 @@ $unlinked = get_posts(
 <section id="note-graph-unlinked" aria-labelledby="note-graph-unlinked-heading">
 	<h2 id="note-graph-unlinked-heading">
 		<?php
-		printf(
-			/* translators: %d: number of notes without links */
-			esc_html( _n( '%d note without links', '%d notes without links', count( $unlinked ), 'memex' ) ),
-			count( $unlinked )
-		);
+		if ( $unlinked_count > count( $unlinked ) ) {
+			printf(
+				/* translators: 1: notes shown, 2: total notes without links */
+				esc_html__( 'Latest %1$d of %2$d notes without links', 'memex' ),
+				count( $unlinked ),
+				$unlinked_count
+			);
+		} else {
+			printf(
+				/* translators: %d: number of notes without links */
+				esc_html( _n( '%d note without links', '%d notes without links', $unlinked_count, 'memex' ) ),
+				$unlinked_count
+			);
+		}
 		?>
 	</h2>
 	<ul class="memex-graph-unlinked">

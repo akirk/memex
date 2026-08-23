@@ -50,6 +50,24 @@ class GraphTest extends WP_UnitTestCase {
 		$this->assertStringContainsString( '>Beta</a>', $html );
 	}
 
+	public function test_unlinked_list_shows_latest_ten(): void {
+		for ( $i = 1; $i <= 12; $i++ ) {
+			self::factory()->post->create(
+				array(
+					'post_type'   => CPT::POST_TYPE,
+					'post_status' => 'publish',
+					'post_title'  => 'Note ' . $i,
+					'post_date'   => sprintf( '2026-01-%02d 12:00:00', $i ),
+				)
+			);
+		}
+		$html = $this->render();
+		$this->assertStringContainsString( 'Latest 10 of 12 notes without links', $html );
+		$this->assertSame( 10, substr_count( $html, '<li><a href=' ) );
+		$this->assertStringContainsString( '>Note 12</a>', $html );
+		$this->assertStringNotContainsString( '>Note 2</a>', $html );
+	}
+
 	public function test_only_linked_notes_are_drawn(): void {
 		$a = $this->note( 'Alpha' );
 		$b = $this->note( 'Beta' );
