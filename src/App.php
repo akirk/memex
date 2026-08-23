@@ -375,15 +375,15 @@ class App extends BaseApp {
 		switch ( $type ) {
 			case 'markdown':
 			case 'obsidian':
-				return new Importer\Markdown();
+				return new \Memex\Importer\Markdown();
 			case 'notion':
-				return new Importer\Notion();
+				return new \Memex\Importer\Notion();
 			case 'evernote':
-				return new Importer\Evernote();
+				return new \Memex\Importer\Evernote();
 			case 'roam':
-				return new Importer\Roam();
+				return new \Memex\Importer\Roam();
 			case 'thinkery':
-				return new Importer\Thinkery();
+				return new \Memex\Importer\Thinkery();
 		}
 		return null;
 	}
