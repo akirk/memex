@@ -13,6 +13,7 @@ final class FakeWP {
 	public static array $actions = array();
 	public static int $next_id   = 1;
 	public static string $upload_dir = '';
+	public static array $last_update = array();
 
 	public static function reset(): void {
 		self::$posts   = array();
@@ -103,15 +104,20 @@ function wp_insert_post( array $data, $wp_error = false ) {
 			'post_parent'   => 0,
 			'post_date'     => '',
 			'post_date_gmt' => '',
+			'post_name'     => '',
 		),
 		$data
 	);
 	$post->ID            = $id;
+	if ( '' === $post->post_name ) {
+		$post->post_name = sanitize_title( $post->post_title );
+	}
 	FakeWP::$posts[ $id ] = $post;
 	return $id;
 }
 
 function wp_update_post( array $data ) {
+	FakeWP::$last_update = $data;
 	$id = (int) ( $data['ID'] ?? 0 );
 	if ( ! isset( FakeWP::$posts[ $id ] ) ) {
 		return 0;
@@ -152,7 +158,18 @@ function wp_set_object_terms( $id, $terms, $taxonomy, $append = false ) {
 }
 
 function get_posts( $args ) {
-	return array();
+	$out = array();
+	foreach ( FakeWP::$posts as $post ) {
+		if ( isset( $args['post_type'] ) && $post->post_type !== $args['post_type'] ) {
+			continue;
+		}
+		if ( isset( $args['name'] ) && $post->post_name !== $args['name'] ) {
+			continue;
+		}
+		$out[] = ( $args['fields'] ?? '' ) === 'ids' ? $post->ID : $post;
+	}
+	$limit = (int) ( $args['numberposts'] ?? $args['posts_per_page'] ?? -1 );
+	return $limit > 0 ? array_slice( $out, 0, $limit ) : $out;
 }
 
 function get_option( $key, $default = false ) {

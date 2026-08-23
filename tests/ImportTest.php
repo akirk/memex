@@ -298,6 +298,49 @@ class ImportTest extends TestCase {
 		$this->assertSame( $json_content, $this->content( 'Bookmark' ) );
 	}
 
+	public function test_thinkery_bookmark_extracts_do_not_create_stubs(): void {
+		$things = array(
+			array( 'title' => 'Wiki docs', 'url' => 'https://example.com/api', 'html' => '<div id="extract"><pre>Get links from the [[Some Page]]</pre></div>' ),
+			array( 'title' => 'Plain note', 'url' => '', 'html' => '<p>See [[Linked Note]]</p>' ),
+		);
+		$r = $this->run_importer( new Thinkery(), $this->file( 'things.json', json_encode( $things ) ) );
+		$this->assertCount( 2, $r['ids'] );
+		foreach ( $r['ids'] as $id ) {
+			Importer::resolve_links( $id );
+		}
+		$this->assertStringContainsString( '&#91;&#91;Some Page&#93;&#93;', $this->content( 'Wiki docs' ) );
+		$this->assertSame( 0, FakeWP::find_by_title( 'Some Page' ) );
+		$this->assertSame( 1, get_post_meta( FakeWP::find_by_title( 'Linked Note' ), '_memex_stub', true ) );
+	}
+
+	public function test_thinkery_import_into_existing_stub_keeps_exported_date(): void {
+		$stub = wp_insert_post( array( 'post_type' => 'memex_note', 'post_status' => 'draft', 'post_title' => 'Old Bookmark', 'post_content' => '' ) );
+		update_post_meta( $stub, '_memex_stub', 1 );
+		$things = array(
+			array( 'title' => 'Old Bookmark', 'url' => 'https://example.com/', 'date' => 'Wed, 23 Nov 2005 09:18:14 +0000', 'html' => false ),
+		);
+		$r = $this->run_importer( new Thinkery(), $this->file( 'things.json', json_encode( $things ) ) );
+		$this->assertSame( array( $stub ), $r['ids'] );
+		$post = get_post( $stub );
+		$this->assertSame( '2005-11-23 09:18:14', $post->post_date_gmt );
+		// Drafts have no GMT date, so WordPress discards a supplied date unless edit_date is set.
+		$this->assertTrue( FakeWP::$last_update['edit_date'] ?? false );
+		$this->assertSame( '', (string) get_post_meta( $stub, '_memex_stub', true ) );
+	}
+
+	public function test_thinkery_same_title_things_stay_separate_notes(): void {
+		$things = array(
+			array( 'title' => 'label', 'url' => false, 'date' => 'Sat, 27 Apr 2013 05:08:45 +0000', 'html' => '<p>a short note</p>' ),
+			array( 'title' => 'Label', 'url' => 'https://example.com/page', 'date' => 'Sun, 28 Apr 2013 05:08:45 +0000', 'html' => false ),
+		);
+		$r = $this->run_importer( new Thinkery(), $this->file( 'things.json', json_encode( $things ) ) );
+		$this->assertCount( 2, $r['ids'] );
+		$this->assertNotSame( $r['ids'][0], $r['ids'][1] );
+		$this->assertSame( '<p>a short note</p>', get_post( $r['ids'][0] )->post_content );
+		$this->assertStringNotContainsString( 'memex-import-merge', get_post( $r['ids'][0] )->post_content );
+		$this->assertSame( '2013-04-28 05:08:45', get_post( $r['ids'][1] )->post_date_gmt );
+	}
+
 	/* ─── Detection ─── */
 
 	public function test_from_type_and_detect(): void {

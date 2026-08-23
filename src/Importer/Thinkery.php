@@ -99,6 +99,13 @@ class Thinkery extends Importer {
 			return 0;
 		}
 
+		if ( '' !== $url || 0 === strpos( $html, '<div id="extract"' ) ) {
+			// Retrieved third-party page content: any `[[...]]` in it is the
+			// page's own text (wikitext samples, template syntax), not a link
+			// to one of our notes. Neutralise it so link resolution doesn't
+			// create stubs for it. Renders identically.
+			$html = str_replace( array( '[[', ']]' ), array( '&#91;&#91;', '&#93;&#93;' ), $html );
+		}
 		if ( '' !== $url ) {
 			$html = '<p><a href="' . esc_url( $url ) . '">' . esc_html( $url ) . '</a></p>' . ( '' !== $html ? "\n" . $html : '' );
 		}
@@ -114,7 +121,9 @@ class Thinkery extends Importer {
 			}
 		}
 
-		$id = $this->upsert( $title, $html, $args );
+		// Thinkery titles are labels, not identities: two things with the same
+		// title are two things, so never merge into an existing note.
+		$id = $this->upsert( $title, $html, $args, false );
 		if ( ! $id ) {
 			++$state['skipped'];
 			$state['errors'][] = 'Failed: ' . $title;
