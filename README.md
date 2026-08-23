@@ -1,6 +1,6 @@
 # Memex
 
-Turns WordPress into a note-taking app: bi-directional links, automatic backlinks, daily notes, tags, reminders, and one-click import from Obsidian, Notion, Evernote, and Roam Research.
+Turns WordPress into a note-taking app: bi-directional links, automatic backlinks, daily notes, tags, reminders, and one-click import from Obsidian, Notion, Evernote, Roam Research, and Thinkery.
 
 [Try Memex in WordPress Playground](https://playground.wordpress.net/?blueprint-url=https://raw.githubusercontent.com/akirk/memex/main/blueprint.json) · [Try it with demo data](https://playground.wordpress.net/?blueprint-url=https://raw.githubusercontent.com/akirk/memex/main/demo.json)
 
@@ -14,7 +14,7 @@ Notes live as a custom post type, so you keep WordPress revisions, search, media
 - **Tags.** A `memex_tag` taxonomy with a per-tag listing at `/memex/tag/{slug}`.
 - **Reminders.** Create reminders at `/memex/reminders`; the plugin schedules a 5-minute cron and emails you when one is due.
 - **Graph, orphans, broken links.** Built-in views for navigating the link structure of your notes.
-- **Importers.** Obsidian / generic Markdown, Notion (HTML/Markdown export), Evernote (`.enex`), and Roam Research (JSON). `[[Wiki-Links]]` from sources stay editable; missing targets become stub notes so links resolve.
+- **Importers.** Obsidian / generic Markdown, Notion (HTML/Markdown export), Evernote (`.enex`), Roam Research (JSON), and Thinkery (XML/JSON). `[[Wiki-Links]]` from sources stay editable; missing targets become stub notes so links resolve.
 - **Export.** Download all notes as a ZIP of Markdown files with YAML frontmatter — opens as an Obsidian vault and re-imports into Memex. Single notes download as `.md` from their page.
 - **Login required.** The app and notes are private by default — `memex_note` is registered as `public => false`.
 
@@ -61,6 +61,7 @@ Activate **Memex** in WordPress. The activator registers the CPT, schedules the 
 - **Notion** — the HTML or Markdown `.zip` export
 - **Evernote** — `.enex`
 - **Roam Research** — `.json`
+- **Thinkery** — the `.xml` or `.json` export from `/tools/export.php`
 
 Auto-detect sniffs file extension and content; you can also force a specific importer.
 
