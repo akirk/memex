@@ -43,51 +43,53 @@
 
 		var edges = (data.edges || []).filter(function (e) { return idIndex[e.from] && idIndex[e.to]; });
 
-		// Force-directed iterations.
-		var iterations = 180;
-		var repulse = 8000;
-		var springLen = 80;
-		var springK = 0.04;
-		var damping = 0.85;
+		// Fruchterman–Reingold: k is the ideal edge length for this many
+		// nodes in this much area, repulsion is k²/d, attraction d²/k, and a
+		// cooling temperature caps how far a node may move per step so the
+		// layout settles instead of bouncing off the walls. Scales from a
+		// handful of nodes to a few hundred without retuning.
+		var count = data.nodes.length;
+		var k = Math.sqrt((width * height) / count) * 0.5;
+		var iterations = count > 300 ? 100 : 200;
+		var temp = Math.max(width, height) / 8;
+		var cool = Math.pow(0.5 / temp, 1 / iterations);
 
 		for (var step = 0; step < iterations; step++) {
+			data.nodes.forEach(function (n) { n.vx = 0; n.vy = 0; });
 			// Repulsion.
-			for (var i = 0; i < data.nodes.length; i++) {
+			for (var i = 0; i < count; i++) {
 				var a = data.nodes[i];
-				for (var j = i + 1; j < data.nodes.length; j++) {
+				for (var j = i + 1; j < count; j++) {
 					var b = data.nodes[j];
 					var dx = a.x - b.x;
 					var dy = a.y - b.y;
-					var d2 = dx * dx + dy * dy + 0.01;
-					var f = repulse / d2;
-					var d = Math.sqrt(d2);
-					var fx = (dx / d) * f;
-					var fy = (dy / d) * f;
-					a.vx += fx; a.vy += fy;
-					b.vx -= fx; b.vy -= fy;
+					var d = Math.sqrt(dx * dx + dy * dy) + 0.01;
+					var f = (k * k) / d / d;
+					a.vx += dx * f; a.vy += dy * f;
+					b.vx -= dx * f; b.vy -= dy * f;
 				}
 			}
-			// Springs.
+			// Attraction along edges.
 			edges.forEach(function (e) {
 				var a = idIndex[e.from], b = idIndex[e.to];
 				var dx = b.x - a.x, dy = b.y - a.y;
 				var d = Math.sqrt(dx * dx + dy * dy) + 0.01;
-				var f = (d - springLen) * springK;
-				var fx = (dx / d) * f, fy = (dy / d) * f;
-				a.vx += fx; a.vy += fy;
-				b.vx -= fx; b.vy -= fy;
+				var f = d / k;
+				a.vx += dx * f; a.vy += dy * f;
+				b.vx -= dx * f; b.vy -= dy * f;
 			});
-			// Centering.
+			// Gentle pull to the centre, then move by at most `temp`.
 			data.nodes.forEach(function (n) {
-				n.vx += (width / 2 - n.x) * 0.001;
-				n.vy += (height / 2 - n.y) * 0.001;
-				n.x += n.vx;
-				n.y += n.vy;
-				n.vx *= damping;
-				n.vy *= damping;
+				n.vx += (width / 2 - n.x) * 0.05;
+				n.vy += (height / 2 - n.y) * 0.05;
+				var len = Math.sqrt(n.vx * n.vx + n.vy * n.vy) + 0.01;
+				var move = Math.min(len, temp) / len;
+				n.x += n.vx * move;
+				n.y += n.vy * move;
 				n.x = Math.max(10, Math.min(width - 10, n.x));
 				n.y = Math.max(10, Math.min(height - 10, n.y));
 			});
+			temp *= cool;
 		}
 
 		// Edges first so they render beneath nodes.

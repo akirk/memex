@@ -943,6 +943,16 @@ body.memex {
 	pointer-events: none;
 }
 
+#note-graph-unlinked {
+	margin-top: 2rem;
+}
+
+.memex-graph-unlinked {
+	columns: 18em;
+	column-gap: 2rem;
+	padding-left: 1.2em;
+}
+
 /* Reminders */
 
 .memex-reminder-form {
