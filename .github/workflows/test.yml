@@ -1,0 +1,66 @@
+name: Tests
+
+on:
+  push:
+    branches-ignore:
+      - 'dist/**'
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.event_name }}-${{ github.ref_name || github.event.pull_request.head.ref }}
+  cancel-in-progress: true
+
+jobs:
+  phpunit:
+    name: PHP ${{ matrix.php }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['7.4', '8.2', '8.4']
+
+    services:
+      mysql:
+        image: mariadb:11
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: wordpress_tests
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mysqli, zip, xml, mbstring
+          coverage: none
+          tools: composer:v2
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Download WordPress
+        run: |
+          curl -sSL https://wordpress.org/latest.tar.gz | tar -xz -C /tmp
+          test -f /tmp/wordpress/wp-settings.php
+
+      - name: Run PHPUnit
+        env:
+          WP_CORE_DIR: /tmp/wordpress
+          WP_TESTS_DB_NAME: wordpress_tests
+          WP_TESTS_DB_USER: root
+          WP_TESTS_DB_PASSWORD: root
+          WP_TESTS_DB_HOST: 127.0.0.1
+        run: vendor/bin/phpunit

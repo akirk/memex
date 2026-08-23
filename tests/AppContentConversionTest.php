@@ -2,9 +2,8 @@
 
 use Memex\App;
 use Memex\Content;
-use PHPUnit\Framework\TestCase;
 
-class AppContentConversionTest extends TestCase {
+class AppContentConversionTest extends WP_UnitTestCase {
 	public function test_content_to_editor_text_preserves_unsupported_html_between_markdown_blocks(): void {
 		$content = '<p>Hello</p><figure><img src="cover.jpg" alt="Cover"></figure><p>Bye</p>';
 
@@ -25,7 +24,7 @@ class AppContentConversionTest extends TestCase {
 
 	public function test_content_to_editor_text_keeps_wiki_links_editable(): void {
 		wp_insert_post( array( 'post_type' => 'memex_note', 'post_title' => 'Reading List' ) );
-		$content = '<p>See <a href="https://example.test/memex/note/reading-list">Reading List</a> and <a href="https://example.com">Example</a>.</p>';
+		$content = '<p>See <a href="http://example.org/memex/note/reading-list">Reading List</a> and <a href="https://example.com">Example</a>.</p>';
 
 		$this->assertSame(
 			'See [[Reading List]] and [Example](https://example.com).',
@@ -46,7 +45,7 @@ class AppContentConversionTest extends TestCase {
 		$this->assertStringContainsString( '&#91;&#91;Main Page&#93;&#93;', $saved );
 		// And a real link typed next to it still becomes an anchor.
 		$saved = Content::markdown_to_html( '\\[\\[not a link\\]\\] but [[Real Note]]' );
-		$this->assertStringContainsString( '&#91;&#91;not a link&#93;&#93; but <a href="https://example.test/memex/note/real-note">Real Note</a>', $saved );
+		$this->assertStringContainsString( '&#91;&#91;not a link&#93;&#93; but <a href="http://example.org/memex/note/real-note">Real Note</a>', $saved );
 	}
 
 	public function test_markdown_to_html_preserves_wiki_links_after_markdown_rendering(): void {
@@ -54,8 +53,8 @@ class AppContentConversionTest extends TestCase {
 
 		$this->assertStringContainsString( '<h2>Books</h2>', $html );
 		// Shorthand is an input form only: notes store real anchors.
-		$this->assertStringContainsString( '<li><a href="https://example.test/memex/note/the-martian">The Martian</a></li>', $html );
-		$this->assertStringContainsString( '<li><a href="https://example.test/memex/note/project-hail-mary">PHM</a></li>', $html );
+		$this->assertStringContainsString( '<li><a href="http://example.org/memex/note/the-martian">The Martian</a></li>', $html );
+		$this->assertStringContainsString( '<li><a href="http://example.org/memex/note/project-hail-mary">PHM</a></li>', $html );
 		$this->assertStringNotContainsString( '[[', $html );
 	}
 

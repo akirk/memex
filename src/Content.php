@@ -89,7 +89,9 @@ class Content {
 	 * escapes first so literal brackets survive the next save.
 	 */
 	private static function decode_for_editor( string $text ): string {
-		$text = str_replace( array( '&#91;', '&#x5B;', '&#x5b;', '&lbrack;', '&#93;', '&#x5D;', '&#x5d;', '&rbrack;' ), array( '\\[', '\\[', '\\[', '\\[', '\\]', '\\]', '\\]', '\\]' ), $text );
+		// kses zero-pads numeric entities (&#091;), so match those too.
+		$text = (string) preg_replace( '/&(?:#0*91|#x0*5[Bb]|lbrack);/', '\\[', $text );
+		$text = (string) preg_replace( '/&(?:#0*93|#x0*5[Dd]|rbrack);/', '\\]', $text );
 		return html_entity_decode( $text, ENT_QUOTES | ENT_HTML5, get_bloginfo( 'charset' ) ?: 'UTF-8' );
 	}
 

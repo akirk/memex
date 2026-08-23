@@ -1,67 +1,26 @@
 <?php
+/**
+ * PHPUnit bootstrap: load the WordPress core test library with the plugin
+ * active, so tests run against real WordPress and a real database.
+ */
 
 require dirname( __DIR__ ) . '/vendor/autoload.php';
-require __DIR__ . '/fake-wp.php';
 
-if ( ! defined( 'ABSPATH' ) ) {
-	define( 'ABSPATH', dirname( __DIR__ ) . '/' );
+putenv( 'WP_PHPUNIT__TESTS_CONFIG=' . __DIR__ . '/wp-tests-config.php' );
+
+$memex_tests_dir = getenv( 'WP_PHPUNIT__DIR' );
+if ( ! $memex_tests_dir || ! file_exists( $memex_tests_dir . '/includes/functions.php' ) ) {
+	fwrite( STDERR, "wp-phpunit/wp-phpunit is not installed; run composer install.\n" );
+	exit( 1 );
 }
 
-if ( ! function_exists( 'get_bloginfo' ) ) {
-	function get_bloginfo( $show = '' ) {
-		return 'charset' === $show ? 'UTF-8' : '';
+require_once $memex_tests_dir . '/includes/functions.php';
+
+tests_add_filter(
+	'muplugins_loaded',
+	static function () {
+		require dirname( __DIR__ ) . '/memex.php';
 	}
-}
+);
 
-if ( ! function_exists( '__' ) ) {
-	function __( $text, $domain = 'default' ) {
-		return $text;
-	}
-}
-
-if ( ! function_exists( 'esc_html' ) ) {
-	function esc_html( $text ) {
-		return htmlspecialchars( (string) $text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8' );
-	}
-}
-
-if ( ! function_exists( 'wp_strip_all_tags' ) ) {
-	function wp_strip_all_tags( $text, $remove_breaks = false ) {
-		$text = preg_replace( '@<(script|style)[^>]*?>.*?</\\1>@si', '', (string) $text );
-		$text = strip_tags( $text );
-		if ( $remove_breaks ) {
-			$text = preg_replace( '/[\r\n\t ]+/', ' ', $text );
-		}
-		return trim( $text );
-	}
-}
-
-if ( ! function_exists( 'wp_parse_url' ) ) {
-	function wp_parse_url( $url, $component = -1 ) {
-		return parse_url( $url, $component );
-	}
-}
-
-if ( ! function_exists( 'home_url' ) ) {
-	function home_url( $path = '' ) {
-		return 'https://example.test' . $path;
-	}
-}
-
-if ( ! function_exists( 'wp_slash' ) ) {
-	function wp_slash( $value ) {
-		if ( is_array( $value ) ) {
-			return array_map( 'wp_slash', $value );
-		}
-		return is_string( $value ) ? addslashes( $value ) : $value;
-	}
-}
-
-if ( ! function_exists( 'wp_unslash' ) ) {
-	function wp_unslash( $value ) {
-		if ( is_array( $value ) ) {
-			return array_map( 'wp_unslash', $value );
-		}
-		return is_string( $value ) ? stripslashes( $value ) : $value;
-	}
-}
+require $memex_tests_dir . '/includes/bootstrap.php';
