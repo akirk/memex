@@ -1,14 +1,14 @@
 <?php
 /**
- * [[Wiki-link]] parsing, stub creation, backlink tracking, and rendering.
+ * Links between notes: stub creation, backlink tracking, and link styling.
  *
- * The Memex app is the primary authoring surface. Users can type:
- *   [[Target]]
- *   [[Target|Display text]]
- *   [[Target#Heading]]
- *
- * Gutenberg-authored/imported HTML anchors are still understood so older notes
- * continue to participate in backlinks and graph views.
+ * At rest a link is always an HTML anchor to the target note's URL. The
+ * `[[Target]]`, `[[Target|Display text]]` and `[[Target#Heading]]` shorthand
+ * is an input convenience only: the in-app editor and the importers convert
+ * it to anchors before content is stored (see `shorthand_to_html()`), and
+ * Gutenberg's `[[` opens the link picker. Nothing parses shorthand on save
+ * or at display time, so literal double brackets in note text (code samples,
+ * scraped pages) stay text.
  *
  * Storage:
  *   `_memex_links_to` post_meta — one row per outgoing target post ID. Lets
@@ -23,7 +23,6 @@ class Links {
 	public static function register() {
 		add_action( 'save_post_' . CPT::POST_TYPE, array( __CLASS__, 'on_save' ), 20, 2 );
 		add_action( 'wp_trash_post', array( __CLASS__, 'on_trash' ) );
-		add_filter( 'the_content', array( __CLASS__, 'render_links' ), 9 );
 		add_filter( 'the_content', array( __CLASS__, 'style_internal_links' ), 10 );
 	}
 
@@ -48,43 +47,13 @@ class Links {
 	}
 
 	/**
-	 * Extract `[[Target]]` strings from content.
-	 *
-	 * @return array<int,array{target:string,display:?string}>
-	 */
-	public static function extract_links( string $content ): array {
-		if ( ! preg_match_all( self::LINK_REGEX, $content, $matches, PREG_SET_ORDER ) ) {
-			return array();
-		}
-		$out = array();
-		foreach ( $matches as $m ) {
-			$target = trim( $m[1] );
-			if ( '' === $target ) {
-				continue;
-			}
-			$out[] = array(
-				'target'  => $target,
-				'display' => isset( $m[2] ) && '' !== trim( $m[2] ) ? trim( $m[2] ) : null,
-			);
-		}
-		return $out;
-	}
-
-	/**
-	 * Rewrite `_memex_links_to` rows for a note from wiki links and HTML hrefs.
+	 * Rewrite `_memex_links_to` rows for a note from the hrefs in its content.
 	 *
 	 * @return int[] target post IDs that were stored.
 	 */
 	public static function sync_links_from_content( int $post_id, string $content ): array {
 		delete_post_meta( $post_id, CPT::META_LINKS_TO );
 		$stored = array();
-
-		foreach ( self::extract_links( $content ) as $link ) {
-			$tid = self::resolve_or_create( self::strip_fragment( $link['target'] ) );
-			if ( $tid && $tid !== $post_id && ! in_array( $tid, $stored, true ) ) {
-				$stored[] = $tid;
-			}
-		}
 
 		foreach ( self::extract_hrefs( $content ) as $href ) {
 			$tid = self::resolve_href( $href );
@@ -158,6 +127,10 @@ class Links {
 			$id = self::resolve( $slug );
 			if ( $id ) {
 				return $id;
+			}
+			// CPT::url() falls back to the ID for notes without a slug.
+			if ( ctype_digit( $slug ) && CPT::POST_TYPE === get_post_type( (int) $slug ) ) {
+				return (int) $slug;
 			}
 		}
 
@@ -266,6 +239,8 @@ class Links {
 				'post_title'   => $title,
 				'post_status'  => 'draft',
 				'post_content' => '',
+				// Drafts get no slug by default; anchors need one to resolve.
+				'post_name'    => sanitize_title( $title ),
 			),
 			true
 		);
@@ -277,56 +252,9 @@ class Links {
 	}
 
 	/**
-	 * Replace `[[...]]` strings with anchors when content is rendered.
-	 */
-	public static function render_links( $content ) {
-		if ( ! is_string( $content ) || false === strpos( $content, '[[' ) ) {
-			return $content;
-		}
-		return (string) preg_replace_callback(
-			self::LINK_REGEX,
-			static function ( $m ) {
-				$raw_target = trim( $m[1] );
-				if ( '' === $raw_target ) {
-					return $m[0];
-				}
-				$display  = isset( $m[2] ) && '' !== trim( $m[2] ) ? trim( $m[2] ) : $raw_target;
-				$target   = self::strip_fragment( $raw_target );
-				$fragment = '';
-				$hash     = strpos( $raw_target, '#' );
-				if ( false !== $hash ) {
-					$fragment = '#' . sanitize_title( substr( $raw_target, $hash + 1 ) );
-				}
-				$id = self::resolve( $target );
-				if ( $id ) {
-					$url     = CPT::url( $id ) . $fragment;
-					$classes = (bool) get_post_meta( $id, CPT::META_STUB, true ) ? 'memex-link memex-link-stub' : 'memex-link';
-					return sprintf(
-						'<a class="%s" href="%s" data-memex-target="%s">%s</a>',
-						esc_attr( $classes ),
-						esc_url( $url ),
-						esc_attr( $target ),
-						esc_html( $display )
-					);
-				}
-				$create_url = add_query_arg( 'title', rawurlencode( $target ), home_url( '/memex/new' ) );
-				return sprintf(
-					'<a class="memex-link memex-link-stub" href="%s" title="%s" data-memex-target="%s">%s</a>',
-					esc_url( $create_url ),
-					esc_attr__( 'Create this note', 'memex' ),
-					esc_attr( $target ),
-					esc_html( $display )
-				);
-			},
-			$content
-		);
-	}
-
-	/**
-	 * Convert `[[Target]]` / `[[Target|Display]]` shorthand to `<a href>` HTML.
-	 *
-	 * Kept for compatibility with older migration paths. Normal app editing
-	 * now keeps wiki-link text in stored note content.
+	 * Convert `[[Target]]` / `[[Target|Display]]` shorthand to `<a href>` HTML,
+	 * creating a stub for a target that doesn't exist yet. This is the only
+	 * place shorthand is interpreted; run it on input (editor save, import).
 	 */
 	public static function shorthand_to_html( string $content ): string {
 		if ( false === strpos( $content, '[[' ) ) {

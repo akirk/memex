@@ -16,8 +16,9 @@
  *
  * Importers stage `[[Title]]` shorthand in content because they don't yet know
  * which titles will end up existing. `Job` detaches the save_post link sync
- * while items run and resolves the shorthand for every imported note at the
- * end, creating stubs for truly-missing targets.
+ * while items run and, at the end, rewrites the shorthand of every imported
+ * note into anchors (creating stubs for truly-missing targets) so nothing but
+ * HTML is stored.
  */
 
 namespace Memex\Importer;
@@ -185,23 +186,36 @@ abstract class Importer {
 	}
 
 	/**
-	 * Resolve `[[Title]]` shorthand of one imported note into backlink rows,
-	 * creating stubs for missing targets. Run once every note exists.
+	 * Turn the `[[Title]]` shorthand staged in one imported note into real
+	 * anchors (creating stubs for missing targets) and record its backlinks.
+	 * Run once every note exists, so titles resolve to the imported notes.
 	 */
 	public static function resolve_links( int $id ): void {
 		$p = get_post( $id );
 		if ( ! $p ) {
 			return;
 		}
-		Links::sync_links_from_content( (int) $id, (string) $p->post_content );
+		$content = Links::shorthand_to_html( (string) $p->post_content );
+		if ( $content !== $p->post_content ) {
+			wp_update_post(
+				array(
+					'ID'           => $id,
+					'post_content' => $content,
+				)
+			);
+		}
+		Links::sync_links_from_content( $id, $content );
 	}
 
 	/**
 	 * Insert-or-update a note by title. Existing notes with the same title are
 	 * promoted from stub → real note; non-stub existing notes are left alone
-	 * (we don't want to overwrite user edits on re-import).
+	 * (we don't want to overwrite user edits on re-import) and the imported
+	 * content is appended below a separator. Importers whose titles are not
+	 * unique identities (bookmark labels, say) pass `$merge = false` to get a
+	 * separate note instead.
 	 */
-	protected function upsert( string $title, string $content_html, array $args = array() ): int {
+	protected function upsert( string $title, string $content_html, array $args = array(), bool $merge = true ): int {
 		$title = trim( $title );
 		if ( '' === $title ) {
 			return 0;
@@ -221,6 +235,11 @@ abstract class Importer {
 			$empty    = $existing && '' === trim( wp_strip_all_tags( $existing->post_content ) );
 			if ( $is_stub || $empty ) {
 				$data['ID'] = $existing_id;
+				// Stubs are drafts with a zero GMT date; without this flag
+				// wp_update_post() discards the supplied date and uses "now".
+				if ( isset( $data['post_date'] ) ) {
+					$data['edit_date'] = true;
+				}
 				wp_update_post( $data );
 				delete_post_meta( $existing_id, CPT::META_STUB );
 				update_post_meta( $existing_id, CPT::META_IMPORT_SOURCE, $this->source() );
@@ -228,6 +247,9 @@ abstract class Importer {
 					update_post_meta( $existing_id, CPT::META_IMPORT_PATH, $args['_import_path'] );
 				}
 				return $existing_id;
+			}
+			if ( ! $merge ) {
+				return $this->insert( $data, $args );
 			}
 			// Real content exists; append imported variant below a separator.
 			$merged = $existing->post_content . "\n\n<hr class=\"memex-import-merge\" />\n\n" . $content_html;
@@ -240,6 +262,10 @@ abstract class Importer {
 			return $existing_id;
 		}
 
+		return $this->insert( $data, $args );
+	}
+
+	private function insert( array $data, array $args ): int {
 		unset( $data['_import_path'] );
 		$id = wp_insert_post( $data, true );
 		if ( is_wp_error( $id ) || ! $id ) {

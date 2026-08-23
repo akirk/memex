@@ -52,22 +52,45 @@ class Content {
 		}
 		$html = $parser->text( $markdown );
 		$html = self::render_task_list_items( $html );
+		// Tokens may sit back to back, so the payload match must be lazy:
+		// "END…TOKENMEMEX…TOKEN" is itself valid base64 alphabet.
 		$html = preg_replace_callback(
-			'/MEMEXLINKTOKEN([A-Za-z0-9+\/=]+)ENDMEMEXLINKTOKEN/',
+			'/MEMEXLINKTOKEN([A-Za-z0-9+\/=]+?)ENDMEMEXLINKTOKEN/',
 			static function ( $m ) {
 				return '[[' . base64_decode( $m[1] ) . ']]';
 			},
 			$html
 		);
+		// Shorthand is an input form only; store real anchors.
+		$html = Links::shorthand_to_html( (string) $html );
 		$html = str_replace( 'MEMEXBACKSLASHTOKEN', '\\', $html );
 		$html = preg_replace_callback(
-			'/MEMEXESCAPEDCHARTOKEN([A-Za-z0-9+\/=]+)ENDMEMEXESCAPEDCHARTOKEN/',
+			'/MEMEXESCAPEDCHARTOKEN([A-Za-z0-9+\/=]+?)ENDMEMEXESCAPEDCHARTOKEN/',
 			static function ( $m ) {
-				return '\\' . base64_decode( $m[1] );
+				$char = base64_decode( $m[1] );
+				// Escaped brackets are stored as entities so they render
+				// without the backslash and can't be read as `[[link]]`
+				// shorthand or a `[ ]` task when edited again.
+				if ( '[' === $char ) {
+					return '&#91;';
+				}
+				if ( ']' === $char ) {
+					return '&#93;';
+				}
+				return '\\' . $char;
 			},
 			$html
 		);
 		return (string) $html;
+	}
+
+	/**
+	 * Decode entities for the editor, turning bracket entities into Markdown
+	 * escapes first so literal brackets survive the next save.
+	 */
+	private static function decode_for_editor( string $text ): string {
+		$text = str_replace( array( '&#91;', '&#x5B;', '&#x5b;', '&lbrack;', '&#93;', '&#x5D;', '&#x5d;', '&rbrack;' ), array( '\\[', '\\[', '\\[', '\\[', '\\]', '\\]', '\\]', '\\]' ), $text );
+		return html_entity_decode( $text, ENT_QUOTES | ENT_HTML5, get_bloginfo( 'charset' ) ?: 'UTF-8' );
 	}
 
 	/**
@@ -134,6 +157,9 @@ class Content {
 	}
 
 	public static function editor_text_from_html( string $content ): string {
+		// Literal double brackets in stored text are not links; escape them
+		// so they stay text when the editor converts `[[…]]` back to anchors.
+		$content = str_replace( array( '[[', ']]' ), array( '&#91;&#91;', '&#93;&#93;' ), $content );
 		$content = Links::internal_anchors_to_shorthand( $content );
 		$markdown = self::html_to_editor_markdown( $content );
 		if ( '' !== $markdown ) {
@@ -144,7 +170,7 @@ class Content {
 		$content = preg_replace( '/<\/(p|div|li|h[1-6])\s*>/i', "\n\n", $content );
 		$content = preg_replace( '/<hr\b[^>]*>/i', "\n\n---\n\n", $content );
 		$text    = wp_strip_all_tags( $content, true );
-		$text    = html_entity_decode( $text, ENT_QUOTES | ENT_HTML5, get_bloginfo( 'charset' ) ?: 'UTF-8' );
+		$text    = self::decode_for_editor( $text );
 		$text    = preg_replace( "/\n{3,}/", "\n\n", $text );
 		return trim( $text );
 	}
@@ -209,7 +235,7 @@ class Content {
 					continue;
 				}
 				if ( 'pre' === $tag ) {
-					$code = html_entity_decode( wp_strip_all_tags( $inner ), ENT_QUOTES | ENT_HTML5, get_bloginfo( 'charset' ) ?: 'UTF-8' );
+					$code = self::decode_for_editor( wp_strip_all_tags( $inner ) );
 					$blocks[] = "```\n" . trim( $code, "\n" ) . "\n```";
 				}
 			}
@@ -254,7 +280,7 @@ class Content {
 			$html
 		);
 		$text = wp_strip_all_tags( $html, true );
-		$text = html_entity_decode( $text, ENT_QUOTES | ENT_HTML5, get_bloginfo( 'charset' ) ?: 'UTF-8' );
+		$text = self::decode_for_editor( $text );
 		$text = preg_replace( "/[ \t]+\n/", "\n", $text );
 		return trim( $text );
 	}

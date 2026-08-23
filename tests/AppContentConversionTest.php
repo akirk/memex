@@ -24,7 +24,8 @@ class AppContentConversionTest extends TestCase {
 	}
 
 	public function test_content_to_editor_text_keeps_wiki_links_editable(): void {
-		$content = '<p>See [[Reading List]] and <a href="https://example.com">Example</a>.</p>';
+		wp_insert_post( array( 'post_type' => 'memex_note', 'post_title' => 'Reading List' ) );
+		$content = '<p>See <a href="https://example.test/memex/note/reading-list">Reading List</a> and <a href="https://example.com">Example</a>.</p>';
 
 		$this->assertSame(
 			'See [[Reading List]] and [Example](https://example.com).',
@@ -32,12 +33,30 @@ class AppContentConversionTest extends TestCase {
 		);
 	}
 
+	public function test_literal_double_brackets_survive_an_editor_round_trip(): void {
+		// Stored text that merely looks like shorthand (imported wikitext, say)
+		// is shown escaped, and saving it back keeps it text, not a link.
+		$content = '<p>Use [[Main Page]] syntax; see &#91;&#91;Other&#93;&#93;.</p>';
+		$text    = App::content_to_editor_text( $content );
+		$this->assertSame( 'Use \\[\\[Main Page\\]\\] syntax; see \\[\\[Other\\]\\].', $text );
+
+		$saved = Content::markdown_to_html( $text );
+		$this->assertStringNotContainsString( '<a ', $saved );
+		$this->assertStringNotContainsString( '[[', $saved );
+		$this->assertStringContainsString( '&#91;&#91;Main Page&#93;&#93;', $saved );
+		// And a real link typed next to it still becomes an anchor.
+		$saved = Content::markdown_to_html( '\\[\\[not a link\\]\\] but [[Real Note]]' );
+		$this->assertStringContainsString( '&#91;&#91;not a link&#93;&#93; but <a href="https://example.test/memex/note/real-note">Real Note</a>', $saved );
+	}
+
 	public function test_markdown_to_html_preserves_wiki_links_after_markdown_rendering(): void {
 		$html = Content::markdown_to_html( "## Books\n\n- [[The Martian]]\n- [[Project Hail Mary|PHM]]" );
 
 		$this->assertStringContainsString( '<h2>Books</h2>', $html );
-		$this->assertStringContainsString( '<li>[[The Martian]]</li>', $html );
-		$this->assertStringContainsString( '<li>[[Project Hail Mary|PHM]]</li>', $html );
+		// Shorthand is an input form only: notes store real anchors.
+		$this->assertStringContainsString( '<li><a href="https://example.test/memex/note/the-martian">The Martian</a></li>', $html );
+		$this->assertStringContainsString( '<li><a href="https://example.test/memex/note/project-hail-mary">PHM</a></li>', $html );
+		$this->assertStringNotContainsString( '[[', $html );
 	}
 
 	public function test_markdown_to_html_renders_task_list_items_as_checkboxes(): void {
@@ -108,7 +127,8 @@ class AppContentConversionTest extends TestCase {
 
 		$this->assertStringContainsString( '\*literal asterisk\*', $html );
 		$this->assertStringContainsString( 'C:\Temp', $html );
-		$this->assertStringContainsString( '\[[escaped brackets]]', $html );
+		// An escaped bracket is stored as an entity so it can never be read as a link.
+		$this->assertStringContainsString( '&#91;[escaped brackets]]', $html );
 	}
 
 	public function test_slashing_post_array_preserves_backslashes_through_core_unslash(): void {

@@ -121,7 +121,9 @@ class Thinkery extends Importer {
 			}
 		}
 
-		$id = $this->upsert( $title, $html, $args );
+		// Thinkery titles are labels, not identities: two things with the same
+		// title are two things, so never merge into an existing note.
+		$id = $this->upsert( $title, $html, $args, false );
 		if ( ! $id ) {
 			++$state['skipped'];
 			$state['errors'][] = 'Failed: ' . $title;
