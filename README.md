@@ -65,6 +65,8 @@ Activate **Memex** in WordPress. The activator registers the CPT, schedules the 
 
 Auto-detect sniffs file extension and content; you can also force a specific importer.
 
+Large files are imported in chunks: the upload creates a job, and the page then calls the server repeatedly, each call doing about five seconds of work and reporting progress. Closing the tab or a PHP timeout leaves the job resumable — reopen `/memex/import` to resume or discard it. Abandoned jobs are swept daily.
+
 ## Exporting
 
 `/memex/export` downloads a ZIP with one `.md` file per note (stubs are skipped). Each file starts with YAML frontmatter — `title`, `created`, `updated`, plus `tags`, `aliases`, `daily` and `status` when set — followed by the note body in the same Markdown the in-app editor uses, so links appear as `[[Note Title]]`. Child notes are placed in a folder named after their parent. The archive can be imported back via the Markdown importer.

@@ -47,86 +47,78 @@ class Thinkery extends Importer {
 		return false;
 	}
 
-	public function import( string $path ): array {
-		$raw = @file_get_contents( $path );
+	public function prepare( string $path, string $work_dir ): array {
+		$raw = @file_get_contents( $path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 		if ( false === $raw ) {
-			return array(
-				'ids'     => array(),
-				'errors'  => array( 'Could not read Thinkery export.' ),
-				'skipped' => 0,
-			);
+			return self::failure( 'Could not read Thinkery export.' );
 		}
 
 		$trimmed = ltrim( $raw, "\xEF\xBB\xBF \t\r\n" );
 		if ( '[' === substr( $trimmed, 0, 1 ) ) {
 			$things = json_decode( $trimmed, true );
 			if ( ! is_array( $things ) ) {
-				return array(
-					'ids'     => array(),
-					'errors'  => array( 'Invalid JSON in Thinkery export.' ),
-					'skipped' => 0,
-				);
+				return self::failure( 'Invalid JSON in Thinkery export.' );
 			}
 		} else {
 			$things = $this->parse_xml( $raw );
 			if ( null === $things ) {
-				return array(
-					'ids'     => array(),
-					'errors'  => array( 'Failed to parse Thinkery export (invalid XML).' ),
-					'skipped' => 0,
-				);
+				return self::failure( 'Failed to parse Thinkery export (invalid XML).' );
 			}
 		}
+		unset( $raw, $trimmed );
 
-		$ids     = array();
-		$errors  = array();
+		$items   = array();
 		$skipped = 0;
 		foreach ( $things as $thing ) {
 			if ( ! is_array( $thing ) ) {
 				++$skipped;
 				continue;
 			}
-			$title = trim( (string) ( $thing['title'] ?? '' ) );
-			$url   = trim( (string) ( $thing['url'] ?? '' ) );
-			$html  = trim( (string) ( $thing['html'] ?? '' ) );
-			if ( '' === $title ) {
-				$title = $url;
-			}
-			if ( '' === $title ) {
-				++$skipped;
-				continue;
-			}
+			$items[] = $this->stash( $work_dir, 'things', count( $items ), 'json', (string) wp_json_encode( $thing ) );
+		}
+		return self::prepared( $items, array( 'skipped' => $skipped ) );
+	}
 
-			if ( '' !== $url ) {
-				$html = '<p><a href="' . esc_url( $url ) . '">' . esc_html( $url ) . '</a></p>' . ( '' !== $html ? "\n" . $html : '' );
-			}
+	public function import_item( $item, array &$state ): int {
+		$thing = json_decode( (string) @file_get_contents( $item ), true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		if ( ! is_array( $thing ) ) {
+			++$state['skipped'];
+			return 0;
+		}
+		$title = trim( (string) ( $thing['title'] ?? '' ) );
+		$url   = trim( (string) ( $thing['url'] ?? '' ) );
+		$html  = trim( (string) ( $thing['html'] ?? '' ) );
+		if ( '' === $title ) {
+			$title = $url;
+		}
+		if ( '' === $title ) {
+			++$state['skipped'];
+			return 0;
+		}
 
-			$args = array();
-			$date = trim( (string) ( $thing['date'] ?? '' ) );
-			if ( '' !== $date ) {
-				$ts = strtotime( $date );
-				if ( false !== $ts ) {
-					$gmt                   = gmdate( 'Y-m-d H:i:s', $ts );
-					$args['post_date_gmt'] = $gmt;
-					$args['post_date']     = get_date_from_gmt( $gmt );
-				}
-			}
+		if ( '' !== $url ) {
+			$html = '<p><a href="' . esc_url( $url ) . '">' . esc_html( $url ) . '</a></p>' . ( '' !== $html ? "\n" . $html : '' );
+		}
 
-			$id = $this->upsert( $title, $html, $args );
-			if ( $id ) {
-				$ids[] = $id;
-				$this->set_tags( $id, $this->parse_tags( (string) ( $thing['tags'] ?? '' ) ) );
-			} else {
-				++$skipped;
-				$errors[] = 'Failed: ' . $title;
+		$args = array();
+		$date = trim( (string) ( $thing['date'] ?? '' ) );
+		if ( '' !== $date ) {
+			$ts = strtotime( $date );
+			if ( false !== $ts ) {
+				$gmt                   = gmdate( 'Y-m-d H:i:s', $ts );
+				$args['post_date_gmt'] = $gmt;
+				$args['post_date']     = get_date_from_gmt( $gmt );
 			}
 		}
 
-		return array(
-			'ids'     => $ids,
-			'errors'  => $errors,
-			'skipped' => $skipped,
-		);
+		$id = $this->upsert( $title, $html, $args );
+		if ( ! $id ) {
+			++$state['skipped'];
+			$state['errors'][] = 'Failed: ' . $title;
+			return 0;
+		}
+		$this->set_tags( $id, $this->parse_tags( (string) ( $thing['tags'] ?? '' ) ) );
+		return $id;
 	}
 
 	/**

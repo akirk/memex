@@ -2,15 +2,20 @@
 /**
  * Import dispatcher.
  *
- * Flow:
- *   1. `begin()` detaches the save_post link sync so we can insert notes
- *      fast without an N^2 resolve pass.
- *   2. Run a specific importer — it returns a batch of inserted post IDs.
- *      Importers stage `[[Title]]` shorthand in content because they don't yet
- *      know which titles will end up existing.
- *   3. `end()` re-attaches the sync, then walks each imported note, resolving
- *      shorthand links into backlink rows and creating stubs for truly-missing
- *      targets. Imported wiki-link text remains editable in the Memex app.
+ * An import is a list of work items processed in chunks so big files do not
+ * tie up a single request (see `Job`). Importers implement two steps:
+ *
+ *   1. `prepare()` inspects the uploaded file once and materialises it as a
+ *      list of JSON-serialisable work items inside a work directory (extracted
+ *      ZIP entries, one file per note, ...). Nothing is inserted here.
+ *   2. `import_item()` processes one item. Importers that need two passes
+ *      (create every note first so `[[links]]` resolve by title, then fill in
+ *      content) simply emit the items twice with a pass marker.
+ *
+ * Importers stage `[[Title]]` shorthand in content because they don't yet know
+ * which titles will end up existing. `Job` detaches the save_post link sync
+ * while items run and resolves the shorthand for every imported note at the
+ * end, creating stubs for truly-missing targets.
  */
 
 namespace Memex\Importer;
@@ -23,11 +28,78 @@ abstract class Importer {
 	abstract public function source(): string;
 
 	/**
-	 * Run the import for the given path.
+	 * Inspect the file and produce the list of work items.
 	 *
-	 * @return array{ids:int[],errors:string[],skipped:int}
+	 * The work directory exists, is private to this import, and is deleted when
+	 * the job finishes. Items must survive a JSON round-trip.
+	 *
+	 * @return array{items:array,state:array,errors:string[]}
 	 */
-	abstract public function import( string $path ): array;
+	abstract public function prepare( string $path, string $work_dir ): array;
+
+	/**
+	 * Process one work item.
+	 *
+	 * `$state` is whatever `prepare()` returned plus anything previous items
+	 * stored; it persists across requests. Errors go to `$state['errors'][]`,
+	 * silently skipped input increments `$state['skipped']`.
+	 *
+	 * @param mixed $item
+	 * @return int Post ID of an imported note (collected for link resolution), or 0.
+	 */
+	abstract public function import_item( $item, array &$state ): int;
+
+	/**
+	 * Shape every importer's state starts with.
+	 */
+	public static function initial_state(): array {
+		return array(
+			'errors'  => array(),
+			'skipped' => 0,
+		);
+	}
+
+	/**
+	 * @return array{items:array,state:array,errors:string[]}
+	 */
+	protected static function failure( string $message ): array {
+		return array(
+			'items'  => array(),
+			'state'  => self::initial_state(),
+			'errors' => array( $message ),
+		);
+	}
+
+	/**
+	 * @return array{items:array,state:array,errors:string[]}
+	 */
+	protected static function prepared( array $items, array $state = array() ): array {
+		return array(
+			'items'  => array_values( $items ),
+			'state'  => array_merge( self::initial_state(), $state ),
+			'errors' => array(),
+		);
+	}
+
+	/**
+	 * Importer for a user-facing type slug, or null.
+	 */
+	public static function from_type( string $type ): ?Importer {
+		switch ( $type ) {
+			case 'markdown':
+			case 'obsidian':
+				return new Markdown();
+			case 'notion':
+				return new Notion();
+			case 'evernote':
+				return new Evernote();
+			case 'roam':
+				return new Roam();
+			case 'thinkery':
+				return new Thinkery();
+		}
+		return null;
+	}
 
 	/**
 	 * Sniff a file path and return the right importer, or null.
@@ -93,28 +165,31 @@ abstract class Importer {
 	}
 
 	/**
-	 * Detach save_post link sync for the duration of the import.
+	 * Detach save_post link sync while items are inserted. Must be called in
+	 * every request that runs `import_item()`, or each insert triggers a full
+	 * resolve pass.
 	 */
 	public static function begin(): void {
 		remove_action( 'save_post_' . CPT::POST_TYPE, array( Links::class, 'on_save' ), 20 );
 	}
 
 	/**
-	 * Re-attach the save_post hook, then for each imported note: resolve
-	 * `[[Title]]` shorthand into backlink rows, creating stubs for missing
-	 * targets now that all imported titles exist.
-	 *
-	 * @param int[] $ids
+	 * Re-attach the save_post hook.
 	 */
-	public static function end( array $ids ): void {
+	public static function end(): void {
 		add_action( 'save_post_' . CPT::POST_TYPE, array( Links::class, 'on_save' ), 20, 2 );
-		foreach ( $ids as $id ) {
-			$p = get_post( $id );
-			if ( ! $p ) {
-				continue;
-			}
-			Links::sync_links_from_content( (int) $id, (string) $p->post_content );
+	}
+
+	/**
+	 * Resolve `[[Title]]` shorthand of one imported note into backlink rows,
+	 * creating stubs for missing targets. Run once every note exists.
+	 */
+	public static function resolve_links( int $id ): void {
+		$p = get_post( $id );
+		if ( ! $p ) {
+			return;
 		}
+		Links::sync_links_from_content( (int) $id, (string) $p->post_content );
 	}
 
 	/**
@@ -192,22 +267,33 @@ abstract class Importer {
 	}
 
 	/**
-	 * Extract a ZIP to a temp dir. Returns the dir path, or null on failure.
+	 * Extract a ZIP into `$dest`. Returns false on failure.
 	 */
-	protected function extract_zip( string $zip_path ): ?string {
+	protected function extract_zip( string $zip_path, string $dest ): bool {
 		if ( ! class_exists( '\\ZipArchive' ) ) {
-			return null;
+			return false;
 		}
 		$zip = new \ZipArchive();
 		if ( true !== $zip->open( $zip_path ) ) {
-			return null;
+			return false;
 		}
-		$uploads = wp_upload_dir();
-		$dir     = trailingslashit( $uploads['basedir'] ) . 'memex-import/' . wp_generate_password( 12, false, false );
-		wp_mkdir_p( $dir );
-		$zip->extractTo( $dir );
+		wp_mkdir_p( $dest );
+		$ok = $zip->extractTo( $dest );
 		$zip->close();
-		return $dir;
+		return (bool) $ok;
+	}
+
+	/**
+	 * Write one work item's payload to `<work_dir>/<subdir>/<index>.<ext>` and
+	 * return the file path. Used by single-file formats (ENEX, JSON) so that a
+	 * later request can process one note without re-parsing the whole export.
+	 */
+	protected function stash( string $work_dir, string $subdir, int $index, string $ext, string $payload ): string {
+		$dir = trailingslashit( $work_dir ) . $subdir;
+		wp_mkdir_p( $dir );
+		$file = $dir . '/' . $index . '.' . $ext;
+		file_put_contents( $file, $payload ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+		return $file;
 	}
 
 	/**
@@ -217,8 +303,9 @@ abstract class Importer {
 	 * @return \Generator<string,string>  path => relative path
 	 */
 	protected function walk( string $dir, array $exts ): \Generator {
-		$exts = array_map( 'strtolower', $exts );
-		$rii  = new \RecursiveIteratorIterator( new \RecursiveDirectoryIterator( $dir, \FilesystemIterator::SKIP_DOTS ) );
+		$exts  = array_map( 'strtolower', $exts );
+		$rii   = new \RecursiveIteratorIterator( new \RecursiveDirectoryIterator( $dir, \FilesystemIterator::SKIP_DOTS ) );
+		$files = array();
 		foreach ( $rii as $file ) {
 			if ( ! $file->isFile() ) {
 				continue;
@@ -226,9 +313,34 @@ abstract class Importer {
 			if ( ! in_array( strtolower( $file->getExtension() ), $exts, true ) ) {
 				continue;
 			}
-			$path = $file->getPathname();
-			$rel  = ltrim( str_replace( $dir, '', $path ), '/\\' );
+			$files[] = $file->getPathname();
+		}
+		// Deterministic order: parents (shorter paths) before children.
+		sort( $files, SORT_STRING );
+		foreach ( $files as $path ) {
+			$rel = ltrim( str_replace( $dir, '', $path ), '/\\' );
 			yield $path => $rel;
 		}
+	}
+
+	/**
+	 * Recursively delete a directory.
+	 */
+	public static function rrmdir( string $dir ): void {
+		if ( ! is_dir( $dir ) ) {
+			return;
+		}
+		foreach ( scandir( $dir ) as $item ) {
+			if ( '.' === $item || '..' === $item ) {
+				continue;
+			}
+			$full = $dir . '/' . $item;
+			if ( is_dir( $full ) && ! is_link( $full ) ) {
+				self::rrmdir( $full );
+			} else {
+				@unlink( $full ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			}
+		}
+		@rmdir( $dir ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 	}
 }

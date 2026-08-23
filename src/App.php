@@ -5,6 +5,7 @@ namespace Memex;
 use WpApp\WpApp;
 use WpApp\BaseApp;
 use Memex\Importer\Importer;
+use Memex\Importer\Job;
 
 class App extends BaseApp {
 	private $app_registered = false;
@@ -126,11 +127,14 @@ class App extends BaseApp {
 		add_action( 'admin_post_memex_quick_capture', array( $this, 'handle_quick_capture' ) );
 		add_action( 'admin_post_memex_create_note', array( $this, 'handle_create_note' ) );
 		add_action( 'admin_post_memex_update_note', array( $this, 'handle_update_note' ) );
-		add_action( 'admin_post_memex_import', array( $this, 'handle_import' ) );
 		add_action( 'admin_post_memex_export', array( $this, 'handle_export' ) );
 		add_action( 'admin_post_memex_export_note', array( $this, 'handle_export_note' ) );
 		add_action( 'wp_ajax_memex_title_suggest', array( $this, 'ajax_title_suggest' ) );
 		add_action( 'wp_ajax_memex_toggle_task', array( $this, 'ajax_toggle_task' ) );
+		add_action( 'wp_ajax_memex_import_start', array( $this, 'ajax_import_start' ) );
+		add_action( 'wp_ajax_memex_import_step', array( $this, 'ajax_import_step' ) );
+		add_action( 'wp_ajax_memex_import_cancel', array( $this, 'ajax_import_cancel' ) );
+		add_action( Job::CRON_HOOK, array( Job::class, 'cleanup_stale' ) );
 	}
 
 	public function enqueue_block_editor_assets() {
@@ -181,6 +185,7 @@ class App extends BaseApp {
 
 	public function deactivate(): void {
 		Reminder::deactivate();
+		Job::unschedule_cleanup();
 		flush_rewrite_rules();
 	}
 
@@ -289,44 +294,67 @@ class App extends BaseApp {
 		exit;
 	}
 
-	public function handle_import() {
-		check_admin_referer( 'memex_import' );
+	/* ─── Chunked import (driven by assets/memex.js) ─── */
+
+	/**
+	 * Receive the upload, detect the importer and create a job. The browser
+	 * then calls `memex_import_step` until the job reports `done`.
+	 */
+	public function ajax_import_start() {
+		check_ajax_referer( 'memex_import' );
 		if ( ! current_user_can( 'edit_posts' ) ) {
-			wp_die( esc_html__( 'Not allowed.', 'memex' ) );
+			wp_send_json_error( array( 'message' => __( 'Not allowed.', 'memex' ) ), 403 );
 		}
-		if ( empty( $_FILES['import_file']['tmp_name'] ) ) {
-			wp_safe_redirect( add_query_arg( 'error', 'no-file', home_url( '/memex/import' ) ) );
-			exit;
+		if ( empty( $_FILES['import_file']['tmp_name'] ) || ! empty( $_FILES['import_file']['error'] ) ) {
+			wp_send_json_error( array( 'message' => __( 'Please select a file to import.', 'memex' ) ), 400 );
 		}
 
-		$file_tmp = $_FILES['import_file']['tmp_name'];
+		$file_tmp  = $_FILES['import_file']['tmp_name'];
 		$file_name = isset( $_FILES['import_file']['name'] ) ? sanitize_file_name( $_FILES['import_file']['name'] ) : '';
 
-		$type = isset( $_POST['type'] ) ? sanitize_key( $_POST['type'] ) : 'auto';
+		$type     = isset( $_POST['type'] ) ? sanitize_key( $_POST['type'] ) : 'auto';
 		$importer = 'auto' === $type
 			? Importer::detect( $file_tmp, $file_name )
-			: $this->importer_from_type( $type );
+			: Importer::from_type( $type );
 		if ( ! $importer ) {
-			wp_safe_redirect( add_query_arg( 'error', 'unknown-type', home_url( '/memex/import' ) ) );
-			exit;
+			wp_send_json_error( array( 'message' => __( 'Could not detect the file type. Please pick one explicitly.', 'memex' ) ), 400 );
 		}
 
-		Importer::begin();
-		$result = $importer->import( $file_tmp );
-		Importer::end( $result['ids'] );
+		$job = Job::create( get_current_user_id(), $importer, $file_tmp, $file_name );
+		if ( is_wp_error( $job ) ) {
+			wp_send_json_error(
+				array(
+					'code'    => $job->get_error_code(),
+					'message' => $job->get_error_message(),
+					'status'  => $job->get_error_data(),
+				),
+				409
+			);
+		}
+		wp_send_json_success( $job->status() );
+	}
 
-		$count = count( $result['ids'] );
-		set_transient(
-			'memex_import_result_' . get_current_user_id(),
-			array(
-				'source' => $importer->source(),
-				'count'  => $count,
-				'errors' => $result['errors'],
-			),
-			300
-		);
-		wp_safe_redirect( add_query_arg( 'imported', $count, home_url( '/memex/import' ) ) );
-		exit;
+	public function ajax_import_step() {
+		$job = $this->import_job_from_request();
+		wp_send_json_success( $job->step() );
+	}
+
+	public function ajax_import_cancel() {
+		$job = $this->import_job_from_request();
+		$job->cancel();
+		wp_send_json_success( array( 'job' => $job->id() ) );
+	}
+
+	private function import_job_from_request(): Job {
+		check_ajax_referer( 'memex_import' );
+		if ( ! current_user_can( 'edit_posts' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Not allowed.', 'memex' ) ), 403 );
+		}
+		$job = Job::load( isset( $_POST['job'] ) ? (string) wp_unslash( $_POST['job'] ) : '' );
+		if ( ! $job || $job->owner() !== get_current_user_id() ) {
+			wp_send_json_error( array( 'message' => __( 'Import not found. It may have finished or been cancelled.', 'memex' ) ), 404 );
+		}
+		return $job;
 	}
 
 	public function handle_export() {
@@ -369,23 +397,6 @@ class App extends BaseApp {
 		header( 'Content-Disposition: attachment; filename="' . str_replace( '"', '', $filename ) . '"' );
 		echo $markdown; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 		exit;
-	}
-
-	private function importer_from_type( string $type ): ?Importer {
-		switch ( $type ) {
-			case 'markdown':
-			case 'obsidian':
-				return new \Memex\Importer\Markdown();
-			case 'notion':
-				return new \Memex\Importer\Notion();
-			case 'evernote':
-				return new \Memex\Importer\Evernote();
-			case 'roam':
-				return new \Memex\Importer\Roam();
-			case 'thinkery':
-				return new \Memex\Importer\Thinkery();
-		}
-		return null;
 	}
 
 	/**

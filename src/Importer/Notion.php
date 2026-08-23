@@ -21,29 +21,36 @@ class Notion extends Importer {
 		return 'notion';
 	}
 
-	public function import( string $path ): array {
-		$root = $this->extract_zip( $path );
-		if ( ! $root ) {
-			return array(
-				'ids'     => array(),
-				'errors'  => array( 'Could not extract Notion export ZIP.' ),
-				'skipped' => 0,
-			);
+	public function prepare( string $path, string $work_dir ): array {
+		$root = trailingslashit( $work_dir ) . 'extracted';
+		if ( ! $this->extract_zip( $path, $root ) ) {
+			return self::failure( 'Could not extract Notion export ZIP.' );
 		}
 
-		$ids      = array();
-		$errors   = array();
-		$title_map = array();   // relative-path (lower) => imported post ID
-		$pass1    = array();    // list of [file, rel, title, raw, is_md]
-
-		// Pass 1: insert empty notes so [[links]] can resolve via title in pass 2.
+		// Pass 1 inserts empty notes so [[links]] can resolve via title in pass 2.
+		$pages = array();
 		foreach ( $this->walk( $root, array( 'html', 'md' ) ) as $file => $rel ) {
-			$is_md = preg_match( '/\.md$/i', $rel );
 			$title = $this->title_from_filename( basename( $rel ) );
 			if ( '' === $title ) {
 				continue;
 			}
-			$parent_id = $this->ensure_parents( $rel, $root, $title_map );
+			$pages[] = array( $file, $rel, $title, (bool) preg_match( '/\.md$/i', $rel ) );
+		}
+		$items = array();
+		foreach ( array( 1, 2 ) as $pass ) {
+			foreach ( $pages as $page ) {
+				$items[] = array_merge( array( $pass ), $page );
+			}
+		}
+		return self::prepared( $items, array( 'title_map' => array() ) );
+	}
+
+	public function import_item( $item, array &$state ): int {
+		list( $pass, $file, $rel, $title, $is_md ) = $item;
+		$key = strtolower( $rel );
+
+		if ( 1 === $pass ) {
+			$parent_id = $this->ensure_parents( $rel, $state['title_map'] );
 			$id        = $this->upsert(
 				$title,
 				'',
@@ -53,40 +60,33 @@ class Notion extends Importer {
 				)
 			);
 			if ( ! $id ) {
-				$errors[] = 'Failed to create: ' . $rel;
-				continue;
+				$state['errors'][] = 'Failed to create: ' . $rel;
+				return 0;
 			}
-			$title_map[ strtolower( $rel ) ] = $id;
-			$pass1[] = array( $file, $rel, $title, $id, (bool) $is_md );
+			$state['title_map'][ $key ] = $id;
+			return 0; // Collected after pass 2 fills the content.
 		}
 
 		// Pass 2: fill content. Rewrite internal links to `[[Title]]`.
-		foreach ( $pass1 as $row ) {
-			list( $file, $rel, $title, $id, $is_md ) = $row;
-			$raw = @file_get_contents( $file );
-			if ( false === $raw ) {
-				$errors[] = 'Unreadable: ' . $rel;
-				continue;
-			}
-			$html = $is_md ? $this->md_to_html( $raw ) : $this->clean_notion_html( $raw );
-			$html = $this->rewrite_internal_links( $html, $rel, $title_map );
-
-			wp_update_post(
-				array(
-					'ID'           => $id,
-					'post_content' => $html,
-				)
-			);
-			$ids[] = $id;
+		$id = $state['title_map'][ $key ] ?? 0;
+		if ( ! $id ) {
+			return 0;
 		}
+		$raw = @file_get_contents( $file ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		if ( false === $raw ) {
+			$state['errors'][] = 'Unreadable: ' . $rel;
+			return 0;
+		}
+		$html = $is_md ? $this->md_to_html( $raw ) : $this->clean_notion_html( $raw );
+		$html = $this->rewrite_internal_links( $html, $rel, $state['title_map'] );
 
-		$this->rrmdir( $root );
-
-		return array(
-			'ids'     => $ids,
-			'errors'  => $errors,
-			'skipped' => 0,
+		wp_update_post(
+			array(
+				'ID'           => $id,
+				'post_content' => $html,
+			)
 		);
+		return $id;
 	}
 
 	/**
@@ -101,7 +101,7 @@ class Notion extends Importer {
 		return trim( $base );
 	}
 
-	private function ensure_parents( string $rel, string $root, array &$title_map ): int {
+	private function ensure_parents( string $rel, array &$title_map ): int {
 		$parent_rel = dirname( $rel );
 		$parent_rel = str_replace( '\\', '/', $parent_rel );
 		if ( '.' === $parent_rel || '' === $parent_rel ) {
@@ -187,7 +187,7 @@ class Notion extends Importer {
 				$inner = $m[5];
 
 				// External or anchor links are passed through.
-				if ( preg_match( '#^(https?:|mailto:|tel:|#)#i', $href ) ) {
+				if ( preg_match( '~^(https?:|mailto:|tel:|#)~i', $href ) ) {
 					return $m[0];
 				}
 
@@ -247,17 +247,4 @@ class Notion extends Importer {
 		return $parser->text( $md );
 	}
 
-	private function rrmdir( string $dir ): void {
-		if ( ! is_dir( $dir ) ) {
-			return;
-		}
-		foreach ( scandir( $dir ) as $item ) {
-			if ( '.' === $item || '..' === $item ) {
-				continue;
-			}
-			$full = $dir . '/' . $item;
-			is_dir( $full ) ? $this->rrmdir( $full ) : @unlink( $full );
-		}
-		@rmdir( $dir );
-	}
 }
