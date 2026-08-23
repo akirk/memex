@@ -57,6 +57,7 @@ class App extends BaseApp {
 		$this->app->route( 'orphans' );
 		$this->app->route( 'broken' );
 		$this->app->route( 'import' );
+		$this->app->route( 'export' );
 		$this->app->route( 'quick-capture' );
 		$this->app->route( 'reminders' );
 	}
@@ -70,6 +71,7 @@ class App extends BaseApp {
 		$this->app->add_menu_item( 'orphans', __( 'Orphans', 'memex' ), home_url( '/memex/orphans' ) );
 		$this->app->add_menu_item( 'broken', __( 'Broken Links', 'memex' ), home_url( '/memex/broken' ) );
 		$this->app->add_menu_item( 'import', __( 'Import', 'memex' ), home_url( '/memex/import' ) );
+		$this->app->add_menu_item( 'export', __( 'Export', 'memex' ), home_url( '/memex/export' ) );
 	}
 
 	public function register_app() {
@@ -125,6 +127,8 @@ class App extends BaseApp {
 		add_action( 'admin_post_memex_create_note', array( $this, 'handle_create_note' ) );
 		add_action( 'admin_post_memex_update_note', array( $this, 'handle_update_note' ) );
 		add_action( 'admin_post_memex_import', array( $this, 'handle_import' ) );
+		add_action( 'admin_post_memex_export', array( $this, 'handle_export' ) );
+		add_action( 'admin_post_memex_export_note', array( $this, 'handle_export_note' ) );
 		add_action( 'wp_ajax_memex_title_suggest', array( $this, 'ajax_title_suggest' ) );
 		add_action( 'wp_ajax_memex_toggle_task', array( $this, 'ajax_toggle_task' ) );
 	}
@@ -325,19 +329,61 @@ class App extends BaseApp {
 		exit;
 	}
 
+	public function handle_export() {
+		check_admin_referer( 'memex_export' );
+		if ( ! current_user_can( 'edit_posts' ) ) {
+			wp_die( esc_html__( 'Not allowed.', 'memex' ) );
+		}
+
+		$zip_path = wp_tempnam( 'memex-export.zip' );
+		$count    = Exporter::build_zip( $zip_path );
+		if ( is_wp_error( $count ) ) {
+			@unlink( $zip_path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			wp_safe_redirect( add_query_arg( 'error', $count->get_error_code(), home_url( '/memex/export' ) ) );
+			exit;
+		}
+
+		$filename = sanitize_file_name( get_bloginfo( 'name' ) ?: 'memex' ) . '-notes-' . wp_date( 'Y-m-d' ) . '.zip';
+		nocache_headers();
+		header( 'Content-Type: application/zip' );
+		header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
+		header( 'Content-Length: ' . filesize( $zip_path ) );
+		readfile( $zip_path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_readfile
+		@unlink( $zip_path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		exit;
+	}
+
+	public function handle_export_note() {
+		$id = isset( $_GET['id'] ) ? (int) $_GET['id'] : 0;
+		check_admin_referer( 'memex_export_note_' . $id );
+
+		$post = get_post( $id );
+		if ( ! $post || CPT::POST_TYPE !== $post->post_type || ! current_user_can( 'read_post', $id ) ) {
+			wp_die( esc_html__( 'Note not found.', 'memex' ) );
+		}
+
+		$markdown = Exporter::note_to_markdown( $post );
+		$filename = Exporter::filename( $post->post_title, (int) $post->ID ) . '.md';
+		nocache_headers();
+		header( 'Content-Type: text/markdown; charset=UTF-8' );
+		header( 'Content-Disposition: attachment; filename="' . str_replace( '"', '', $filename ) . '"' );
+		echo $markdown; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+		exit;
+	}
+
 	private function importer_from_type( string $type ): ?Importer {
 		switch ( $type ) {
 			case 'markdown':
 			case 'obsidian':
-				return new Importer\Markdown();
+				return new \Memex\Importer\Markdown();
 			case 'notion':
-				return new Importer\Notion();
+				return new \Memex\Importer\Notion();
 			case 'evernote':
-				return new Importer\Evernote();
+				return new \Memex\Importer\Evernote();
 			case 'roam':
-				return new Importer\Roam();
+				return new \Memex\Importer\Roam();
 			case 'thinkery':
-				return new Importer\Thinkery();
+				return new \Memex\Importer\Thinkery();
 		}
 		return null;
 	}

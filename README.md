@@ -15,6 +15,7 @@ Notes live as a custom post type, so you keep WordPress revisions, search, media
 - **Reminders.** Create reminders at `/memex/reminders`; the plugin schedules a 5-minute cron and emails you when one is due.
 - **Graph, orphans, broken links.** Built-in views for navigating the link structure of your notes.
 - **Importers.** Obsidian / generic Markdown, Notion (HTML/Markdown export), Evernote (`.enex`), Roam Research (JSON), and Thinkery (XML/JSON). `[[Wiki-Links]]` from sources stay editable; missing targets become stub notes so links resolve.
+- **Export.** Download all notes as a ZIP of Markdown files with YAML frontmatter — opens as an Obsidian vault and re-imports into Memex. Single notes download as `.md` from their page.
 - **Login required.** The app and notes are private by default — `memex_note` is registered as `public => false`.
 
 ## Routes
@@ -34,6 +35,7 @@ Notes live as a custom post type, so you keep WordPress revisions, search, media
 | `/memex/broken`                    | Stub notes referenced by links but never written  |
 | `/memex/reminders`                 | Pending and past reminders                        |
 | `/memex/import`                    | Upload an export from another tool                |
+| `/memex/export`                    | Download all notes as a Markdown ZIP              |
 | `/memex/quick-capture`             | One-line append to today's daily note             |
 
 ## Requirements
@@ -62,6 +64,10 @@ Activate **Memex** in WordPress. The activator registers the CPT, schedules the 
 - **Thinkery** — the `.xml` or `.json` export from `/tools/export.php`
 
 Auto-detect sniffs file extension and content; you can also force a specific importer.
+
+## Exporting
+
+`/memex/export` downloads a ZIP with one `.md` file per note (stubs are skipped). Each file starts with YAML frontmatter — `title`, `created`, `updated`, plus `tags`, `aliases`, `daily` and `status` when set — followed by the note body in the same Markdown the in-app editor uses, so links appear as `[[Note Title]]`. Child notes are placed in a folder named after their parent. The archive can be imported back via the Markdown importer.
 
 ## Storage model
 
