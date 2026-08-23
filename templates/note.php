@@ -118,6 +118,16 @@ $tags         = get_the_terms( $post->ID, CPT::TAXONOMY );
 $edit_slug    = $post->post_name ? $post->post_name : (string) $post->ID;
 $edit_link    = home_url( '/memex/edit/' . rawurlencode( $edit_slug ) );
 $import_src   = (string) get_post_meta( $post->ID, CPT::META_IMPORT_SOURCE, true );
+$export_link  = wp_nonce_url(
+	add_query_arg(
+		array(
+			'action' => 'memex_export_note',
+			'id'     => (int) $post->ID,
+		),
+		admin_url( 'admin-post.php' )
+	),
+	'memex_export_note_' . $post->ID
+);
 ?>
 
 <article id="selected-note" class="memex-note" aria-labelledby="selected-note-heading" data-ai-assistant-important>
@@ -143,6 +153,7 @@ $import_src   = (string) get_post_meta( $post->ID, CPT::META_IMPORT_SOURCE, true
 				<span class="memex-import-src"><?php echo esc_html( sprintf( /* translators: %s: import source name */ __( 'imported from %s', 'memex' ), $import_src ) ); ?></span>
 			<?php endif; ?>
 			<a class="memex-edit-link" href="<?php echo esc_url( $edit_link ); ?>"><?php esc_html_e( 'Edit', 'memex' ); ?></a>
+			<a class="memex-edit-link" href="<?php echo esc_url( $export_link ); ?>" download><?php esc_html_e( 'Download .md', 'memex' ); ?></a>
 			<?php if ( $tags ) : ?>
 				<span class="memex-tags">
 					<?php foreach ( $tags as $t ) : ?>

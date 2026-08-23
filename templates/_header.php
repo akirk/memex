@@ -53,6 +53,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 				<a href="<?php echo esc_url( home_url( '/memex/orphans' ) ); ?>"><?php esc_html_e( 'Orphans', 'memex' ); ?></a>
 				<a href="<?php echo esc_url( home_url( '/memex/broken' ) ); ?>"><?php esc_html_e( 'Broken links', 'memex' ); ?></a>
 				<a href="<?php echo esc_url( home_url( '/memex/import' ) ); ?>"><?php esc_html_e( 'Import', 'memex' ); ?></a>
+				<a href="<?php echo esc_url( home_url( '/memex/export' ) ); ?>"><?php esc_html_e( 'Export', 'memex' ); ?></a>
 			</nav>
 			<form class="memex-create" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" aria-label="<?php esc_attr_e( 'Create note', 'memex' ); ?>">
 				<input type="hidden" name="action" value="memex_create_note">
