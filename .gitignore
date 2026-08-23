@@ -2,3 +2,4 @@
 composer.lock
 .phpunit.result.cache
 .claude/worktrees/
+/tests/wp-tests-config.local.php

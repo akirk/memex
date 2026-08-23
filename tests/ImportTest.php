@@ -7,19 +7,63 @@ use Memex\Importer\Markdown;
 use Memex\Importer\Notion;
 use Memex\Importer\Roam;
 use Memex\Importer\Thinkery;
-use PHPUnit\Framework\TestCase;
 
 /**
  * Importers under the chunked contract: prepare() lists work, import_item()
  * does one unit, Job drives both across several "requests".
  */
-class ImportTest extends TestCase {
+class ImportTest extends WP_UnitTestCase {
 	private string $dir;
 
+	private string $tmp;
+
 	protected function setUp(): void {
-		FakeWP::reset();
-		$this->dir = FakeWP::$upload_dir . '/fixtures';
+		parent::setUp();
+		// Imports run from the admin screen, so with unfiltered_html.
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'administrator' ) ) );
+		// Keep import jobs and fixtures out of the real uploads directory.
+		$this->tmp = sys_get_temp_dir() . '/memex-tests-' . getmypid();
+		Importer::rrmdir( $this->tmp );
+		mkdir( $this->tmp, 0777, true );
+		add_filter( 'upload_dir', array( $this, 'upload_dir' ) );
+		$this->dir = $this->tmp . '/fixtures';
 		mkdir( $this->dir );
+	}
+
+	protected function tearDown(): void {
+		remove_filter( 'upload_dir', array( $this, 'upload_dir' ) );
+		Importer::rrmdir( $this->tmp );
+		parent::tearDown();
+	}
+
+	public function upload_dir( array $dirs ): array {
+		$dirs['basedir'] = $this->tmp . '/uploads';
+		$dirs['path']    = $dirs['basedir'] . $dirs['subdir'];
+		if ( ! is_dir( $dirs['path'] ) ) {
+			mkdir( $dirs['path'], 0777, true );
+		}
+		return $dirs;
+	}
+
+	/** ID of the note with this title (case-insensitive), preferring published; 0 if none. */
+	private function find_by_title( string $title ): int {
+		global $wpdb;
+		return (int) $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT ID FROM $wpdb->posts WHERE post_type = 'memex_note' AND post_status <> 'trash' AND LOWER(post_title) = LOWER(%s) ORDER BY post_status = 'publish' DESC, ID ASC LIMIT 1",
+				$title
+			)
+		);
+	}
+
+	/** @return string[] */
+	private function tags( int $id ): array {
+		return wp_get_object_terms( $id, 'memex_tag', array( 'fields' => 'names', 'orderby' => 'term_id' ) );
+	}
+
+	/** @return WP_Post[] */
+	private function notes(): array {
+		return get_posts( array( 'post_type' => 'memex_note', 'post_status' => 'any', 'numberposts' => -1 ) );
 	}
 
 	/* ─── Helpers ─── */
@@ -67,7 +111,7 @@ class ImportTest extends TestCase {
 	}
 
 	private function content( string $title ): string {
-		return (string) get_post( FakeWP::find_by_title( $title ) )->post_content;
+		return (string) get_post( $this->find_by_title( $title ) )->post_content;
 	}
 
 	/* ─── Markdown / Obsidian ─── */
@@ -87,12 +131,12 @@ class ImportTest extends TestCase {
 		$this->assertCount( 2, $r['ids'] );
 		$this->assertSame( array(), $r['errors'] );
 
-		$alpha = get_post( FakeWP::find_by_title( 'Alpha' ) );
+		$alpha = get_post( $this->find_by_title( 'Alpha' ) );
 		$this->assertStringContainsString( '[[Beta]]', $alpha->post_content );
-		$this->assertSame( array( 'one', 'two', 'three' ), FakeWP::$terms[ $alpha->ID ] );
+		$this->assertSame( array( 'one', 'two', 'three' ), $this->tags( $alpha->ID ) );
 		$this->assertSame( 'Projects', get_post( $alpha->post_parent )->post_title );
 
-		$beta = get_post( FakeWP::find_by_title( 'Beta heading' ) );
+		$beta = get_post( $this->find_by_title( 'Beta heading' ) );
 		$this->assertSame( 'Sub', get_post( $beta->post_parent )->post_title );
 		$this->assertSame( 'Projects', get_post( get_post( $beta->post_parent )->post_parent )->post_title );
 		$this->assertSame( 'Projects/Sub/Beta.md', get_post_meta( $beta->ID, '_memex_import_path', true ) );
@@ -122,7 +166,7 @@ class ImportTest extends TestCase {
 		$state = unserialize( serialize( $state ) );
 		$importer->import_item( $prepared['items'][1], $state );
 
-		$folders = array_filter( FakeWP::notes(), static fn( $p ) => 'Folder' === $p->post_title );
+		$folders = array_filter( $this->notes(), static fn( $p ) => 'Folder' === $p->post_title );
 		$this->assertCount( 1, $folders );
 	}
 
@@ -151,7 +195,7 @@ class ImportTest extends TestCase {
 		$this->assertCount( 2, $r['ids'] );
 
 		$this->assertStringContainsString( '[[Child|the child]]', $this->content( 'Home' ) );
-		$child = get_post( FakeWP::find_by_title( 'Child' ) );
+		$child = get_post( $this->find_by_title( 'Child' ) );
 		$this->assertSame( 'Home', get_post( $child->post_parent )->post_title );
 		$this->assertStringContainsString( 'Child body', $child->post_content );
 	}
@@ -185,7 +229,7 @@ class ImportTest extends TestCase {
 		$this->assertStringContainsString( '[[Second]]', $first );
 		$this->assertStringContainsString( '<ul><li>', $first );
 		$this->assertStringContainsString( '<input type="checkbox" disabled>', $first );
-		$this->assertSame( array( 'tagged' ), FakeWP::$terms[ FakeWP::find_by_title( 'First' ) ] );
+		$this->assertSame( array( 'tagged' ), $this->tags( $this->find_by_title( 'First' ) ) );
 	}
 
 	public function test_roam_invalid_json_fails_prepare(): void {
@@ -222,10 +266,10 @@ class ImportTest extends TestCase {
 			$this->assertStringStartsWith( '<note>', file_get_contents( $item ) );
 		}
 		$this->assertCount( 2, $r['ids'] );
-		$one = get_post( FakeWP::find_by_title( 'One' ) );
+		$one = get_post( $this->find_by_title( 'One' ) );
 		$this->assertStringContainsString( '<input type="checkbox" checked disabled>', $one->post_content );
 		$this->assertSame( '2024-03-05 13:30:00', $one->post_date_gmt );
-		$this->assertSame( array( 'x', 'y' ), FakeWP::$terms[ $one->ID ] );
+		$this->assertSame( array( 'x', 'y' ), $this->tags( $one->ID ) );
 		$this->assertStringContainsString( '[attachment]', $this->content( 'Untitled note' ) );
 	}
 
@@ -279,11 +323,12 @@ class ImportTest extends TestCase {
 		$this->assertSame( 1, $r['state']['skipped'] );
 		$json_content = $this->content( 'Bookmark' );
 		$this->assertStringStartsWith( '<p><a href="https://example.com/">https://example.com/</a></p>', $json_content );
-		$this->assertSame( array( 'a', 'b' ), FakeWP::$terms[ FakeWP::find_by_title( 'Bookmark' ) ] );
-		$this->assertSame( '2024-03-05 13:30:00', get_post( FakeWP::find_by_title( 'Bookmark' ) )->post_date_gmt );
+		$this->assertSame( array( 'a', 'b' ), $this->tags( $this->find_by_title( 'Bookmark' ) ) );
+		$this->assertSame( '2024-03-05 13:30:00', get_post( $this->find_by_title( 'Bookmark' ) )->post_date_gmt );
 
-		FakeWP::reset();
-		mkdir( $this->dir );
+		foreach ( $this->notes() as $note ) {
+			wp_delete_post( $note->ID, true );
+		}
 		$xml = '<thinkery>';
 		foreach ( $things as $t ) {
 			$xml .= '<thing>';
@@ -309,8 +354,8 @@ class ImportTest extends TestCase {
 			Importer::resolve_links( $id );
 		}
 		$this->assertStringContainsString( '&#91;&#91;Some Page&#93;&#93;', $this->content( 'Wiki docs' ) );
-		$this->assertSame( 0, FakeWP::find_by_title( 'Some Page' ) );
-		$this->assertSame( 1, get_post_meta( FakeWP::find_by_title( 'Linked Note' ), '_memex_stub', true ) );
+		$this->assertSame( 0, $this->find_by_title( 'Some Page' ) );
+		$this->assertSame( '1', get_post_meta( $this->find_by_title( 'Linked Note' ), '_memex_stub', true ) );
 	}
 
 	public function test_thinkery_import_into_existing_stub_keeps_exported_date(): void {
@@ -323,8 +368,6 @@ class ImportTest extends TestCase {
 		$this->assertSame( array( $stub ), $r['ids'] );
 		$post = get_post( $stub );
 		$this->assertSame( '2005-11-23 09:18:14', $post->post_date_gmt );
-		// Drafts have no GMT date, so WordPress discards a supplied date unless edit_date is set.
-		$this->assertTrue( FakeWP::$last_update['edit_date'] ?? false );
 		$this->assertSame( '', (string) get_post_meta( $stub, '_memex_stub', true ) );
 	}
 
@@ -395,15 +438,15 @@ class ImportTest extends TestCase {
 		$this->assertSame( array(), $status['errors'] );
 
 		// Links resolved: every page links to Page 1 and got a stub for its missing target.
-		$page2 = FakeWP::find_by_title( 'Page 2' );
-		$this->assertContains( FakeWP::find_by_title( 'Page 1' ), get_post_meta( $page2, '_memex_links_to' ) );
-		$this->assertSame( 1, get_post_meta( FakeWP::find_by_title( 'Missing 2' ), '_memex_stub', true ) );
+		$page2 = $this->find_by_title( 'Page 2' );
+		$this->assertContains( $this->find_by_title( 'Page 1' ), array_map( 'intval', get_post_meta( $page2, '_memex_links_to' ) ) );
+		$this->assertSame( '1', get_post_meta( $this->find_by_title( 'Missing 2' ), '_memex_stub', true ) );
 
 		// Finished: state and files gone, user free to start another.
 		$this->assertNull( Job::load( $job->id() ) );
 		$this->assertNull( Job::active_for( 7 ) );
 		$this->assertDirectoryDoesNotExist( Job::base_dir() . '/' . $job->id() );
-		$this->assertTrue( isset( FakeWP::$actions['save_post_memex_note'] ), 'save_post sync re-attached' );
+		$this->assertNotFalse( has_action( 'save_post_memex_note', array( Memex\Links::class, 'on_save' ) ), 'save_post sync re-attached' );
 	}
 
 	public function test_job_refuses_a_second_concurrent_import_and_cancel_frees_it(): void {
@@ -440,7 +483,7 @@ class ImportTest extends TestCase {
 		Job::cleanup_stale();
 		$this->assertNotNull( Job::load( $job->id() ), 'fresh job kept' );
 
-		$data            = FakeWP::$options[ Job::OPTION_PREFIX . $job->id() ];
+		$data            = get_option( Job::OPTION_PREFIX . $job->id() );
 		$data['updated'] = time() - 2 * DAY_IN_SECONDS;
 		update_option( Job::OPTION_PREFIX . $job->id(), $data );
 		$orphan = Job::base_dir() . '/orphan';

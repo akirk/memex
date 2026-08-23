@@ -1,9 +1,8 @@
 <?php
 
 use Memex\Exporter;
-use PHPUnit\Framework\TestCase;
 
-class ExporterTest extends TestCase {
+class ExporterTest extends WP_UnitTestCase {
 	public function test_frontmatter_emits_scalars_and_lists(): void {
 		$yaml = Exporter::frontmatter(
 			array(

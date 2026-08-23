@@ -1,9 +1,8 @@
 <?php
 
 use Memex\AI;
-use PHPUnit\Framework\TestCase;
 
-class AIAbilitySchemaTest extends TestCase {
+class AIAbilitySchemaTest extends WP_UnitTestCase {
 	public function test_save_note_schema_describes_content_as_markdown_like_editor_text(): void {
 		$method = new ReflectionMethod( AI::class, 'save_note_input_schema' );
 		$method->setAccessible( true );
