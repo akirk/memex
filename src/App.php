@@ -54,6 +54,7 @@ class App extends BaseApp {
 		$this->app->route( 'daily/{date}' );
 		$this->app->route( 'graph' );
 		$this->app->route( 'backlinks/{slug}' );
+		$this->app->route( 'tags' );
 		$this->app->route( 'tag/{slug}' );
 		$this->app->route( 'orphans' );
 		$this->app->route( 'broken' );
@@ -69,6 +70,7 @@ class App extends BaseApp {
 		$this->app->add_menu_item( 'reminders', __( 'Reminders', 'memex' ), home_url( '/memex/reminders' ) );
 		$this->app->add_menu_item( 'search', __( 'Search', 'memex' ), home_url( '/memex/search' ) );
 		$this->app->add_menu_item( 'graph', __( 'Graph', 'memex' ), home_url( '/memex/graph' ) );
+		$this->app->add_menu_item( 'tags', __( 'Tags', 'memex' ), home_url( '/memex/tags' ) );
 		$this->app->add_menu_item( 'orphans', __( 'Orphans', 'memex' ), home_url( '/memex/orphans' ) );
 		$this->app->add_menu_item( 'broken', __( 'Broken Links', 'memex' ), home_url( '/memex/broken' ) );
 		$this->app->add_menu_item( 'import', __( 'Import', 'memex' ), home_url( '/memex/import' ) );

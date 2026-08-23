@@ -1139,3 +1139,26 @@ body.memex {
 		gap: 0.25rem;
 	}
 }
+
+/* Tag browser (/memex/tags) */
+.memex-tag-cloud {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4rem 1rem;
+	align-items: baseline;
+}
+
+.memex-tag-cloud a {
+	text-decoration: none;
+	font-size: calc(0.9rem + var(--memex-tag-weight, 0) * 1.1rem);
+	line-height: 1.4;
+}
+
+.memex-tag-cloud .memex-tag-count {
+	margin-left: 0.25rem;
+	font-size: 0.72rem;
+	color: var(--wp-app-color-muted);
+}
