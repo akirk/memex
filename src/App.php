@@ -336,7 +336,16 @@ class App extends BaseApp {
 
 	public function ajax_import_step() {
 		$job = $this->import_job_from_request();
-		wp_send_json_success( $job->step() );
+		// The browser can ask for shorter steps when its connection keeps timing out.
+		$seconds = isset( $_POST['budget'] ) ? (float) $_POST['budget'] : Job::TIME_BUDGET;
+		$seconds = max( 1.0, min( 10.0, $seconds ) );
+		/**
+		 * Filter how many seconds of work one import step may do.
+		 *
+		 * @param float $seconds Requested budget, already clamped to 1–10.
+		 */
+		$seconds = (float) apply_filters( 'memex_import_step_seconds', $seconds );
+		wp_send_json_success( $job->step( $seconds ) );
 	}
 
 	public function ajax_import_cancel() {

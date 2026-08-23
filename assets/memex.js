@@ -912,6 +912,7 @@
 		var running = false;
 		var retries = 0;
 		var MAX_RETRIES = 3;
+		var budget = 5; // seconds of work per step; halved when a step times out
 
 		function t(key, values) {
 			var str = form.getAttribute('data-i18n-' + key) || '';
@@ -1012,7 +1013,7 @@
 		function loop() {
 			if (!currentJob) return;
 			running = true;
-			post('memex_import_step', { job: currentJob })
+			post('memex_import_step', { job: currentJob, budget: String(budget) })
 				.then(function (status) {
 					retries = 0;
 					render(status);
@@ -1027,6 +1028,7 @@
 					// job intact on the server; retry a few times before giving up.
 					if (!err.data && retries < MAX_RETRIES) {
 						retries++;
+						budget = Math.max(1, budget / 2);
 						label.textContent = t('retrying', [retries, MAX_RETRIES]);
 						setTimeout(loop, 2000 * retries);
 						return;
