@@ -4,6 +4,7 @@
  */
 
 use Memex\CPT;
+use Memex\Importer\Job;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit; }
@@ -11,12 +12,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 $memex_title = __( 'Import', 'memex' );
 include __DIR__ . '/_header.php';
 
-$result = get_transient( 'memex_import_result_' . get_current_user_id() );
-if ( $result ) {
-	delete_transient( 'memex_import_result_' . get_current_user_id() );
-}
-$error = isset( $_GET['error'] ) ? sanitize_key( $_GET['error'] ) : '';
-
+$active     = Job::active_for( get_current_user_id() );
 $max_upload = wp_max_upload_size();
 ?>
 
@@ -25,38 +21,64 @@ $max_upload = wp_max_upload_size();
 	<p class="memex-muted"><?php esc_html_e( 'Bring in your knowledge from another app. Wiki-links, tags, and folder hierarchy are preserved.', 'memex' ); ?></p>
 </header>
 
-<?php if ( $result ) : ?>
-	<div class="memex-notice memex-notice-success" role="status">
+<div class="memex-import-progress" id="memex-import-progress" hidden>
+	<p class="memex-import-progress-label" aria-live="polite"></p>
+	<progress max="100" value="0"></progress>
+	<p class="memex-muted memex-import-progress-detail"></p>
+</div>
+
+<div class="memex-notice memex-notice-success memex-import-result" id="memex-import-result" role="status" hidden>
+	<p class="memex-import-result-summary"></p>
+	<details hidden>
+		<summary></summary>
+		<ul></ul>
+	</details>
+</div>
+
+<div class="memex-notice memex-notice-error memex-import-error" id="memex-import-error" role="alert" hidden>
+	<p></p>
+	<p><button type="button" class="memex-button" data-import-retry><?php esc_html_e( 'Resume', 'memex' ); ?></button></p>
+</div>
+
+<?php if ( $active ) : ?>
+	<?php $status = $active->status(); ?>
+	<div class="memex-notice memex-notice-error memex-import-resume" id="memex-import-resume" role="status" data-job="<?php echo esc_attr( $status['job'] ); ?>" data-phase="<?php echo esc_attr( $status['phase'] ); ?>" data-done="<?php echo (int) $status['done']; ?>" data-total="<?php echo (int) $status['total']; ?>" data-file="<?php echo esc_attr( $status['file'] ); ?>">
 		<p>
 			<?php
 			printf(
-				/* translators: 1: number of notes, 2: source name */
-				esc_html( _n( 'Imported %1$d note from %2$s.', 'Imported %1$d notes from %2$s.', (int) $result['count'], 'memex' ) ),
-				(int) $result['count'],
-				esc_html( $result['source'] )
+				/* translators: 1: file name, 2: items done, 3: items total */
+				esc_html__( 'An import of %1$s was interrupted (%2$d of %3$d done). You can resume it, or discard it and start over.', 'memex' ),
+				'<strong>' . esc_html( $status['file'] ) . '</strong>',
+				(int) $status['done'],
+				(int) $status['total']
 			);
 			?>
 		</p>
-		<?php if ( ! empty( $result['errors'] ) ) : ?>
-			<details>
-				<summary><?php esc_html_e( 'View warnings', 'memex' ); ?> (<?php echo count( $result['errors'] ); ?>)</summary>
-				<ul>
-					<?php foreach ( array_slice( $result['errors'], 0, 50 ) as $e ) : ?>
-						<li><?php echo esc_html( $e ); ?></li>
-					<?php endforeach; ?>
-				</ul>
-			</details>
-		<?php endif; ?>
+		<p>
+			<button type="button" class="memex-button memex-button-primary" data-import-resume><?php esc_html_e( 'Resume import', 'memex' ); ?></button>
+			<button type="button" class="memex-button" data-import-discard><?php esc_html_e( 'Discard', 'memex' ); ?></button>
+		</p>
 	</div>
-<?php elseif ( 'no-file' === $error ) : ?>
-	<div class="memex-notice memex-notice-error" role="alert"><p><?php esc_html_e( 'Please select a file to import.', 'memex' ); ?></p></div>
-<?php elseif ( 'unknown-type' === $error ) : ?>
-	<div class="memex-notice memex-notice-error" role="alert"><p><?php esc_html_e( 'Could not detect the file type. Please pick one explicitly below.', 'memex' ); ?></p></div>
 <?php endif; ?>
 
-<form class="memex-import-form" method="post" enctype="multipart/form-data" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" aria-labelledby="import-notes-heading" data-ai-assistant-important>
-	<input type="hidden" name="action" value="memex_import">
-	<?php wp_nonce_field( 'memex_import' ); ?>
+<form class="memex-import-form" id="memex-import-form" method="post" enctype="multipart/form-data" action="<?php echo esc_url( admin_url( 'admin-ajax.php' ) ); ?>" aria-labelledby="import-notes-heading" data-ai-assistant-important
+	data-ajax-url="<?php echo esc_url( admin_url( 'admin-ajax.php' ) ); ?>"
+	data-nonce="<?php echo esc_attr( wp_create_nonce( 'memex_import' ) ); ?>"
+	data-i18n-uploading="<?php esc_attr_e( 'Uploading %s…', 'memex' ); ?>"
+	data-i18n-preparing="<?php esc_attr_e( 'Reading %s…', 'memex' ); ?>"
+	data-i18n-found="<?php esc_attr_e( '%s notes found so far', 'memex' ); ?>"
+	data-i18n-importing="<?php esc_attr_e( 'Importing notes…', 'memex' ); ?>"
+	data-i18n-resuming="<?php esc_attr_e( 'Resuming…', 'memex' ); ?>"
+	data-i18n-retrying="<?php esc_attr_e( 'Connection lost, retrying (%1$s of %2$s)…', 'memex' ); ?>"
+	data-i18n-links="<?php esc_attr_e( 'Resolving links…', 'memex' ); ?>"
+	data-i18n-progress="<?php esc_attr_e( '%1$s of %2$s', 'memex' ); ?>"
+	data-i18n-done="<?php esc_attr_e( 'Imported %1$s notes from %2$s.', 'memex' ); ?>"
+	data-i18n-warnings="<?php esc_attr_e( 'View warnings (%s)', 'memex' ); ?>"
+	data-i18n-failed="<?php esc_attr_e( 'The import was interrupted: %s', 'memex' ); ?>"
+	data-i18n-leave="<?php esc_attr_e( 'An import is still running. Leave anyway?', 'memex' ); ?>"
+	<?php echo $active ? 'hidden' : ''; ?>>
+	<input type="hidden" name="action" value="memex_import_start">
+	<input type="hidden" name="_ajax_nonce" value="<?php echo esc_attr( wp_create_nonce( 'memex_import' ) ); ?>">
 
 	<fieldset class="memex-import-types">
 		<legend><?php esc_html_e( 'Import format', 'memex' ); ?></legend>

@@ -47,92 +47,97 @@ class Thinkery extends Importer {
 		return false;
 	}
 
-	public function import( string $path ): array {
-		$raw = @file_get_contents( $path );
-		if ( false === $raw ) {
-			return array(
-				'ids'     => array(),
-				'errors'  => array( 'Could not read Thinkery export.' ),
-				'skipped' => 0,
-			);
+	public function prepare( string $path, string $work_dir, array &$state, callable $within ): array {
+		$fh = @fopen( $path, 'rb' ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		if ( ! $fh ) {
+			return self::failure( $state, 'Could not read Thinkery export.' );
+		}
+		$head = ltrim( (string) fread( $fh, 64 ), "\xEF\xBB\xBF \t\r\n" );
+		fclose( $fh );
+
+		if ( '[' !== substr( $head, 0, 1 ) ) {
+			// XML: stream `<thing>` elements, resuming after earlier calls.
+			$skip = (int) ( $state['prepared'] ?? 0 );
+			$r    = $this->stream_xml_elements( $path, 'thing', $work_dir, 'things', $skip, $within, $state );
+			if ( ! $r['opened'] || ( 0 === $skip && ! $r['items'] && $r['complete'] && $state['errors'] ) ) {
+				$state['errors'] = array( 'Failed to parse Thinkery export (invalid XML).' );
+				return self::prepared( array() );
+			}
+			$state['prepared'] = $skip + count( $r['items'] );
+			return self::prepared( $r['items'], $r['complete'] );
 		}
 
-		$trimmed = ltrim( $raw, "\xEF\xBB\xBF \t\r\n" );
-		if ( '[' === substr( $trimmed, 0, 1 ) ) {
-			$things = json_decode( $trimmed, true );
-			if ( ! is_array( $things ) ) {
-				return array(
-					'ids'     => array(),
-					'errors'  => array( 'Invalid JSON in Thinkery export.' ),
-					'skipped' => 0,
-				);
-			}
-		} else {
-			$things = $this->parse_xml( $raw );
-			if ( null === $things ) {
-				return array(
-					'ids'     => array(),
-					'errors'  => array( 'Failed to parse Thinkery export (invalid XML).' ),
-					'skipped' => 0,
-				);
-			}
+		$things = json_decode( ltrim( (string) file_get_contents( $path ), "\xEF\xBB\xBF \t\r\n" ), true ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+		if ( ! is_array( $things ) ) {
+			return self::failure( $state, 'Invalid JSON in Thinkery export.' );
 		}
-
-		$ids     = array();
-		$errors  = array();
-		$skipped = 0;
+		$items = array();
 		foreach ( $things as $thing ) {
 			if ( ! is_array( $thing ) ) {
-				++$skipped;
+				++$state['skipped'];
 				continue;
 			}
-			$title = trim( (string) ( $thing['title'] ?? '' ) );
-			$url   = trim( (string) ( $thing['url'] ?? '' ) );
-			$html  = trim( (string) ( $thing['html'] ?? '' ) );
-			if ( '' === $title ) {
-				$title = $url;
-			}
-			if ( '' === $title ) {
-				++$skipped;
-				continue;
-			}
+			$items[] = $this->stash( $work_dir, 'things', count( $items ), 'json', (string) wp_json_encode( $thing ) );
+		}
+		return self::prepared( $items );
+	}
 
-			if ( '' !== $url ) {
-				$html = '<p><a href="' . esc_url( $url ) . '">' . esc_html( $url ) . '</a></p>' . ( '' !== $html ? "\n" . $html : '' );
-			}
+	public function import_item( $item, array &$state ): int {
+		$thing = $this->read_thing( $item );
+		if ( ! is_array( $thing ) ) {
+			++$state['skipped'];
+			return 0;
+		}
+		$title = trim( (string) ( $thing['title'] ?? '' ) );
+		$url   = trim( (string) ( $thing['url'] ?? '' ) );
+		$html  = trim( (string) ( $thing['html'] ?? '' ) );
+		if ( '' === $title ) {
+			$title = $url;
+		}
+		if ( '' === $title ) {
+			++$state['skipped'];
+			return 0;
+		}
 
-			$args = array();
-			$date = trim( (string) ( $thing['date'] ?? '' ) );
-			if ( '' !== $date ) {
-				$ts = strtotime( $date );
-				if ( false !== $ts ) {
-					$gmt                   = gmdate( 'Y-m-d H:i:s', $ts );
-					$args['post_date_gmt'] = $gmt;
-					$args['post_date']     = get_date_from_gmt( $gmt );
-				}
-			}
+		if ( '' !== $url ) {
+			$html = '<p><a href="' . esc_url( $url ) . '">' . esc_html( $url ) . '</a></p>' . ( '' !== $html ? "\n" . $html : '' );
+		}
 
-			$id = $this->upsert( $title, $html, $args );
-			if ( $id ) {
-				$ids[] = $id;
-				$this->set_tags( $id, $this->parse_tags( (string) ( $thing['tags'] ?? '' ) ) );
-			} else {
-				++$skipped;
-				$errors[] = 'Failed: ' . $title;
+		$args = array();
+		$date = trim( (string) ( $thing['date'] ?? '' ) );
+		if ( '' !== $date ) {
+			$ts = strtotime( $date );
+			if ( false !== $ts ) {
+				$gmt                   = gmdate( 'Y-m-d H:i:s', $ts );
+				$args['post_date_gmt'] = $gmt;
+				$args['post_date']     = get_date_from_gmt( $gmt );
 			}
 		}
 
-		return array(
-			'ids'     => $ids,
-			'errors'  => $errors,
-			'skipped' => $skipped,
-		);
+		$id = $this->upsert( $title, $html, $args );
+		if ( ! $id ) {
+			++$state['skipped'];
+			$state['errors'][] = 'Failed: ' . $title;
+			return 0;
+		}
+		$this->set_tags( $id, $this->parse_tags( (string) ( $thing['tags'] ?? '' ) ) );
+		return $id;
 	}
 
 	/**
-	 * @return array<int,array<string,string>>|null
+	 * Read one stashed thing (a `<thing>` element or a JSON object).
+	 *
+	 * @return array<string,string>|null
 	 */
-	private function parse_xml( string $raw ): ?array {
+	private function read_thing( string $file ): ?array {
+		$raw = @file_get_contents( $file ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		if ( false === $raw ) {
+			return null;
+		}
+		if ( '.json' === substr( $file, -5 ) ) {
+			$thing = json_decode( $raw, true );
+			return is_array( $thing ) ? $thing : null;
+		}
 		$prev = libxml_use_internal_errors( true );
 		$xml  = simplexml_load_string( $raw, 'SimpleXMLElement', LIBXML_NOCDATA | LIBXML_NONET );
 		libxml_clear_errors();
@@ -140,15 +145,11 @@ class Thinkery extends Importer {
 		if ( false === $xml ) {
 			return null;
 		}
-		$things = array();
-		foreach ( $xml->thing as $thing ) {
-			$row = array();
-			foreach ( array( 'title', 'url', 'tags', 'date', 'html' ) as $field ) {
-				$row[ $field ] = isset( $thing->{$field} ) ? (string) $thing->{$field} : '';
-			}
-			$things[] = $row;
+		$row = array();
+		foreach ( array( 'title', 'url', 'tags', 'date', 'html' ) as $field ) {
+			$row[ $field ] = isset( $xml->{$field} ) ? (string) $xml->{$field} : '';
 		}
-		return $things;
+		return $row;
 	}
 
 	/**

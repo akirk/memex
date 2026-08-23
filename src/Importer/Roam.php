@@ -19,69 +19,77 @@ class Roam extends Importer {
 		return 'roam';
 	}
 
-	public function import( string $path ): array {
-		$raw = @file_get_contents( $path );
+	public function prepare( string $path, string $work_dir, array &$state, callable $within ): array {
+		$state['title_ids'] = array();
+		$raw                = @file_get_contents( $path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 		if ( false === $raw ) {
-			return array(
-				'ids'     => array(),
-				'errors'  => array( 'Could not read Roam JSON file.' ),
-				'skipped' => 0,
-			);
+			return self::failure( $state, 'Could not read Roam JSON file.' );
 		}
 		$data = json_decode( $raw, true );
+		unset( $raw );
 		if ( ! is_array( $data ) ) {
-			return array(
-				'ids'     => array(),
-				'errors'  => array( 'Invalid JSON in Roam export.' ),
-				'skipped' => 0,
-			);
+			return self::failure( $state, 'Invalid JSON in Roam export.' );
 		}
 
-		$ids    = array();
-		$errors = array();
-
-		// Pass 1: create empty notes for every page so [[links]] resolve.
-		$title_ids = array();
+		// One file per page so a later request can fill one page without
+		// re-parsing the whole export.
+		$pages = array();
 		foreach ( $data as $page ) {
 			$title = isset( $page['title'] ) ? trim( (string) $page['title'] ) : '';
 			if ( '' === $title ) {
 				continue;
 			}
+			$pages[] = array(
+				$this->stash( $work_dir, 'pages', count( $pages ), 'json', (string) wp_json_encode( $page['children'] ?? array() ) ),
+				$title,
+			);
+		}
+		unset( $data );
+
+		// Pass 1 creates empty notes for every page so [[links]] resolve; pass 2 fills content.
+		$items = array();
+		foreach ( array( 1, 2 ) as $pass ) {
+			foreach ( $pages as $page ) {
+				$items[] = array_merge( array( $pass ), $page );
+			}
+		}
+		return self::prepared( $items );
+	}
+
+	public function import_item( $item, array &$state ): int {
+		list( $pass, $file, $title ) = $item;
+		$key = strtolower( $title );
+
+		if ( 1 === $pass ) {
 			$id = $this->upsert( $title, '' );
 			if ( $id ) {
-				$title_ids[ strtolower( $title ) ] = $id;
+				$state['title_ids'][ $key ] = $id;
+			} else {
+				$state['errors'][] = 'Failed: ' . $title;
 			}
+			return 0;
 		}
 
-		// Pass 2: fill content.
-		foreach ( $data as $page ) {
-			$title = isset( $page['title'] ) ? trim( (string) $page['title'] ) : '';
-			if ( '' === $title ) {
-				continue;
-			}
-			$id = $title_ids[ strtolower( $title ) ] ?? 0;
-			if ( ! $id ) {
-				continue;
-			}
-			$html = $this->render_children( $page['children'] ?? array() );
-			$tags = $this->collect_hashtags( $page['children'] ?? array() );
-			wp_update_post(
-				array(
-					'ID'           => $id,
-					'post_content' => $html,
-				)
-			);
-			if ( $tags ) {
-				$this->set_tags( $id, $tags );
-			}
-			$ids[] = $id;
+		$id = $state['title_ids'][ $key ] ?? 0;
+		if ( ! $id ) {
+			return 0;
 		}
-
-		return array(
-			'ids'     => $ids,
-			'errors'  => $errors,
-			'skipped' => 0,
+		$children = json_decode( (string) @file_get_contents( $file ), true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		if ( ! is_array( $children ) ) {
+			$children = array();
+		}
+		$html = $this->render_children( $children );
+		$tags = $this->collect_hashtags( $children );
+		wp_update_post(
+			array(
+				'ID'           => $id,
+				'post_content' => $html,
+			)
 		);
+		if ( $tags ) {
+			$this->set_tags( $id, $tags );
+		}
+		return $id;
 	}
 
 	private function render_children( array $children, int $depth = 0 ): string {

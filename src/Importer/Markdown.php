@@ -20,52 +20,34 @@ class Markdown extends Importer {
 		return 'markdown';
 	}
 
-	public function import( string $path ): array {
-		$errors = array();
-		$ids    = array();
-
+	public function prepare( string $path, string $work_dir, array &$state, callable $within ): array {
+		$state['folder_parents'] = array();
 		if ( is_dir( $path ) ) {
 			$root = $path;
-			$cleanup = false;
 		} elseif ( preg_match( '/\.zip$/i', $path ) ) {
-			$root = $this->extract_zip( $path );
-			if ( ! $root ) {
-				return array(
-					'ids'     => array(),
-					'errors'  => array( 'Could not extract ZIP archive.' ),
-					'skipped' => 0,
-				);
+			$root = trailingslashit( $work_dir ) . 'extracted';
+			if ( ! $this->extract_zip( $path, $root ) ) {
+				return self::failure( $state, 'Could not extract ZIP archive.' );
 			}
-			$cleanup = true;
 		} else {
-			$id = $this->import_file( $path, basename( $path ) );
-			return array(
-				'ids'     => $id ? array( $id ) : array(),
-				'errors'  => $id ? array() : array( 'Could not import file.' ),
-				'skipped' => 0,
-			);
+			return self::prepared( array( array( $path, basename( $path ) ) ) );
 		}
 
-		$folder_parents = array();  // rel-dir => parent post ID
+		$items = array();
 		foreach ( $this->walk( $root, array( 'md', 'markdown', 'txt' ) ) as $file => $rel ) {
-			$parent_id = $this->ensure_folder_parents( dirname( $rel ), $folder_parents );
-			$id        = $this->import_file( $file, $rel, $parent_id );
-			if ( $id ) {
-				$ids[] = $id;
-			} else {
-				$errors[] = 'Failed: ' . $rel;
-			}
+			$items[] = array( $file, $rel );
 		}
+		return self::prepared( $items );
+	}
 
-		if ( $cleanup && $root && is_dir( $root ) ) {
-			$this->rrmdir( $root );
+	public function import_item( $item, array &$state ): int {
+		list( $file, $rel ) = $item;
+		$parent_id = $this->ensure_folder_parents( dirname( $rel ), $state['folder_parents'] );
+		$id        = $this->import_file( $file, $rel, $parent_id );
+		if ( ! $id ) {
+			$state['errors'][] = 'Failed: ' . $rel;
 		}
-
-		return array(
-			'ids'     => $ids,
-			'errors'  => $errors,
-			'skipped' => 0,
-		);
+		return $id;
 	}
 
 	/**
@@ -242,22 +224,4 @@ class Markdown extends Importer {
 		return array();
 	}
 
-	private function rrmdir( string $dir ): void {
-		if ( ! is_dir( $dir ) ) {
-			return;
-		}
-		$items = scandir( $dir );
-		foreach ( $items as $item ) {
-			if ( '.' === $item || '..' === $item ) {
-				continue;
-			}
-			$full = $dir . '/' . $item;
-			if ( is_dir( $full ) ) {
-				$this->rrmdir( $full );
-			} else {
-				@unlink( $full );
-			}
-		}
-		@rmdir( $dir );
-	}
 }

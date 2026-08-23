@@ -887,6 +887,252 @@
 		});
 	}
 
+	// --- Chunked import ----------------------------------------------------
+	//
+	// The upload creates a job; we then call `memex_import_step` until the
+	// server reports `done`, rendering progress after every step. A failed
+	// step leaves the job resumable (same job ID), so "Resume" just loops again.
+
+	function setupImport() {
+		var form = document.getElementById('memex-import-form');
+		if (!form) return;
+
+		var progress = document.getElementById('memex-import-progress');
+		var bar = progress.querySelector('progress');
+		var label = progress.querySelector('.memex-import-progress-label');
+		var detail = progress.querySelector('.memex-import-progress-detail');
+		var result = document.getElementById('memex-import-result');
+		var errorBox = document.getElementById('memex-import-error');
+		var resumeBox = document.getElementById('memex-import-resume');
+		var submit = form.querySelector('button[type="submit"]');
+		var nonce = form.getAttribute('data-nonce');
+		var url = form.getAttribute('data-ajax-url') || ajaxurl();
+		var currentJob = null;
+		var lastStatus = null;
+		var running = false;
+		var retries = 0;
+		var MAX_RETRIES = 3;
+		var budget = 5; // seconds of work per step; halved when a step times out
+
+		function t(key, values) {
+			var str = form.getAttribute('data-i18n-' + key) || '';
+			(values || []).forEach(function (v, i) {
+				str = str.replace('%' + (i + 1) + '$s', v).replace('%s', v);
+			});
+			return str;
+		}
+
+		function fmt(n) {
+			return Number(n).toLocaleString();
+		}
+
+		function show(el, visible) {
+			if (visible) el.removeAttribute('hidden'); else el.setAttribute('hidden', '');
+		}
+
+		function setProgress(text, done, total, extra) {
+			show(progress, true);
+			label.textContent = text;
+			if (total > 0) {
+				bar.max = total;
+				bar.value = done;
+				detail.textContent = t('progress', [fmt(done), fmt(total)]);
+			} else {
+				bar.removeAttribute('value');
+				detail.textContent = extra || '';
+			}
+		}
+
+		function render(status) {
+			lastStatus = status;
+			if (status.phase === 'prepare') {
+				setProgress(t('preparing', [status.file]), 0, 0, status.done > 0 ? t('found', [fmt(status.done)]) : '');
+			} else if (status.phase === 'links') {
+				setProgress(t('links'), status.done, status.total);
+			} else {
+				setProgress(t('importing'), status.done, status.total);
+			}
+		}
+
+		function finish(status) {
+			running = false;
+			currentJob = null;
+			show(progress, false);
+			show(errorBox, false);
+			if (resumeBox) show(resumeBox, false);
+			result.querySelector('.memex-import-result-summary').textContent = t('done', [fmt(status.count), status.type]);
+			var details = result.querySelector('details');
+			var list = details.querySelector('ul');
+			list.innerHTML = '';
+			if (status.errors && status.errors.length) {
+				details.querySelector('summary').textContent = t('warnings', [fmt(status.errors.length)]);
+				status.errors.slice(0, 50).forEach(function (e) {
+					var li = document.createElement('li');
+					li.textContent = e;
+					list.appendChild(li);
+				});
+			}
+			show(details, status.errors && status.errors.length > 0);
+			show(result, true);
+			form.reset();
+			show(form, true);
+			submit.disabled = false;
+		}
+
+		function fail(message) {
+			running = false;
+			show(progress, false);
+			errorBox.querySelector('p').textContent = t('failed', [message]);
+			show(errorBox.querySelector('[data-import-retry]').parentNode, !!currentJob);
+			show(errorBox, true);
+			// Without a resumable job there is nothing else to do but try again.
+			show(form, !currentJob);
+			submit.disabled = false;
+		}
+
+		function post(action, params) {
+			var body = params instanceof FormData ? params : new URLSearchParams(params || {});
+			body.set('action', action);
+			body.set('_ajax_nonce', nonce);
+			return fetch(url, { method: 'POST', credentials: 'same-origin', body: body })
+				.then(function (r) {
+					return r.json().catch(function () {
+						throw new Error('HTTP ' + r.status);
+					});
+				})
+				.then(function (json) {
+					if (!json || !json.success) {
+						var err = new Error((json && json.data && json.data.message) || 'Request failed');
+						err.data = json && json.data;
+						throw err;
+					}
+					return json.data;
+				});
+		}
+
+		function loop() {
+			if (!currentJob) return;
+			running = true;
+			post('memex_import_step', { job: currentJob, budget: String(budget) })
+				.then(function (status) {
+					retries = 0;
+					render(status);
+					if (status.phase === 'done') {
+						finish(status);
+					} else {
+						loop();
+					}
+				})
+				.catch(function (err) {
+					// A dropped connection (proxy timeout, flaky network) leaves the
+					// job intact on the server; retry a few times before giving up.
+					if (!err.data && retries < MAX_RETRIES) {
+						retries++;
+						budget = Math.max(1, budget / 2);
+						label.textContent = t('retrying', [retries, MAX_RETRIES]);
+						setTimeout(loop, 2000 * retries);
+						return;
+					}
+					fail(err.message);
+				});
+		}
+
+		function start(job, resuming) {
+			currentJob = job;
+			retries = 0;
+			show(result, false);
+			show(errorBox, false);
+			if (resumeBox) show(resumeBox, false);
+			show(form, false);
+			if (resuming) {
+				// Show something right away; the first step can take several seconds.
+				var known = lastStatus && lastStatus.total > 0;
+				setProgress(t('resuming'), known ? lastStatus.done : 0, known ? lastStatus.total : 0);
+			}
+			loop();
+		}
+
+		function upload(formData) {
+			submit.disabled = true;
+			show(result, false);
+			show(errorBox, false);
+			show(form, false);
+			running = true;
+			var file = form.querySelector('input[type="file"]').files[0];
+			setProgress(t('uploading', [file ? file.name : '']), 0, 0);
+
+			formData.set('action', 'memex_import_start');
+			formData.set('_ajax_nonce', nonce);
+			var xhr = new XMLHttpRequest();
+			xhr.open('POST', url);
+			xhr.withCredentials = true;
+			xhr.upload.onprogress = function (e) {
+				if (e.lengthComputable) {
+					setProgress(t('uploading', [file ? file.name : '']), e.loaded, e.total);
+				}
+			};
+			xhr.onerror = function () {
+				fail('network error');
+			};
+			xhr.onload = function () {
+				var json = null;
+				try { json = JSON.parse(xhr.responseText); } catch (e) { /* not JSON */ }
+				if (!json || !json.success) {
+					var data = json && json.data;
+					if (data && data.code === 'import-in-progress' && data.status) {
+						// Another (interrupted) job exists: pick it up instead.
+						lastStatus = data.status;
+						start(data.status.job, true);
+						return;
+					}
+					fail((data && data.message) || ('HTTP ' + xhr.status));
+					return;
+				}
+				render(json.data);
+				start(json.data.job);
+			};
+			xhr.send(formData);
+		}
+
+		form.addEventListener('submit', function (e) {
+			e.preventDefault();
+			if (running) return;
+			upload(new FormData(form));
+		});
+
+		errorBox.querySelector('[data-import-retry]').addEventListener('click', function () {
+			if (currentJob && !running) start(currentJob, true);
+		});
+
+		if (resumeBox) {
+			resumeBox.querySelector('[data-import-resume]').addEventListener('click', function () {
+				lastStatus = {
+					phase: resumeBox.getAttribute('data-phase'),
+					done: Number(resumeBox.getAttribute('data-done')),
+					total: Number(resumeBox.getAttribute('data-total')),
+					file: resumeBox.getAttribute('data-file'),
+				};
+				start(resumeBox.getAttribute('data-job'), true);
+			});
+			resumeBox.querySelector('[data-import-discard]').addEventListener('click', function () {
+				var job = resumeBox.getAttribute('data-job');
+				post('memex_import_cancel', { job: job })
+					.catch(function () { /* already gone */ })
+					.then(function () {
+						show(resumeBox, false);
+						show(form, true);
+					});
+			});
+		}
+
+		window.addEventListener('beforeunload', function (e) {
+			if (!running) return;
+			e.preventDefault();
+			e.returnValue = t('leave');
+			return e.returnValue;
+		});
+	}
+
 	// --- Bootstrap ---------------------------------------------------------
 
 	document.addEventListener('DOMContentLoaded', function () {
@@ -898,6 +1144,7 @@
 		setupMarkdownEditor();
 		setupAutocomplete();
 		setupRevisionDiffs();
+		setupImport();
 		setupTaskCheckboxes();
 	});
 })();

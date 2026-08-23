@@ -17,78 +17,75 @@ class Evernote extends Importer {
 		return 'evernote';
 	}
 
-	public function import( string $path ): array {
+	/**
+	 * Stream the export and stash every `<note>` as its own file, so a
+	 * multi-hundred-megabyte ENEX is never held in memory at once. Resumes
+	 * after the notes stashed by earlier calls.
+	 */
+	public function prepare( string $path, string $work_dir, array &$state, callable $within ): array {
 		if ( ! is_readable( $path ) ) {
-			return array(
-				'ids'     => array(),
-				'errors'  => array( 'ENEX file not readable.' ),
-				'skipped' => 0,
-			);
+			return self::failure( $state, 'ENEX file not readable.' );
 		}
+		$skip = (int) ( $state['prepared'] ?? 0 );
+		$r    = $this->stream_xml_elements( $path, 'note', $work_dir, 'notes', $skip, $within, $state );
+		if ( ! $r['opened'] || ( 0 === $skip && ! $r['items'] && $r['complete'] && $state['errors'] ) ) {
+			$state['errors'] = array( 'Failed to parse ENEX (invalid XML).' );
+			return self::prepared( array() );
+		}
+		$state['prepared'] = $skip + count( $r['items'] );
+		return self::prepared( $r['items'], $r['complete'] );
+	}
 
+	public function import_item( $item, array &$state ): int {
 		$prev = libxml_use_internal_errors( true );
-		$xml  = simplexml_load_file( $path, 'SimpleXMLElement', LIBXML_NOCDATA | LIBXML_NONET );
+		$note = simplexml_load_file( $item, 'SimpleXMLElement', LIBXML_NOCDATA | LIBXML_NONET );
 		libxml_clear_errors();
 		libxml_use_internal_errors( $prev );
-		if ( false === $xml ) {
-			return array(
-				'ids'     => array(),
-				'errors'  => array( 'Failed to parse ENEX (invalid XML).' ),
-				'skipped' => 0,
-			);
+		if ( false === $note ) {
+			++$state['skipped'];
+			$state['errors'][] = 'Failed to parse note ' . basename( $item, '.xml' );
+			return 0;
 		}
 
-		$ids     = array();
-		$errors  = array();
-		$skipped = 0;
-		foreach ( $xml->note as $note ) {
-			$title = trim( (string) $note->title );
-			if ( '' === $title ) {
-				$title = __( 'Untitled note', 'memex' );
-			}
+		$title = trim( (string) $note->title );
+		if ( '' === $title ) {
+			$title = __( 'Untitled note', 'memex' );
+		}
 
-			$content_xml = (string) $note->content;
-			$html        = $this->enml_to_html( $content_xml );
+		$html = $this->enml_to_html( (string) $note->content );
 
-			$tags = array();
-			foreach ( $note->tag as $t ) {
-				$tag = trim( (string) $t );
-				if ( '' !== $tag ) {
-					$tags[] = $tag;
-				}
-			}
-
-			$args = array();
-			if ( isset( $note->created ) ) {
-				$gmt = $this->evernote_time_to_mysql( (string) $note->created );
-				if ( $gmt ) {
-					$args['post_date_gmt'] = $gmt;
-					$args['post_date']     = get_date_from_gmt( $gmt );
-				}
-			}
-			if ( isset( $note->updated ) ) {
-				$gmt = $this->evernote_time_to_mysql( (string) $note->updated );
-				if ( $gmt ) {
-					$args['post_modified_gmt'] = $gmt;
-					$args['post_modified']     = get_date_from_gmt( $gmt );
-				}
-			}
-
-			$id = $this->upsert( $title, $html, $args );
-			if ( $id ) {
-				$ids[] = $id;
-				$this->set_tags( $id, $tags );
-			} else {
-				++$skipped;
-				$errors[] = 'Failed: ' . $title;
+		$tags = array();
+		foreach ( $note->tag as $t ) {
+			$tag = trim( (string) $t );
+			if ( '' !== $tag ) {
+				$tags[] = $tag;
 			}
 		}
 
-		return array(
-			'ids'     => $ids,
-			'errors'  => $errors,
-			'skipped' => $skipped,
-		);
+		$args = array();
+		if ( isset( $note->created ) ) {
+			$gmt = $this->evernote_time_to_mysql( (string) $note->created );
+			if ( $gmt ) {
+				$args['post_date_gmt'] = $gmt;
+				$args['post_date']     = get_date_from_gmt( $gmt );
+			}
+		}
+		if ( isset( $note->updated ) ) {
+			$gmt = $this->evernote_time_to_mysql( (string) $note->updated );
+			if ( $gmt ) {
+				$args['post_modified_gmt'] = $gmt;
+				$args['post_modified']     = get_date_from_gmt( $gmt );
+			}
+		}
+
+		$id = $this->upsert( $title, $html, $args );
+		if ( ! $id ) {
+			++$state['skipped'];
+			$state['errors'][] = 'Failed: ' . $title;
+			return 0;
+		}
+		$this->set_tags( $id, $tags );
+		return $id;
 	}
 
 	/**

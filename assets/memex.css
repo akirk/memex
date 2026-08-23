@@ -764,6 +764,35 @@ body.memex {
 	color: #991b1b;
 }
 
+.memex-import-progress {
+	margin-bottom: 1rem;
+	padding: 0.75rem 1rem;
+	border: 1px solid var(--wp-app-color-border);
+	border-radius: 6px;
+	background: var(--wp-app-color-surface);
+}
+
+.memex-import-progress progress {
+	display: block;
+	width: 100%;
+	height: 0.75rem;
+	margin: 0.5rem 0;
+}
+
+.memex-import-progress-label {
+	margin: 0;
+	font-weight: 600;
+}
+
+.memex-import-progress-detail {
+	margin: 0;
+}
+
+.memex-import-result ul,
+.memex-import-resume p:last-child {
+	margin-bottom: 0;
+}
+
 .memex-empty {
 	padding: 2rem;
 	text-align: center;
