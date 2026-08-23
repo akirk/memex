@@ -384,6 +384,18 @@ class ImportTest extends WP_UnitTestCase {
 		$this->assertSame( '2013-04-28 05:08:45', get_post( $r['ids'][1] )->post_date_gmt );
 	}
 
+	public function test_thinkery_duplicate_empty_things_keep_their_dates(): void {
+		$xml = '<thinkery>'
+			. '<thing><title>about:debugging</title><url></url><tags></tags><date>Mon, 18 Jun 2018 16:05:08 +0000</date><html></html></thing>'
+			. '<thing><title>about:debugging</title><url></url><tags></tags><date>Mon, 18 Jun 2018 16:07:55 +0000</date><html></html></thing>'
+			. '</thinkery>';
+		$r = $this->run_importer( new Thinkery(), $this->file( 'things.xml', $xml ) );
+		$this->assertCount( 2, $r['ids'] );
+		$this->assertNotSame( $r['ids'][0], $r['ids'][1] );
+		$this->assertSame( '2018-06-18 16:05:08', get_post( $r['ids'][0] )->post_date_gmt );
+		$this->assertSame( '2018-06-18 16:07:55', get_post( $r['ids'][1] )->post_date_gmt );
+	}
+
 	/* ─── Detection ─── */
 
 	public function test_from_type_and_detect(): void {
