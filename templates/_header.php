@@ -4,10 +4,46 @@
  *
  * Usage:
  *   $memex_title = 'Page title';
+ *   $memex_current_note = $post; // optional, highlights the note in the folder tree
  *   include __DIR__ . '/_header.php';
  */
+
+use Memex\CPT;
+
 if ( ! defined( 'ABSPATH' ) ) {
 	exit; }
+
+if ( ! function_exists( 'memex_render_folder_tree' ) ) {
+	/**
+	 * Render folder notes as nested <details>, expanded along the current path.
+	 *
+	 * @param array $nodes   Nodes from CPT::folder_tree().
+	 * @param int[] $open    IDs of the current note and its ancestors.
+	 * @param int   $current ID of the current note, 0 if none.
+	 */
+	function memex_render_folder_tree( array $nodes, array $open, int $current ): void {
+		echo '<ul>';
+		foreach ( $nodes as $node ) {
+			$p    = $node['post'];
+			$id   = (int) $p->ID;
+			$link = '<a href="' . esc_url( CPT::url( $p ) ) . '"' . ( $id === $current ? ' aria-current="page"' : '' ) . '>' . esc_html( $p->post_title ) . '</a>';
+			echo '<li>';
+			if ( $node['children'] ) {
+				echo '<details' . ( in_array( $id, $open, true ) ? ' open' : '' ) . '><summary>' . $link . '</summary>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+				memex_render_folder_tree( $node['children'], $open, $current );
+				echo '</details>';
+			} else {
+				echo $link; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+			}
+			echo '</li>';
+		}
+		echo '</ul>';
+	}
+}
+
+$memex_folder_tree = CPT::folder_tree();
+$memex_current_id  = isset( $memex_current_note ) && CPT::is_note( $memex_current_note ) ? (int) $memex_current_note->ID : 0;
+$memex_open_ids    = $memex_current_id ? CPT::ancestor_ids( $memex_current_id ) : array();
 ?>
 <!DOCTYPE html>
 <html <?php wp_app_language_attributes(); ?>>
@@ -55,6 +91,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 				<a href="<?php echo esc_url( home_url( '/memex/import' ) ); ?>"><?php esc_html_e( 'Import', 'memex' ); ?></a>
 				<a href="<?php echo esc_url( home_url( '/memex/export' ) ); ?>"><?php esc_html_e( 'Export', 'memex' ); ?></a>
 			</nav>
+			<?php if ( $memex_folder_tree ) : ?>
+				<nav class="memex-folders" aria-labelledby="memex-folders-heading">
+					<h2 id="memex-folders-heading"><?php esc_html_e( 'Folders', 'memex' ); ?></h2>
+					<?php memex_render_folder_tree( $memex_folder_tree, $memex_open_ids, $memex_current_id ); ?>
+				</nav>
+			<?php endif; ?>
 			<form class="memex-create" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" aria-label="<?php esc_attr_e( 'Create note', 'memex' ); ?>">
 				<input type="hidden" name="action" value="memex_create_note">
 				<?php wp_nonce_field( 'memex_create_note' ); ?>

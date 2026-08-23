@@ -132,6 +132,79 @@ class CPT {
 	}
 
 	/**
+	 * Notes that have children ("folders" — e.g. the parents created from the
+	 * directory layout of an imported vault), as a nested tree.
+	 *
+	 * Only folder notes are included: leaves are listed on their parent's page.
+	 *
+	 * @return array<int, array{post: \WP_Post, children: array}> Root nodes, sorted by title.
+	 */
+	public static function folder_tree(): array {
+		global $wpdb;
+
+		$statuses     = self::readable_statuses();
+		$placeholders = implode( ',', array_fill( 0, count( $statuses ), '%s' ) );
+		$parent_ids   = $wpdb->get_col( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$wpdb->prepare(
+				"SELECT DISTINCT post_parent FROM {$wpdb->posts} WHERE post_type = %s AND post_parent > 0 AND post_status IN ({$placeholders})", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				array_merge( array( self::POST_TYPE ), $statuses )
+			)
+		);
+		if ( ! $parent_ids ) {
+			return array();
+		}
+
+		$folders = get_posts(
+			array(
+				'post_type'      => self::POST_TYPE,
+				'post_status'    => $statuses,
+				'post__in'       => array_map( 'intval', $parent_ids ),
+				'posts_per_page' => -1,
+				'orderby'        => 'title',
+				'order'          => 'ASC',
+			)
+		);
+
+		$nodes = array();
+		foreach ( $folders as $f ) {
+			$nodes[ $f->ID ] = array(
+				'post'     => $f,
+				'children' => array(),
+			);
+		}
+		$roots = array();
+		foreach ( array_keys( $nodes ) as $id ) {
+			$parent = (int) $nodes[ $id ]['post']->post_parent;
+			if ( $parent && isset( $nodes[ $parent ] ) ) {
+				$nodes[ $parent ]['children'][] = &$nodes[ $id ];
+			} else {
+				$roots[] = &$nodes[ $id ];
+			}
+		}
+		return $roots;
+	}
+
+	/**
+	 * IDs of a note and all its ancestors, for expanding the folder tree.
+	 *
+	 * @return int[]
+	 */
+	public static function ancestor_ids( $post ): array {
+		$post = get_post( $post );
+		if ( ! $post ) {
+			return array();
+		}
+		$ids  = array( (int) $post->ID );
+		$seen = array();
+		while ( $post && $post->post_parent && ! isset( $seen[ $post->post_parent ] ) ) {
+			$seen[ $post->post_parent ] = true;
+			$ids[]                      = (int) $post->post_parent;
+			$post                       = get_post( $post->post_parent );
+		}
+		return $ids;
+	}
+
+	/**
 	 * Permalink for a note in the Memex app.
 	 */
 	public static function url( $post ): string {

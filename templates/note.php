@@ -96,7 +96,8 @@ if ( ! $post ) {
 	return;
 }
 
-$memex_title = $post->post_title;
+$memex_title        = $post->post_title;
+$memex_current_note = $post;
 include __DIR__ . '/_header.php';
 
 $is_stub      = (bool) get_post_meta( $post->ID, CPT::META_STUB, true );
@@ -179,14 +180,25 @@ $export_link  = wp_nonce_url(
 		?>
 	</section>
 
-	<?php if ( $children ) : ?>
+	<?php if ( $children || $can_edit_note ) : ?>
 		<section class="memex-panel memex-children" aria-labelledby="nested-notes-heading">
 			<h2 id="nested-notes-heading"><?php esc_html_e( 'Nested notes', 'memex' ); ?></h2>
-			<ul>
-				<?php foreach ( $children as $c ) : ?>
-					<li><a href="<?php echo esc_url( CPT::url( $c ) ); ?>"><?php echo esc_html( $c->post_title ); ?></a></li>
-				<?php endforeach; ?>
-			</ul>
+			<?php if ( $children ) : ?>
+				<ul>
+					<?php foreach ( $children as $c ) : ?>
+						<li><a href="<?php echo esc_url( CPT::url( $c ) ); ?>"><?php echo esc_html( $c->post_title ); ?></a></li>
+					<?php endforeach; ?>
+				</ul>
+			<?php endif; ?>
+			<?php if ( $can_edit_note ) : ?>
+				<form class="memex-create memex-create-nested" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" aria-label="<?php esc_attr_e( 'Create nested note', 'memex' ); ?>">
+					<input type="hidden" name="action" value="memex_create_note">
+					<input type="hidden" name="parent" value="<?php echo (int) $post->ID; ?>">
+					<?php wp_nonce_field( 'memex_create_note' ); ?>
+					<input type="text" name="title" aria-label="<?php esc_attr_e( 'Nested note title', 'memex' ); ?>" placeholder="<?php esc_attr_e( 'New nested note…', 'memex' ); ?>" autocomplete="off" required>
+					<button type="submit"><?php esc_html_e( 'Create', 'memex' ); ?></button>
+				</form>
+			<?php endif; ?>
 		</section>
 	<?php endif; ?>
 
