@@ -233,7 +233,9 @@ abstract class Importer {
 			$existing = get_post( $existing_id );
 			$is_stub  = (bool) get_post_meta( $existing_id, CPT::META_STUB, true );
 			$empty    = $existing && '' === trim( wp_strip_all_tags( $existing->post_content ) );
-			if ( $is_stub || $empty ) {
+			// An empty non-stub note may just be a same-titled thing imported
+			// a moment ago; when titles aren't identities, leave it alone.
+			if ( $is_stub || ( $empty && $merge ) ) {
 				$data['ID'] = $existing_id;
 				// Stubs are drafts with a zero GMT date; without this flag
 				// wp_update_post() discards the supplied date and uses "now".
