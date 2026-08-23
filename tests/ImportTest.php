@@ -298,6 +298,21 @@ class ImportTest extends TestCase {
 		$this->assertSame( $json_content, $this->content( 'Bookmark' ) );
 	}
 
+	public function test_thinkery_bookmark_extracts_do_not_create_stubs(): void {
+		$things = array(
+			array( 'title' => 'Wiki docs', 'url' => 'https://example.com/api', 'html' => '<div id="extract"><pre>Get links from the [[Some Page]]</pre></div>' ),
+			array( 'title' => 'Plain note', 'url' => '', 'html' => '<p>See [[Linked Note]]</p>' ),
+		);
+		$r = $this->run_importer( new Thinkery(), $this->file( 'things.json', json_encode( $things ) ) );
+		$this->assertCount( 2, $r['ids'] );
+		foreach ( $r['ids'] as $id ) {
+			Importer::resolve_links( $id );
+		}
+		$this->assertStringContainsString( '&#91;&#91;Some Page&#93;&#93;', $this->content( 'Wiki docs' ) );
+		$this->assertSame( 0, FakeWP::find_by_title( 'Some Page' ) );
+		$this->assertSame( 1, get_post_meta( FakeWP::find_by_title( 'Linked Note' ), '_memex_stub', true ) );
+	}
+
 	/* ─── Detection ─── */
 
 	public function test_from_type_and_detect(): void {
