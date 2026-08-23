@@ -1037,16 +1037,18 @@
 				});
 		}
 
-		function start(job) {
+		function start(job, resuming) {
 			currentJob = job;
 			retries = 0;
 			show(result, false);
 			show(errorBox, false);
 			if (resumeBox) show(resumeBox, false);
 			show(form, false);
-			// Show something right away; the first step can take several seconds.
-			var known = lastStatus && lastStatus.total > 0;
-			setProgress(t('resuming'), known ? lastStatus.done : 0, known ? lastStatus.total : 0);
+			if (resuming) {
+				// Show something right away; the first step can take several seconds.
+				var known = lastStatus && lastStatus.total > 0;
+				setProgress(t('resuming'), known ? lastStatus.done : 0, known ? lastStatus.total : 0);
+			}
 			loop();
 		}
 
@@ -1079,7 +1081,8 @@
 					var data = json && json.data;
 					if (data && data.code === 'import-in-progress' && data.status) {
 						// Another (interrupted) job exists: pick it up instead.
-						start(data.status.job);
+						lastStatus = data.status;
+						start(data.status.job, true);
 						return;
 					}
 					fail((data && data.message) || ('HTTP ' + xhr.status));
@@ -1098,7 +1101,7 @@
 		});
 
 		errorBox.querySelector('[data-import-retry]').addEventListener('click', function () {
-			if (currentJob && !running) start(currentJob);
+			if (currentJob && !running) start(currentJob, true);
 		});
 
 		if (resumeBox) {
@@ -1109,7 +1112,7 @@
 					total: Number(resumeBox.getAttribute('data-total')),
 					file: resumeBox.getAttribute('data-file'),
 				};
-				start(resumeBox.getAttribute('data-job'));
+				start(resumeBox.getAttribute('data-job'), true);
 			});
 			resumeBox.querySelector('[data-import-discard]').addEventListener('click', function () {
 				var job = resumeBox.getAttribute('data-job');
