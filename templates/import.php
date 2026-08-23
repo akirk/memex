@@ -65,6 +65,7 @@ $max_upload = wp_max_upload_size();
 		<label><input type="radio" name="type" value="notion"> Notion <span class="memex-muted"><?php esc_html_e( '(HTML or Markdown export ZIP)', 'memex' ); ?></span></label>
 		<label><input type="radio" name="type" value="evernote"> Evernote <span class="memex-muted">(.enex)</span></label>
 		<label><input type="radio" name="type" value="roam"> Roam Research <span class="memex-muted">(.json)</span></label>
+		<label><input type="radio" name="type" value="thinkery"> Thinkery <span class="memex-muted">(.xml <?php esc_html_e( 'or', 'memex' ); ?> .json)</span></label>
 		<label><input type="radio" name="type" value="markdown"> Markdown <span class="memex-muted"><?php esc_html_e( '(single .md or ZIP)', 'memex' ); ?></span></label>
 	</fieldset>
 
@@ -92,6 +93,7 @@ $max_upload = wp_max_upload_size();
 		<li><strong>Notion</strong> — <?php esc_html_e( 'Page hierarchy, HTML/Markdown body, internal page links rewritten as memex links between notes.', 'memex' ); ?></li>
 		<li><strong>Evernote</strong> — <?php esc_html_e( 'Note title, HTML body (ENML), tags, created/updated timestamps.', 'memex' ); ?></li>
 		<li><strong>Roam Research</strong> — <?php esc_html_e( 'Pages, nested bullet outline, [[page-links]], #hashtags, TODO/DONE markers.', 'memex' ); ?></li>
+		<li><strong>Thinkery</strong> — <?php esc_html_e( 'Things (notes and bookmarks) with title, HTML body, tags, and creation date; bookmark URLs are linked at the top of the note.', 'memex' ); ?></li>
 	</ul>
 	<p class="memex-muted"><?php esc_html_e( 'Attachments (images, PDFs) are skipped in this first pass — the text is the important part.', 'memex' ); ?></p>
 </section>

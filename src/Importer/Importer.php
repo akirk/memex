@@ -19,7 +19,7 @@ use Memex\CPT;
 use Memex\Links;
 
 abstract class Importer {
-	/** Human-readable source name (obsidian/notion/evernote/roam/markdown). */
+	/** Human-readable source name (obsidian/notion/evernote/roam/thinkery/markdown). */
 	abstract public function source(): string;
 
 	/**
@@ -38,6 +38,9 @@ abstract class Importer {
 
 		if ( 'enex' === $ext || self::sniff_xml_root( $path, 'en-export' ) ) {
 			return new Evernote();
+		}
+		if ( Thinkery::sniff( $path ) ) {
+			return new Thinkery();
 		}
 		if ( 'json' === $ext ) {
 			return new Roam();

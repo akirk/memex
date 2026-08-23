@@ -336,6 +336,8 @@ class App extends BaseApp {
 				return new Importer\Evernote();
 			case 'roam':
 				return new Importer\Roam();
+			case 'thinkery':
+				return new Importer\Thinkery();
 		}
 		return null;
 	}
