@@ -61,60 +61,61 @@ class CPT {
 			add_filter( 'rest_pre_dispatch', array( __CLASS__, 'require_login_for_rest' ), 10, 3 );
 		}
 
-		$note_args = array(
-			'labels'            => array(
-				'name'               => __( 'Notes', 'memex' ),
-				'singular_name'      => __( 'Note', 'memex' ),
-				'add_new'            => __( 'Add New', 'memex' ),
-				'add_new_item'       => __( 'Add New Note', 'memex' ),
-				'edit_item'          => __( 'Edit Note', 'memex' ),
-				'new_item'           => __( 'New Note', 'memex' ),
-				'view_item'          => __( 'View Note', 'memex' ),
-				'search_items'       => __( 'Search Notes', 'memex' ),
-				'not_found'          => __( 'No notes found', 'memex' ),
-				'not_found_in_trash' => __( 'No notes in trash', 'memex' ),
-				'menu_name'          => __( 'Memex', 'memex' ),
-			),
-			'public'            => false,
-			'show_ui'           => true,
-			'show_in_menu'      => true,
-			'show_in_admin_bar' => true,
-			'show_in_rest'      => true,
-			'hierarchical'      => true,
-			'menu_icon'         => 'dashicons-book-alt',
-			'menu_position'     => 20,
-			'supports'          => array(
-				'title',
-				'editor',
-				'revisions',
-				'author',
-				'excerpt',
-				'custom-fields',
-				'page-attributes',
-			),
-			'rewrite'           => false,
-			'capability_type'   => 'page',
-			'map_meta_cap'      => true,
+		register_post_type(
+			self::POST_TYPE,
+			array(
+				'labels'            => array(
+					'name'               => __( 'Notes', 'memex' ),
+					'singular_name'      => __( 'Note', 'memex' ),
+					'add_new'            => __( 'Add New', 'memex' ),
+					'add_new_item'       => __( 'Add New Note', 'memex' ),
+					'edit_item'          => __( 'Edit Note', 'memex' ),
+					'new_item'           => __( 'New Note', 'memex' ),
+					'view_item'          => __( 'View Note', 'memex' ),
+					'search_items'       => __( 'Search Notes', 'memex' ),
+					'not_found'          => __( 'No notes found', 'memex' ),
+					'not_found_in_trash' => __( 'No notes in trash', 'memex' ),
+					'menu_name'          => __( 'Memex', 'memex' ),
+				),
+				'public'            => false,
+				'show_ui'           => true,
+				'show_in_menu'      => true,
+				'show_in_admin_bar' => true,
+				'show_in_rest'      => true,
+				'rest_controller_class' => $rest_gate ? \WpApp\Rest\Access::protect_post_type( self::POST_TYPE, 'read' ) : null,
+				'hierarchical'      => true,
+				'menu_icon'         => 'dashicons-book-alt',
+				'menu_position'     => 20,
+				'supports'          => array(
+					'title',
+					'editor',
+					'revisions',
+					'author',
+					'excerpt',
+					'custom-fields',
+					'page-attributes',
+				),
+				'rewrite'           => false,
+				'capability_type'   => 'page',
+				'map_meta_cap'      => true,
+			)
 		);
-		if ( $rest_gate ) {
-			$note_args['rest_controller_class'] = \WpApp\Rest\Access::protect_post_type( self::POST_TYPE, 'read' );
-		}
-		register_post_type( self::POST_TYPE, $note_args );
 
-		$tag_args = array(
-			'labels'       => array(
-				'name'          => __( 'Tags', 'memex' ),
-				'singular_name' => __( 'Tag', 'memex' ),
-			),
-			'public'       => false,
-			'show_ui'      => true,
-			'show_in_rest' => true,
-			'hierarchical' => false,
+		register_taxonomy(
+			self::TAXONOMY,
+			self::POST_TYPE,
+			array(
+				'labels'       => array(
+					'name'          => __( 'Tags', 'memex' ),
+					'singular_name' => __( 'Tag', 'memex' ),
+				),
+				'public'       => false,
+				'show_ui'      => true,
+				'show_in_rest' => true,
+				'rest_controller_class' => $rest_gate ? \WpApp\Rest\Access::protect_taxonomy( self::TAXONOMY, 'read' ) : null,
+				'hierarchical' => false,
+			)
 		);
-		if ( $rest_gate ) {
-			$tag_args['rest_controller_class'] = \WpApp\Rest\Access::protect_taxonomy( self::TAXONOMY, 'read' );
-		}
-		register_taxonomy( self::TAXONOMY, self::POST_TYPE, $tag_args );
 
 		register_post_meta(
 			self::POST_TYPE,
