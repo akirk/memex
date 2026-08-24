@@ -21,60 +21,100 @@ class CPT {
 	const META_IMPORT_SOURCE = '_memex_import_source';   // e.g. obsidian, notion, evernote, roam.
 	const META_IMPORT_PATH   = '_memex_import_path';     // Original path inside the import source.
 
-	public static function register() {
-		register_post_type(
-			self::POST_TYPE,
-			array(
-				'labels'            => array(
-					'name'               => __( 'Notes', 'memex' ),
-					'singular_name'      => __( 'Note', 'memex' ),
-					'add_new'            => __( 'Add New', 'memex' ),
-					'add_new_item'       => __( 'Add New Note', 'memex' ),
-					'edit_item'          => __( 'Edit Note', 'memex' ),
-					'new_item'           => __( 'New Note', 'memex' ),
-					'view_item'          => __( 'View Note', 'memex' ),
-					'search_items'       => __( 'Search Notes', 'memex' ),
-					'not_found'          => __( 'No notes found', 'memex' ),
-					'not_found_in_trash' => __( 'No notes in trash', 'memex' ),
-					'menu_name'          => __( 'Memex', 'memex' ),
-				),
-				'public'            => false,
-				'show_ui'           => true,
-				'show_in_menu'      => true,
-				'show_in_admin_bar' => true,
-				'show_in_rest'      => true,
-				'hierarchical'      => true,
-				'menu_icon'         => 'dashicons-book-alt',
-				'menu_position'     => 20,
-				'supports'          => array(
-					'title',
-					'editor',
-					'revisions',
-					'author',
-					'excerpt',
-					'custom-fields',
-					'page-attributes',
-				),
-				'rewrite'           => false,
-				'capability_type'   => 'page',
-				'map_meta_cap'      => true,
-			)
-		);
+	/**
+	 * Fallback gate used only when an older wp-app (< 1.5.0) without
+	 * WpApp\Rest\Access is the loaded copy: deny anonymous REST reads of the
+	 * note and tag routes so notes are never served publicly. Logged-in reads
+	 * (and the block editor) are unaffected.
+	 *
+	 * @param mixed            $result  Response to replace the requested one, or null.
+	 * @param \WP_REST_Server  $server  Server instance.
+	 * @param \WP_REST_Request $request Current request.
+	 * @return mixed
+	 */
+	public static function require_login_for_rest( $result, $server, $request ) {
+		if ( is_user_logged_in() ) {
+			return $result;
+		}
 
-		register_taxonomy(
-			self::TAXONOMY,
-			self::POST_TYPE,
-			array(
-				'labels'       => array(
-					'name'          => __( 'Tags', 'memex' ),
-					'singular_name' => __( 'Tag', 'memex' ),
-				),
-				'public'       => false,
-				'show_ui'      => true,
-				'show_in_rest' => true,
-				'hierarchical' => false,
-			)
+		$route = $request->get_route();
+		foreach ( array( self::POST_TYPE, self::TAXONOMY ) as $base ) {
+			if ( 0 === strpos( $route, '/wp/v2/' . $base ) ) {
+				return new \WP_Error(
+					'rest_login_required',
+					__( 'Authentication is required to read this data.', 'memex' ),
+					array( 'status' => rest_authorization_required_code() )
+				);
+			}
+		}
+
+		return $result;
+	}
+
+	public static function register() {
+		// REST reads of notes/tags must be gated: front-end require_login does not
+		// cover the WordPress REST API, and core keys anonymous read access off
+		// show_in_rest alone (not 'public'). Prefer wp-app's Access gate; if an
+		// older wp-app (< 1.5.0) is the loaded copy, fall back to a request filter.
+		$rest_gate = class_exists( '\\WpApp\\Rest\\Access' );
+		if ( ! $rest_gate ) {
+			add_filter( 'rest_pre_dispatch', array( __CLASS__, 'require_login_for_rest' ), 10, 3 );
+		}
+
+		$note_args = array(
+			'labels'            => array(
+				'name'               => __( 'Notes', 'memex' ),
+				'singular_name'      => __( 'Note', 'memex' ),
+				'add_new'            => __( 'Add New', 'memex' ),
+				'add_new_item'       => __( 'Add New Note', 'memex' ),
+				'edit_item'          => __( 'Edit Note', 'memex' ),
+				'new_item'           => __( 'New Note', 'memex' ),
+				'view_item'          => __( 'View Note', 'memex' ),
+				'search_items'       => __( 'Search Notes', 'memex' ),
+				'not_found'          => __( 'No notes found', 'memex' ),
+				'not_found_in_trash' => __( 'No notes in trash', 'memex' ),
+				'menu_name'          => __( 'Memex', 'memex' ),
+			),
+			'public'            => false,
+			'show_ui'           => true,
+			'show_in_menu'      => true,
+			'show_in_admin_bar' => true,
+			'show_in_rest'      => true,
+			'hierarchical'      => true,
+			'menu_icon'         => 'dashicons-book-alt',
+			'menu_position'     => 20,
+			'supports'          => array(
+				'title',
+				'editor',
+				'revisions',
+				'author',
+				'excerpt',
+				'custom-fields',
+				'page-attributes',
+			),
+			'rewrite'           => false,
+			'capability_type'   => 'page',
+			'map_meta_cap'      => true,
 		);
+		if ( $rest_gate ) {
+			$note_args['rest_controller_class'] = \WpApp\Rest\Access::protect_post_type( self::POST_TYPE, 'read' );
+		}
+		register_post_type( self::POST_TYPE, $note_args );
+
+		$tag_args = array(
+			'labels'       => array(
+				'name'          => __( 'Tags', 'memex' ),
+				'singular_name' => __( 'Tag', 'memex' ),
+			),
+			'public'       => false,
+			'show_ui'      => true,
+			'show_in_rest' => true,
+			'hierarchical' => false,
+		);
+		if ( $rest_gate ) {
+			$tag_args['rest_controller_class'] = \WpApp\Rest\Access::protect_taxonomy( self::TAXONOMY, 'read' );
+		}
+		register_taxonomy( self::TAXONOMY, self::POST_TYPE, $tag_args );
 
 		register_post_meta(
 			self::POST_TYPE,
