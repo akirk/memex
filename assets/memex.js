@@ -753,21 +753,24 @@
 				});
 			});
 
+			// Accordion: one revision open at a time, each diff directly under
+			// its entry; clicking the open entry again collapses it.
 			function select(id) {
 				Array.prototype.forEach.call(triggers, function (trigger) {
-					var active = trigger.getAttribute('data-memex-revision-trigger') === id;
+					var active = id !== null && trigger.getAttribute('data-memex-revision-trigger') === id;
 					trigger.classList.toggle('is-selected', active);
 					trigger.setAttribute('aria-expanded', active ? 'true' : 'false');
 				});
 				Array.prototype.forEach.call(panels, function (panel) {
-					panel.hidden = panel.getAttribute('data-memex-revision-panel') !== id;
+					panel.hidden = id === null || panel.getAttribute('data-memex-revision-panel') !== id;
 				});
-				if (empty) empty.hidden = true;
+				if (empty) empty.hidden = id !== null;
 			}
 
 			Array.prototype.forEach.call(triggers, function (trigger) {
 				trigger.addEventListener('click', function () {
-					select(trigger.getAttribute('data-memex-revision-trigger'));
+					var id = trigger.getAttribute('data-memex-revision-trigger');
+					select(trigger.getAttribute('aria-expanded') === 'true' ? null : id);
 				});
 			});
 		});
@@ -1135,9 +1138,41 @@
 		});
 	}
 
+	// --- Collapsible sidebar (narrow screens) ------------------------------
+
+	function setupSidebarToggle() {
+		var toggle = document.querySelector('[data-memex-sidebar-toggle]');
+		var sidebar = toggle && toggle.closest('.memex-sidebar');
+		if (!toggle || !sidebar) return;
+
+		function setOpen(open) {
+			sidebar.classList.toggle('is-open', open);
+			toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+		}
+
+		toggle.addEventListener('click', function () {
+			setOpen(!sidebar.classList.contains('is-open'));
+		});
+
+		document.addEventListener('keydown', function (ev) {
+			if (ev.key === 'Escape' && sidebar.classList.contains('is-open')) {
+				setOpen(false);
+				toggle.focus();
+			}
+		});
+
+		// Tapping the page content dismisses the menu.
+		document.addEventListener('click', function (ev) {
+			if (sidebar.classList.contains('is-open') && !sidebar.contains(ev.target)) {
+				setOpen(false);
+			}
+		});
+	}
+
 	// --- Bootstrap ---------------------------------------------------------
 
 	document.addEventListener('DOMContentLoaded', function () {
+		setupSidebarToggle();
 		var graph = document.getElementById('memex-graph');
 		if (graph) renderGraph(graph);
 		initQuickDue();

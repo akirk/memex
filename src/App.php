@@ -164,18 +164,31 @@ class App extends BaseApp {
 		);
 	}
 
+	/**
+	 * Cache-busting version for a plugin asset: its mtime, so every edit gets a
+	 * fresh URL without bumping MEMEX_VERSION.
+	 *
+	 * @param string $relative Path relative to the plugin directory.
+	 */
+	private static function asset_version( string $relative ): string {
+		$mtime = @filemtime( dirname( __DIR__ ) . '/' . $relative ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		return $mtime ? MEMEX_VERSION . '.' . $mtime : MEMEX_VERSION;
+	}
+
 	public function enqueue_assets() {
-		$base   = plugin_dir_url( dirname( __DIR__ ) . '/memex.php' );
-		$suffix = '?v=' . MEMEX_VERSION;
+		$base     = plugin_dir_url( dirname( __DIR__ ) . '/memex.php' );
+		$css_ver  = self::asset_version( 'assets/memex.css' );
+		$js_ver   = self::asset_version( 'assets/memex.js' );
+		$vend_ver = self::asset_version( 'assets/vendor/overtype/overtype.min.js' );
 		if ( function_exists( 'wp_app_enqueue_style' ) ) {
-			wp_app_enqueue_style( 'memex', $base . 'assets/memex.css' . $suffix );
-			wp_app_enqueue_script( 'memex-overtype', $base . 'assets/vendor/overtype/overtype.min.js' . $suffix, array(), false, true );
-			wp_app_enqueue_script( 'memex', $base . 'assets/memex.js' . $suffix, array( 'memex-overtype' ), false, true );
+			wp_app_enqueue_style( 'memex', $base . 'assets/memex.css?v=' . $css_ver );
+			wp_app_enqueue_script( 'memex-overtype', $base . 'assets/vendor/overtype/overtype.min.js?v=' . $vend_ver, array(), false, true );
+			wp_app_enqueue_script( 'memex', $base . 'assets/memex.js?v=' . $js_ver, array( 'memex-overtype' ), false, true );
 		} else {
 			// Fallback if called outside an app request.
-			wp_enqueue_style( 'memex', $base . 'assets/memex.css', array(), MEMEX_VERSION );
-			wp_enqueue_script( 'memex-overtype', $base . 'assets/vendor/overtype/overtype.min.js', array(), MEMEX_VERSION, true );
-			wp_enqueue_script( 'memex', $base . 'assets/memex.js', array( 'memex-overtype' ), MEMEX_VERSION, true );
+			wp_enqueue_style( 'memex', $base . 'assets/memex.css', array(), $css_ver );
+			wp_enqueue_script( 'memex-overtype', $base . 'assets/vendor/overtype/overtype.min.js', array(), $vend_ver, true );
+			wp_enqueue_script( 'memex', $base . 'assets/memex.js', array( 'memex-overtype' ), $js_ver, true );
 		}
 	}
 
