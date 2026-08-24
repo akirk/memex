@@ -58,6 +58,56 @@ body.memex {
 	color: var(--wp-app-color-link);
 }
 
+.memex-sidebar-toggle {
+	display: none;
+	align-items: center;
+	justify-content: center;
+	width: 2.5rem;
+	height: 2.5rem;
+	padding: 0;
+	margin: -0.5rem 0;
+	background: transparent;
+	border: 1px solid transparent;
+	border-radius: 4px;
+	color: var(--wp-app-color-text);
+	cursor: pointer;
+}
+
+.memex-sidebar-toggle:hover,
+.memex-sidebar-toggle[aria-expanded="true"] {
+	background: var(--wp-app-color-surface);
+	border-color: var(--wp-app-color-border);
+}
+
+.memex-sidebar-toggle-icon,
+.memex-sidebar-toggle-icon::before,
+.memex-sidebar-toggle-icon::after {
+	display: block;
+	width: 1.25rem;
+	height: 2px;
+	background: currentColor;
+	border-radius: 1px;
+}
+
+.memex-sidebar-toggle-icon {
+	position: relative;
+}
+
+.memex-sidebar-toggle-icon::before,
+.memex-sidebar-toggle-icon::after {
+	content: '';
+	position: absolute;
+	left: 0;
+}
+
+.memex-sidebar-toggle-icon::before {
+	top: -6px;
+}
+
+.memex-sidebar-toggle-icon::after {
+	top: 6px;
+}
+
 .memex-nav {
 	display: flex;
 	flex-direction: column;
@@ -245,6 +295,7 @@ body.memex {
 .memex-main {
 	padding: 1.5rem 2rem 4rem;
 	max-width: 900px;
+	min-width: 0;
 	box-sizing: border-box;
 }
 
@@ -376,6 +427,7 @@ body.memex {
 
 .memex-note-body {
 	font-size: 1.02rem;
+	overflow-wrap: break-word;
 }
 
 .memex-note-body h1 { margin-top: 1.75rem; font-size: 1.65rem; }
@@ -525,10 +577,16 @@ body.memex {
 	display: grid;
 	gap: 0.25rem;
 	font-weight: 600;
+	min-width: 0;
+}
+
+.memex-edit-form label > * {
+	min-width: 0;
 }
 
 .memex-edit-form {
 	max-width: 900px;
+	min-width: 0;
 }
 
 .memex-edit-form textarea {
@@ -541,6 +599,7 @@ body.memex {
 .memex-markdown-editor {
 	display: none;
 	width: 100%;
+	min-width: 0;
 	height: clamp(28rem, 62vh, 44rem);
 	min-height: 28rem;
 }
@@ -563,6 +622,7 @@ body.memex {
 
 .memex-markdown-editor .overtype-toolbar {
 	border-bottom: 1px solid var(--wp-app-color-border);
+	flex-wrap: wrap;
 }
 
 .memex-markdown-editor .overtype-toolbar-button {
@@ -578,6 +638,8 @@ body.memex {
 	border-top: 1px solid var(--wp-app-color-border);
 	color: var(--wp-app-color-muted);
 	font-size: 0.78rem;
+	flex-wrap: wrap;
+	min-width: 0;
 }
 
 .memex-markdown-editor .memex-editor-wikilink {
@@ -612,6 +674,10 @@ body.memex {
 	gap: 1.25rem;
 	align-items: start;
 	width: 100%;
+}
+
+.memex-edit-shell > * {
+	min-width: 0;
 }
 
 .memex-main:has(.memex-edit-shell) {
@@ -666,18 +732,19 @@ body.memex {
 	color: var(--wp-app-color-muted);
 }
 
-.memex-revision-diffs {
-	margin-top: 1rem;
-}
-
-.memex-revision-diff h3 {
-	margin: 0 0 0.5rem;
-	font-size: 0.95rem;
+.memex-revision-diff {
+	margin: 0.25rem 0 0.75rem;
+	padding-left: 0.55rem;
+	border-left: 2px solid var(--wp-app-color-border);
 }
 
 .memex-diff-block {
-	margin-top: 0.75rem;
+	margin-top: 0.5rem;
 	overflow-x: auto;
+}
+
+.memex-diff-block:first-child {
+	margin-top: 0;
 }
 
 .memex-diff-block table.diff {
@@ -1130,16 +1197,73 @@ body.memex {
 	.memex-layout {
 		grid-template-columns: 1fr;
 	}
+
+	/* The sidebar becomes a slim bar; quick capture, folders and the create
+	   form fold away behind a menu button. Section links are left out here:
+	   the masterbar's app dropdown already lists them. */
 	.memex-sidebar {
 		position: static;
 		height: auto;
+		padding: 0.6rem 1rem;
+		border-bottom: 1px solid var(--wp-app-color-border);
 	}
+	.memex-brand {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 0;
+	}
+	.memex-js .memex-sidebar-toggle {
+		display: inline-flex;
+	}
+	.memex-sidebar-body {
+		padding-top: 1rem;
+	}
+	.memex-js .memex-sidebar:not(.is-open) .memex-sidebar-body {
+		display: none;
+	}
+	.memex-nav {
+		display: none;
+	}
+	.memex-create {
+		flex-direction: row;
+		align-items: center;
+		margin-bottom: 0.25rem;
+	}
+	.memex-create input {
+		flex: 1;
+	}
+	.memex-create button {
+		align-self: auto;
+	}
+
+	.memex-main {
+		padding: 1rem 1rem 3rem;
+	}
+	.memex-page-header h1 {
+		font-size: 1.5rem;
+	}
+	.memex-note-header h1 {
+		font-size: 1.6rem;
+	}
+
 	.memex-edit-shell {
 		grid-template-columns: 1fr;
 	}
 	.memex-edit-revisions {
 		position: static;
 		max-height: none;
+	}
+	.memex-markdown-editor {
+		height: clamp(18rem, 60vh, 44rem);
+		min-height: 18rem;
+	}
+	.memex-edit-form textarea {
+		min-height: 18rem;
+	}
+	.memex-edit-actions .memex-button {
+		flex: 1 1 auto;
+		text-align: center;
 	}
 	.memex-reminder-form {
 		grid-template-columns: 1fr;
