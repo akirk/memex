@@ -6,6 +6,7 @@
 use Memex\App;
 use Memex\CPT;
 use Memex\Links;
+use Memex\RevisionDiff;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit; }
@@ -49,30 +50,6 @@ if ( ! $post ) {
 }
 
 $memex_title = sprintf( /* translators: %s: note title */ __( 'Edit %s', 'memex' ), $post->post_title );
-if ( ! function_exists( 'wp_text_diff' ) ) {
-	require_once ABSPATH . WPINC . '/wp-diff.php';
-}
-if ( ! function_exists( 'memex_prepare_revision_diff' ) ) {
-	function memex_prepare_revision_diff( string $diff, int $revision_number ): string {
-		$diff = preg_replace( '/<caption class="diff-title">.*?<\/caption>\s*/s', '', $diff );
-		$diff = preg_replace( '/<span\b[^>]*(?:dashicons-(?:minus|plus)|screen-reader-text)[^>]*>.*?<\/span>/s', '', $diff );
-		$diff = preg_replace(
-			'/(<tr\b[^>]*class="[^"]*\bdiff-sub-title\b[^"]*"[^>]*>\s*)<td\b[^>]*>\s*<\/td>/i',
-			'$1<td class="memex-revision-diff-number">' . (int) $revision_number . '</td>',
-			$diff,
-			1
-		);
-		if ( false === strpos( $diff, 'memex-revision-diff-number' ) ) {
-			$diff = preg_replace(
-				'/<td\b[^>]*>\s*<\/td>/i',
-				'<td class="memex-revision-diff-number">' . (int) $revision_number . '</td>',
-				$diff,
-				1
-			);
-		}
-		return $diff;
-	}
-}
 $revisions = current_user_can( 'edit_post', $post->ID ) ? wp_get_post_revisions(
 	$post->ID,
 	array(
@@ -146,26 +123,16 @@ include __DIR__ . '/_header.php';
 					<ol class="memex-edit-revision-list">
 						<?php foreach ( $revisions as $revision ) : ?>
 							<?php
-							$title_diff   = memex_prepare_revision_diff(
-								wp_text_diff(
-									(string) $revision->post_title,
-									(string) $post->post_title,
-									array(
-										'title'       => __( 'Revision title', 'memex' ),
-										'title_right' => __( 'Current title', 'memex' ),
-									)
-								),
+							$title_diff   = RevisionDiff::render(
+								(string) $revision->post_title,
+								(string) $post->post_title,
+								__( 'Current title', 'memex' ),
 								(int) $revision->ID
 							);
-							$content_diff = memex_prepare_revision_diff(
-								wp_text_diff(
-									App::content_to_editor_text( (string) $revision->post_content ),
-									App::content_to_editor_text( (string) $post->post_content ),
-									array(
-										'title'       => __( 'Revision note', 'memex' ),
-										'title_right' => __( 'Current note', 'memex' ),
-									)
-								),
+							$content_diff = RevisionDiff::render(
+								App::content_to_editor_text( (string) $revision->post_content ),
+								App::content_to_editor_text( (string) $post->post_content ),
+								__( 'Current note', 'memex' ),
 								(int) $revision->ID
 							);
 							if ( ! $title_diff && ! $content_diff ) {

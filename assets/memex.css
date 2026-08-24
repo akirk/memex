@@ -789,6 +789,18 @@ body.memex {
 	cursor: pointer;
 }
 
+.memex-diff-block .diff-context {
+	color: var(--wp-app-color-muted);
+}
+
+.memex-diff-block .diff-skipped td {
+	padding: 0 0.35rem;
+	color: var(--wp-app-color-muted);
+	text-align: center;
+	line-height: 1;
+	user-select: none;
+}
+
 .memex-quick-capture-full textarea {
 	width: 100%;
 	resize: vertical;
