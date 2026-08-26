@@ -753,6 +753,12 @@
 				});
 			});
 
+			Array.prototype.forEach.call(host.querySelectorAll('[data-memex-revision-load]'), function (button) {
+				button.addEventListener('click', function () {
+					loadRevision(editorSource, button);
+				});
+			});
+
 			// Accordion: one revision open at a time, each diff directly under
 			// its entry; clicking the open entry again collapses it.
 			function select(id) {
@@ -793,6 +799,38 @@
 				.replace(/^\s*\+\s?/, '')
 				.replace(/\n+$/g, '');
 		}
+
+	function setEditorValue(textarea, value) {
+		var editor = textarea._memexOvertypeEditor;
+		if (editor && typeof editor.setValue === 'function') {
+			editor.setValue(value);
+		}
+		textarea.value = value;
+		textarea.dispatchEvent(new Event('input', { bubbles: true }));
+		if (editor && typeof editor.updatePreview === 'function') {
+			editor.updatePreview();
+		}
+	}
+
+	// Puts a revision's title and text into the form without saving; the
+	// user reviews and saves as usual. Asks first when the form already
+	// holds edits that differ from what the page loaded with.
+	function loadRevision(textarea, button) {
+		if (!textarea) return;
+		var form = textarea.form || textarea.closest('form');
+		var title = form ? form.querySelector('input[name="title"]') : null;
+		var editor = textarea._memexOvertypeEditor;
+		var current = editor && typeof editor.getValue === 'function' ? editor.getValue() : textarea.value;
+		var dirty = current.replace(/\s+$/, '') !== textarea.defaultValue.replace(/\s+$/, '')
+			|| (title && title.value !== title.defaultValue);
+		if (dirty && !window.confirm(button.getAttribute('data-confirm'))) return;
+		if (title) {
+			title.value = button.getAttribute('data-title') || '';
+		}
+		setEditorValue(textarea, button.getAttribute('data-content') || '');
+		var target = editor && editor.textarea ? editor.textarea : textarea;
+		target.focus();
+	}
 
 	function insertRevisionLine(textarea, text) {
 		if (!textarea || !text) return;

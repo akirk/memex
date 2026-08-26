@@ -157,9 +157,14 @@ include __DIR__ . '/_header.php';
 							}
 							?>
 							<li>
-								<button type="button" data-memex-revision-trigger="<?php echo (int) $revision->ID; ?>" aria-controls="memex-revision-diff-<?php echo (int) $revision->ID; ?>" aria-expanded="false" title="<?php echo esc_attr( $date ); ?>">
-									<span><?php echo esc_html( $relative_date ); ?></span>
-								</button>
+								<div class="memex-edit-revision-row">
+									<button type="button" data-memex-revision-trigger="<?php echo (int) $revision->ID; ?>" aria-controls="memex-revision-diff-<?php echo (int) $revision->ID; ?>" aria-expanded="false" title="<?php echo esc_attr( $date ); ?>">
+										<span><?php echo esc_html( $relative_date ); ?></span>
+									</button>
+									<button type="button" class="memex-edit-revision-load" data-memex-revision-load data-title="<?php echo esc_attr( (string) $revision->post_title ); ?>" data-content="<?php echo esc_attr( App::content_to_editor_text( (string) $revision->post_content ) ); ?>" data-confirm="<?php esc_attr_e( 'Replace your unsaved changes with this revision?', 'memex' ); ?>" title="<?php esc_attr_e( 'Load this revision into the editor (nothing is saved until you click Save note)', 'memex' ); ?>" aria-label="<?php esc_attr_e( 'Load this revision into the editor', 'memex' ); ?>">
+										<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 3 3 9 9 9"/></svg>
+									</button>
+								</div>
 								<div id="memex-revision-diff-<?php echo (int) $revision->ID; ?>" class="memex-revision-diff" data-memex-revision-panel="<?php echo (int) $revision->ID; ?>" hidden>
 									<?php if ( $title_diff ) : ?>
 										<div class="memex-diff-block"><?php echo $title_diff; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></div>

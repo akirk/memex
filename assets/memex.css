@@ -735,6 +735,36 @@ body.memex {
 	color: var(--wp-app-color-muted);
 }
 
+.memex-edit-revision-row {
+	display: flex;
+	align-items: stretch;
+	gap: 0.15rem;
+}
+
+.memex-edit-revision-row [data-memex-revision-trigger] {
+	flex: 1 1 auto;
+	width: auto;
+}
+
+.memex-edit-revision-list .memex-edit-revision-load {
+	flex: 0 0 auto;
+	width: auto;
+	display: inline-flex;
+	align-items: center;
+	padding: 0 0.45rem;
+	border: 0;
+	border-radius: 4px;
+	background: transparent;
+	color: var(--wp-app-color-muted);
+	cursor: pointer;
+}
+
+.memex-edit-revision-list .memex-edit-revision-load:hover,
+.memex-edit-revision-list .memex-edit-revision-load:focus-visible {
+	background: var(--wp-app-color-surface-alt);
+	color: var(--wp-app-color-link-hover);
+}
+
 .memex-edit-revision-list small {
 	color: var(--wp-app-color-muted);
 }
