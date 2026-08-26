@@ -753,9 +753,10 @@
 				});
 			});
 
+			var revisionState = { stash: null, loaded: null };
 			Array.prototype.forEach.call(host.querySelectorAll('[data-memex-revision-load]'), function (button) {
 				button.addEventListener('click', function () {
-					loadRevision(editorSource, button);
+					loadRevision(editorSource, button, revisionState, host);
 				});
 			});
 
@@ -812,22 +813,57 @@
 		}
 	}
 
+	function readForm(textarea) {
+		var form = textarea.form || textarea.closest('form');
+		var title = form ? form.querySelector('input[name="title"]') : null;
+		var editor = textarea._memexOvertypeEditor;
+		var content = editor && typeof editor.getValue === 'function' ? editor.getValue() : textarea.value;
+		return { title: title ? title.value : '', content: content.replace(/\s+$/, '') };
+	}
+
+	function sameFormState(a, b) {
+		return !!a && !!b && a.title === b.title && a.content === b.content;
+	}
+
 	// Puts a revision's title and text into the form without saving; the
-	// user reviews and saves as usual. Asks first when the form already
-	// holds edits that differ from what the page loaded with.
-	function loadRevision(textarea, button) {
+	// user reviews and saves as usual. Loading an older revision stashes
+	// whatever the form held, so the current-version icon can bring those
+	// edits back. Asks only when edits made since the last load would be lost.
+	function loadRevision(textarea, button, state, host) {
 		if (!textarea) return;
 		var form = textarea.form || textarea.closest('form');
 		var title = form ? form.querySelector('input[name="title"]') : null;
 		var editor = textarea._memexOvertypeEditor;
-		var current = editor && typeof editor.getValue === 'function' ? editor.getValue() : textarea.value;
-		var dirty = current.replace(/\s+$/, '') !== textarea.defaultValue.replace(/\s+$/, '')
-			|| (title && title.value !== title.defaultValue);
-		if (dirty && !window.confirm(button.getAttribute('data-confirm'))) return;
-		if (title) {
-			title.value = button.getAttribute('data-title') || '';
+		var isCurrent = button.hasAttribute('data-memex-revision-current');
+		var now = readForm(textarea);
+		var edited = state.loaded ? !sameFormState(now, state.loaded) : true;
+		var next;
+
+		if (isCurrent) {
+			next = state.stash || { title: button.getAttribute('data-title') || '', content: button.getAttribute('data-content') || '' };
+			if (state.loaded && edited && !window.confirm(button.getAttribute('data-confirm'))) return;
+			state.stash = null;
+		} else {
+			next = { title: button.getAttribute('data-title') || '', content: button.getAttribute('data-content') || '' };
+			if (!state.stash) {
+				state.stash = now;
+			} else if (edited && !window.confirm(button.getAttribute('data-confirm'))) {
+				return;
+			}
 		}
-		setEditorValue(textarea, button.getAttribute('data-content') || '');
+
+		if (title) {
+			title.value = next.title;
+		}
+		setEditorValue(textarea, next.content);
+		state.loaded = readForm(textarea);
+
+		var back = host.querySelector('[data-memex-revision-current]');
+		if (back) back.hidden = isCurrent;
+		Array.prototype.forEach.call(host.querySelectorAll('[data-memex-revision-load]'), function (b) {
+			b.classList.toggle('is-loaded', b === button && !isCurrent);
+		});
+
 		var target = editor && editor.textarea ? editor.textarea : textarea;
 		target.focus();
 	}
