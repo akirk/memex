@@ -121,7 +121,35 @@ include __DIR__ . '/_header.php';
 				<?php else : ?>
 					<p class="memex-muted" data-memex-revision-empty><?php esc_html_e( 'Select a revision to see its diff.', 'memex' ); ?></p>
 					<ol class="memex-edit-revision-list">
-						<?php foreach ( $revisions as $index => $revision ) : ?>
+						<?php
+						// The saved note itself, so the list starts at the last save
+						// (the newest revision is a copy of it and is skipped below).
+						// Its icon brings back whatever was in the form before an
+						// older revision was loaded.
+						$current_date = mysql2date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $post->post_modified );
+						?>
+						<li class="memex-edit-revision-current">
+							<div class="memex-edit-revision-row">
+								<div class="memex-edit-revision-label" title="<?php echo esc_attr( $current_date ); ?>">
+									<span>
+										<?php
+										echo esc_html(
+											sprintf(
+												/* translators: %s: human-readable time difference */
+												__( '%s ago', 'memex' ),
+												human_time_diff( mysql2date( 'U', $post->post_modified ), current_time( 'timestamp' ) )
+											)
+										);
+										?>
+									</span>
+									<small><?php esc_html_e( 'Current version', 'memex' ); ?></small>
+								</div>
+								<button type="button" class="memex-edit-revision-load" data-memex-revision-load data-memex-revision-current data-title="<?php echo esc_attr( (string) $post->post_title ); ?>" data-content="<?php echo esc_attr( App::content_to_editor_text( (string) $post->post_content ) ); ?>" data-confirm="<?php esc_attr_e( 'Discard the changes made since loading that revision?', 'memex' ); ?>" title="<?php esc_attr_e( 'Back to the current version, including your unsaved edits', 'memex' ); ?>" aria-label="<?php esc_attr_e( 'Back to the current version', 'memex' ); ?>" hidden>
+									<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg>
+								</button>
+							</div>
+						</li>
+						<?php foreach ( $revisions as $revision ) : ?>
 							<?php
 							$title_diff   = RevisionDiff::render(
 								(string) $revision->post_title,
@@ -142,24 +170,18 @@ include __DIR__ . '/_header.php';
 								human_time_diff( mysql2date( 'U', $revision->post_modified ), current_time( 'timestamp' ) )
 							);
 							if ( ! $title_diff && ! $content_diff ) {
-								// The newest revision is a snapshot of what is in the
-								// editor now, so it has no diff to show. Say so instead of
-								// dropping it, or the list looks older than the last save.
-								if ( 0 === $index ) :
-									?>
-									<li class="memex-edit-revision-current" title="<?php echo esc_attr( $date ); ?>">
-										<span><?php echo esc_html( $relative_date ); ?></span>
-										<small><?php esc_html_e( 'Current version', 'memex' ); ?></small>
-									</li>
-									<?php
-								endif;
 								continue;
 							}
 							?>
 							<li>
-								<button type="button" data-memex-revision-trigger="<?php echo (int) $revision->ID; ?>" aria-controls="memex-revision-diff-<?php echo (int) $revision->ID; ?>" aria-expanded="false" title="<?php echo esc_attr( $date ); ?>">
-									<span><?php echo esc_html( $relative_date ); ?></span>
-								</button>
+								<div class="memex-edit-revision-row">
+									<button type="button" data-memex-revision-trigger="<?php echo (int) $revision->ID; ?>" aria-controls="memex-revision-diff-<?php echo (int) $revision->ID; ?>" aria-expanded="false" title="<?php echo esc_attr( $date ); ?>">
+										<span><?php echo esc_html( $relative_date ); ?></span>
+									</button>
+									<button type="button" class="memex-edit-revision-load" data-memex-revision-load data-title="<?php echo esc_attr( (string) $revision->post_title ); ?>" data-content="<?php echo esc_attr( App::content_to_editor_text( (string) $revision->post_content ) ); ?>" data-confirm="<?php esc_attr_e( 'Discard the changes made since loading the previous revision?', 'memex' ); ?>" title="<?php esc_attr_e( 'Load this revision into the editor (nothing is saved until you click Save note)', 'memex' ); ?>" aria-label="<?php esc_attr_e( 'Load this revision into the editor', 'memex' ); ?>">
+										<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 3 3 9 9 9"/></svg>
+									</button>
+								</div>
 								<div id="memex-revision-diff-<?php echo (int) $revision->ID; ?>" class="memex-revision-diff" data-memex-revision-panel="<?php echo (int) $revision->ID; ?>" hidden>
 									<?php if ( $title_diff ) : ?>
 										<div class="memex-diff-block"><?php echo $title_diff; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></div>

@@ -753,6 +753,13 @@
 				});
 			});
 
+			var revisionState = { stash: null, loaded: null };
+			Array.prototype.forEach.call(host.querySelectorAll('[data-memex-revision-load]'), function (button) {
+				button.addEventListener('click', function () {
+					loadRevision(editorSource, button, revisionState, host);
+				});
+			});
+
 			// Accordion: one revision open at a time, each diff directly under
 			// its entry; clicking the open entry again collapses it.
 			function select(id) {
@@ -793,6 +800,73 @@
 				.replace(/^\s*\+\s?/, '')
 				.replace(/\n+$/g, '');
 		}
+
+	function setEditorValue(textarea, value) {
+		var editor = textarea._memexOvertypeEditor;
+		if (editor && typeof editor.setValue === 'function') {
+			editor.setValue(value);
+		}
+		textarea.value = value;
+		textarea.dispatchEvent(new Event('input', { bubbles: true }));
+		if (editor && typeof editor.updatePreview === 'function') {
+			editor.updatePreview();
+		}
+	}
+
+	function readForm(textarea) {
+		var form = textarea.form || textarea.closest('form');
+		var title = form ? form.querySelector('input[name="title"]') : null;
+		var editor = textarea._memexOvertypeEditor;
+		var content = editor && typeof editor.getValue === 'function' ? editor.getValue() : textarea.value;
+		return { title: title ? title.value : '', content: content.replace(/\s+$/, '') };
+	}
+
+	function sameFormState(a, b) {
+		return !!a && !!b && a.title === b.title && a.content === b.content;
+	}
+
+	// Puts a revision's title and text into the form without saving; the
+	// user reviews and saves as usual. Loading an older revision stashes
+	// whatever the form held, so the current-version icon can bring those
+	// edits back. Asks only when edits made since the last load would be lost.
+	function loadRevision(textarea, button, state, host) {
+		if (!textarea) return;
+		var form = textarea.form || textarea.closest('form');
+		var title = form ? form.querySelector('input[name="title"]') : null;
+		var editor = textarea._memexOvertypeEditor;
+		var isCurrent = button.hasAttribute('data-memex-revision-current');
+		var now = readForm(textarea);
+		var edited = state.loaded ? !sameFormState(now, state.loaded) : true;
+		var next;
+
+		if (isCurrent) {
+			next = state.stash || { title: button.getAttribute('data-title') || '', content: button.getAttribute('data-content') || '' };
+			if (state.loaded && edited && !window.confirm(button.getAttribute('data-confirm'))) return;
+			state.stash = null;
+		} else {
+			next = { title: button.getAttribute('data-title') || '', content: button.getAttribute('data-content') || '' };
+			if (!state.stash) {
+				state.stash = now;
+			} else if (edited && !window.confirm(button.getAttribute('data-confirm'))) {
+				return;
+			}
+		}
+
+		if (title) {
+			title.value = next.title;
+		}
+		setEditorValue(textarea, next.content);
+		state.loaded = readForm(textarea);
+
+		var back = host.querySelector('[data-memex-revision-current]');
+		if (back) back.hidden = isCurrent;
+		Array.prototype.forEach.call(host.querySelectorAll('[data-memex-revision-load]'), function (b) {
+			b.classList.toggle('is-loaded', b === button && !isCurrent);
+		});
+
+		var target = editor && editor.textarea ? editor.textarea : textarea;
+		target.focus();
+	}
 
 	function insertRevisionLine(textarea, text) {
 		if (!textarea || !text) return;
