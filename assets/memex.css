@@ -728,6 +728,13 @@ body.memex {
 	color: var(--wp-app-color-link-hover);
 }
 
+.memex-edit-revision-current {
+	display: grid;
+	gap: 0.1rem;
+	padding: 0.45rem 0.55rem;
+	color: var(--wp-app-color-muted);
+}
+
 .memex-edit-revision-list small {
 	color: var(--wp-app-color-muted);
 }

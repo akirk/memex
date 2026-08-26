@@ -121,7 +121,7 @@ include __DIR__ . '/_header.php';
 				<?php else : ?>
 					<p class="memex-muted" data-memex-revision-empty><?php esc_html_e( 'Select a revision to see its diff.', 'memex' ); ?></p>
 					<ol class="memex-edit-revision-list">
-						<?php foreach ( $revisions as $revision ) : ?>
+						<?php foreach ( $revisions as $index => $revision ) : ?>
 							<?php
 							$title_diff   = RevisionDiff::render(
 								(string) $revision->post_title,
@@ -135,15 +135,26 @@ include __DIR__ . '/_header.php';
 								__( 'Current note', 'memex' ),
 								(int) $revision->ID
 							);
-							if ( ! $title_diff && ! $content_diff ) {
-								continue;
-							}
 							$date          = mysql2date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $revision->post_modified );
 							$relative_date = sprintf(
 								/* translators: %s: human-readable time difference */
 								__( '%s ago', 'memex' ),
 								human_time_diff( mysql2date( 'U', $revision->post_modified ), current_time( 'timestamp' ) )
 							);
+							if ( ! $title_diff && ! $content_diff ) {
+								// The newest revision is a snapshot of what is in the
+								// editor now, so it has no diff to show. Say so instead of
+								// dropping it, or the list looks older than the last save.
+								if ( 0 === $index ) :
+									?>
+									<li class="memex-edit-revision-current" title="<?php echo esc_attr( $date ); ?>">
+										<span><?php echo esc_html( $relative_date ); ?></span>
+										<small><?php esc_html_e( 'Current version', 'memex' ); ?></small>
+									</li>
+									<?php
+								endif;
+								continue;
+							}
 							?>
 							<li>
 								<button type="button" data-memex-revision-trigger="<?php echo (int) $revision->ID; ?>" aria-controls="memex-revision-diff-<?php echo (int) $revision->ID; ?>" aria-expanded="false" title="<?php echo esc_attr( $date ); ?>">
