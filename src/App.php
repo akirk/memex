@@ -18,10 +18,14 @@ class App extends BaseApp {
 			array(
 				'require_login'                => true,
 				'app_name'                     => 'Memex',
-				'my_apps'                      => true,
-				'my_apps_icon'                 => plugins_url( 'assets/icon.svg', dirname( __DIR__ ) . '/memex.php' ),
+				'launcher'                     => true,
+				'app_icon'                     => plugins_url( 'assets/icon.svg', dirname( __DIR__ ) . '/memex.php' ),
 				'show_masterbar_for_anonymous' => false,
 				'show_dark_mode_toggle'        => false,
+				// Owned content: REST reads are gated with the app's capability and
+				// OpenStation keeps these menus out of its dock.
+				'post_types'                   => array( CPT::POST_TYPE, Reminder::POST_TYPE ),
+				'taxonomies'                   => array( CPT::TAXONOMY ),
 			)
 		);
 	}
