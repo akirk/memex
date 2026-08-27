@@ -52,12 +52,10 @@ class CPT {
 	}
 
 	public static function register() {
-		// REST reads of notes/tags must be gated: front-end require_login does not
-		// cover the WordPress REST API, and core keys anonymous read access off
-		// show_in_rest alone (not 'public'). Prefer wp-app's Access gate; if an
-		// older wp-app (< 1.5.0) is the loaded copy, fall back to a request filter.
-		$rest_gate = class_exists( '\\WpApp\\Rest\\Access' );
-		if ( ! $rest_gate ) {
+		// REST reads are gated by wp-app via the 'post_types' app option. If an
+		// older wp-app without that gate is the loaded copy, fall back to a
+		// request filter.
+		if ( ! class_exists( '\\WpApp\\Rest\\Access' ) ) {
 			add_filter( 'rest_pre_dispatch', array( __CLASS__, 'require_login_for_rest' ), 10, 3 );
 		}
 
@@ -82,7 +80,6 @@ class CPT {
 				'show_in_menu'      => true,
 				'show_in_admin_bar' => true,
 				'show_in_rest'      => true,
-				'rest_controller_class' => $rest_gate ? \WpApp\Rest\Access::protect_post_type( self::POST_TYPE, 'read' ) : null,
 				'hierarchical'      => true,
 				'menu_icon'         => 'dashicons-book-alt',
 				'menu_position'     => 20,
@@ -112,7 +109,6 @@ class CPT {
 				'public'       => false,
 				'show_ui'      => true,
 				'show_in_rest' => true,
-				'rest_controller_class' => $rest_gate ? \WpApp\Rest\Access::protect_taxonomy( self::TAXONOMY, 'read' ) : null,
 				'hierarchical' => false,
 			)
 		);
