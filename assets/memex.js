@@ -495,8 +495,12 @@
 				},
 			};
 
+			// Pad existing content with a blank line to type into; a new,
+			// empty note should start empty, not with two blank lines.
+			var initial = source.value.trim() === '' ? '' : source.value.replace(/\s*$/, "\n\n");
+
 			var editors = new window.OverType(host, {
-				value: source.value.replace(/\s*$/, "\n\n"),
+				value: initial,
 				theme: theme,
 				toolbar: true,
 				toolbarButtons: markdownToolbarButtons(),
