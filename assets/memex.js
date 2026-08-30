@@ -408,11 +408,7 @@
 					abilities[input.ability]
 				);
 			},
-			callback: function () {
-				if (window.location.pathname.indexOf('/memex') === 0) {
-					window.location.reload();
-				}
-			},
+			callback: refreshMainContent,
 		};
 
 		if (window.aiAssistant && typeof window.aiAssistant.onToolCall === 'function') {
@@ -421,6 +417,62 @@
 			window.aiAssistantToolCallbacks = window.aiAssistantToolCallbacks || [];
 			window.aiAssistantToolCallbacks.push(subscription);
 		}
+	}
+
+	// Re-fetch the page we are on and swap in its main content, so the note the
+	// assistant just changed is up to date without leaving the page or losing
+	// the open chat. Anything the user has typed but not saved wins over the
+	// refresh.
+	function refreshMainContent() {
+		if (contentDirty || !document.getElementById('memex-main')) return;
+
+		// A running import owns the page; leave its progress UI alone.
+		var importProgress = document.getElementById('memex-import-progress');
+		if (importProgress && !importProgress.hasAttribute('hidden')) return;
+
+		fetch(window.location.href, {
+			credentials: 'same-origin',
+			headers: { 'X-Requested-With': 'XMLHttpRequest' },
+		})
+			.then(function (response) {
+				if (!response.ok) throw new Error('refresh failed');
+				return response.text();
+			})
+			.then(function (html) {
+				var fresh = new DOMParser().parseFromString(html, 'text/html').getElementById('memex-main');
+				var host = document.getElementById('memex-main');
+				if (!fresh || !host || contentDirty) return;
+				host.innerHTML = fresh.innerHTML;
+				setupMainContent();
+			})
+			.catch(function () {});
+	}
+
+	// Anything typed into the main content since it was last set up. Comparing
+	// field values against their defaults does not work: the Markdown editor
+	// keeps its own textarea and rewrites the source one as it initialises.
+	var contentDirty = false;
+
+	function watchContentEdits() {
+		var host = document.getElementById('memex-main');
+		if (!host) return;
+		host.addEventListener('input', function () {
+			contentDirty = true;
+		});
+	}
+
+	// Everything that has to run again when the main content is replaced. The
+	// sidebar, its clock and the menu toggle stay put, so they are not in here.
+	function setupMainContent() {
+		var graph = document.getElementById('memex-graph');
+		if (graph) renderGraph(graph);
+		initQuickDue();
+		setupMarkdownEditor();
+		setupAutocomplete();
+		setupRevisionDiffs();
+		setupImport();
+		setupTaskCheckboxes();
+		contentDirty = false;
 	}
 
 	// --- Markdown editor ----------------------------------------------------
@@ -1251,15 +1303,9 @@
 
 	document.addEventListener('DOMContentLoaded', function () {
 		setupSidebarToggle();
-		var graph = document.getElementById('memex-graph');
-		if (graph) renderGraph(graph);
-		initQuickDue();
 		setupServerTime();
 		setupAiAssistantRefresh();
-		setupMarkdownEditor();
-		setupAutocomplete();
-		setupRevisionDiffs();
-		setupImport();
-		setupTaskCheckboxes();
+		watchContentEdits();
+		setupMainContent();
 	});
 })();
