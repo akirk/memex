@@ -770,7 +770,7 @@
 	}
 
 	function ajaxurl() {
-		return window.ajaxurl || (window.location.origin + '/wp-admin/admin-ajax.php');
+		return window.memexAjaxUrl || window.ajaxurl || (window.location.origin + '/wp-admin/admin-ajax.php');
 	}
 
 	function setupRevisionDiffs() {

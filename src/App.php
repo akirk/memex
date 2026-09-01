@@ -184,12 +184,19 @@ class App extends BaseApp {
 		$css_ver  = self::asset_version( 'assets/memex.css' );
 		$js_ver   = self::asset_version( 'assets/memex.js' );
 		$vend_ver = self::asset_version( 'assets/vendor/overtype/overtype.min.js' );
+		// The admin-ajax URL has to come from the server: guessing it from
+		// window.location.origin drops any subdirectory the site lives in, and
+		// an environment that redirects such a request to the real one (as the
+		// WordPress Playground service worker does for its /scope:.../ prefix)
+		// turns our POSTs into bodyless GETs.
+		$inline = 'window.memexAjaxUrl = ' . wp_json_encode( admin_url( 'admin-ajax.php' ) ) . ';';
 		if ( function_exists( 'wp_app_enqueue_style' ) ) {
 			// wp_app_before_render fires for every app, and an omitted scope
 			// resolves to whichever one is rendering, so name ours explicitly.
 			$scope = $this->get_url_path();
 
 			wp_app_enqueue_style( 'memex', $base . 'assets/memex.css?v=' . $css_ver, array(), false, $scope );
+			wp_app_add_inline_script( 'memex-config', $inline, false, $scope );
 			wp_app_enqueue_script( 'memex-overtype', $base . 'assets/vendor/overtype/overtype.min.js?v=' . $vend_ver, array(), false, true, $scope );
 			wp_app_enqueue_script( 'memex', $base . 'assets/memex.js?v=' . $js_ver, array( 'memex-overtype' ), false, true, $scope );
 		} else {
@@ -197,6 +204,7 @@ class App extends BaseApp {
 			wp_enqueue_style( 'memex', $base . 'assets/memex.css', array(), $css_ver );
 			wp_enqueue_script( 'memex-overtype', $base . 'assets/vendor/overtype/overtype.min.js', array(), $vend_ver, true );
 			wp_enqueue_script( 'memex', $base . 'assets/memex.js', array( 'memex-overtype' ), $js_ver, true );
+			wp_add_inline_script( 'memex', $inline, 'before' );
 		}
 	}
 
