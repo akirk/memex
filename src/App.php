@@ -185,9 +185,13 @@ class App extends BaseApp {
 		$js_ver   = self::asset_version( 'assets/memex.js' );
 		$vend_ver = self::asset_version( 'assets/vendor/overtype/overtype.min.js' );
 		if ( function_exists( 'wp_app_enqueue_style' ) ) {
-			wp_app_enqueue_style( 'memex', $base . 'assets/memex.css?v=' . $css_ver );
-			wp_app_enqueue_script( 'memex-overtype', $base . 'assets/vendor/overtype/overtype.min.js?v=' . $vend_ver, array(), false, true );
-			wp_app_enqueue_script( 'memex', $base . 'assets/memex.js?v=' . $js_ver, array( 'memex-overtype' ), false, true );
+			// wp_app_before_render fires for every app, and an omitted scope
+			// resolves to whichever one is rendering, so name ours explicitly.
+			$scope = $this->get_url_path();
+
+			wp_app_enqueue_style( 'memex', $base . 'assets/memex.css?v=' . $css_ver, array(), false, $scope );
+			wp_app_enqueue_script( 'memex-overtype', $base . 'assets/vendor/overtype/overtype.min.js?v=' . $vend_ver, array(), false, true, $scope );
+			wp_app_enqueue_script( 'memex', $base . 'assets/memex.js?v=' . $js_ver, array( 'memex-overtype' ), false, true, $scope );
 		} else {
 			// Fallback if called outside an app request.
 			wp_enqueue_style( 'memex', $base . 'assets/memex.css', array(), $css_ver );
