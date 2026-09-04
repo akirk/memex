@@ -9,6 +9,10 @@
 
 namespace Memex;
 
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
 if ( ! class_exists( 'WP_Text_Diff_Renderer_Table', false ) ) {
 	require_once ABSPATH . WPINC . '/wp-diff.php';
 }

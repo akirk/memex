@@ -88,7 +88,8 @@ include __DIR__ . '/_header.php';
 				<label>
 					<span><?php esc_html_e( 'Nested under', 'memex' ); ?></span>
 					<?php
-					wp_dropdown_pages( // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+					// phpcs:disable WordPress.Security.EscapeOutput.OutputNotEscaped -- wp_dropdown_pages() escapes the markup it prints.
+					wp_dropdown_pages(
 						array(
 							'post_type'        => CPT::POST_TYPE,
 							'post_status'      => CPT::readable_statuses(),
@@ -99,6 +100,7 @@ include __DIR__ . '/_header.php';
 							'sort_column'      => 'post_title',
 						)
 					);
+					// phpcs:enable WordPress.Security.EscapeOutput.OutputNotEscaped
 					?>
 				</label>
 

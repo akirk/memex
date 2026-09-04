@@ -105,7 +105,7 @@ $unlinked = $unlinked_count ? get_posts(
 			esc_html__( '%1$d linked notes, %2$d links; %3$d notes without links are not shown.', 'memex' ),
 			count( $nodes_data ),
 			count( $edges_data ),
-			$unlinked_count
+			(int) $unlinked_count
 		);
 		?>
 	</p>
@@ -140,13 +140,13 @@ $unlinked = $unlinked_count ? get_posts(
 				/* translators: 1: notes shown, 2: total notes without links */
 				esc_html__( 'Latest %1$d of %2$d notes without links', 'memex' ),
 				count( $unlinked ),
-				$unlinked_count
+				(int) $unlinked_count
 			);
 		} else {
 			printf(
 				/* translators: %d: number of notes without links */
 				esc_html( _n( '%d note without links', '%d notes without links', $unlinked_count, 'memex' ) ),
-				$unlinked_count
+				(int) $unlinked_count
 			);
 		}
 		?>
