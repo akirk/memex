@@ -1,7 +1,7 @@
 # Memex
 
 - Contributors: akirk
-- Tags: notes, note-taking, backlinks, wiki, markdown
+- Tags: notes, note-taking, backlinks, wiki, wp-app
 - Requires at least: 6.0
 - Requires PHP: 7.4
 - Tested up to: 7.1
