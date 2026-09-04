@@ -11,7 +11,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 $memex_title = __( 'Export', 'memex' );
 include __DIR__ . '/_header.php';
 
-$error = isset( $_GET['error'] ) ? sanitize_key( $_GET['error'] ) : '';
+// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only flag that only picks which notice to render.
+$error = isset( $_GET['error'] ) ? sanitize_key( wp_unslash( $_GET['error'] ) ) : '';
 $count = count( Exporter::notes() );
 ?>
 

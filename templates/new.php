@@ -9,6 +9,7 @@ use Memex\CPT;
 if ( ! defined( 'ABSPATH' ) ) {
 	exit; }
 
+// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only prefill for the new-note form.
 $title = isset( $_GET['title'] ) ? sanitize_text_field( wp_unslash( $_GET['title'] ) ) : '';
 
 $memex_title = __( 'New note', 'memex' );

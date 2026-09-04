@@ -227,6 +227,7 @@ class App extends BaseApp {
 		if ( ! is_user_logged_in() ) {
 			wp_die( esc_html__( 'Please log in.', 'memex' ) );
 		}
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- note body; wp_update_post() runs it through kses for users without unfiltered_html.
 		$raw = isset( $_POST['content'] ) ? trim( wp_unslash( $_POST['content'] ) ) : '';
 		if ( '' === $raw ) {
 			wp_safe_redirect( home_url( '/memex/' ) );
@@ -312,6 +313,7 @@ class App extends BaseApp {
 		}
 
 		$title = isset( $_POST['title'] ) ? sanitize_text_field( wp_unslash( $_POST['title'] ) ) : '';
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- note body; wp_update_post() runs it through kses for users without unfiltered_html.
 		$text  = isset( $_POST['content'] ) ? trim( wp_unslash( $_POST['content'] ) ) : '';
 		if ( '' === $title ) {
 			wp_safe_redirect( add_query_arg( 'error', 'missing-title', home_url( '/memex/edit/' . rawurlencode( $post->post_name ?: (string) $id ) ) ) );
@@ -356,7 +358,7 @@ class App extends BaseApp {
 			wp_send_json_error( array( 'message' => __( 'Please select a file to import.', 'memex' ) ), 400 );
 		}
 
-		$file_tmp  = $_FILES['import_file']['tmp_name'];
+		$file_tmp  = sanitize_text_field( wp_unslash( $_FILES['import_file']['tmp_name'] ) );
 		$file_name = isset( $_FILES['import_file']['name'] ) ? sanitize_file_name( $_FILES['import_file']['name'] ) : '';
 
 		$type     = isset( $_POST['type'] ) ? sanitize_key( $_POST['type'] ) : 'auto';
@@ -384,6 +386,7 @@ class App extends BaseApp {
 	public function ajax_import_step() {
 		$job = $this->import_job_from_request();
 		// The browser can ask for shorter steps when its connection keeps timing out.
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- import_job_from_request() checked the nonce above.
 		$seconds = isset( $_POST['budget'] ) ? (float) $_POST['budget'] : Job::TIME_BUDGET;
 		$seconds = max( 1.0, min( 10.0, $seconds ) );
 		/**
@@ -406,7 +409,7 @@ class App extends BaseApp {
 		if ( ! current_user_can( 'edit_posts' ) ) {
 			wp_send_json_error( array( 'message' => __( 'Not allowed.', 'memex' ) ), 403 );
 		}
-		$job = Job::load( isset( $_POST['job'] ) ? (string) wp_unslash( $_POST['job'] ) : '' );
+		$job = Job::load( isset( $_POST['job'] ) ? sanitize_text_field( wp_unslash( $_POST['job'] ) ) : '' );
 		if ( ! $job || $job->owner() !== get_current_user_id() ) {
 			wp_send_json_error( array( 'message' => __( 'Import not found. It may have finished or been cancelled.', 'memex' ) ), 404 );
 		}
@@ -422,7 +425,7 @@ class App extends BaseApp {
 		$zip_path = wp_tempnam( 'memex-export.zip' );
 		$count    = Exporter::build_zip( $zip_path );
 		if ( is_wp_error( $count ) ) {
-			@unlink( $zip_path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			wp_delete_file( $zip_path );
 			wp_safe_redirect( add_query_arg( 'error', $count->get_error_code(), home_url( '/memex/export' ) ) );
 			exit;
 		}
@@ -433,7 +436,7 @@ class App extends BaseApp {
 		header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
 		header( 'Content-Length: ' . filesize( $zip_path ) );
 		readfile( $zip_path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_readfile
-		@unlink( $zip_path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		wp_delete_file( $zip_path );
 		exit;
 	}
 
@@ -480,6 +483,7 @@ class App extends BaseApp {
 		if ( ! is_user_logged_in() ) {
 			wp_send_json_error( array( 'message' => 'auth' ), 401 );
 		}
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only title lookup for the [[ autocomplete.
 		$q       = isset( $_GET['q'] ) ? sanitize_text_field( wp_unslash( $_GET['q'] ) ) : '';
 		$results = Search::title_suggest( $q, 10 );
 		wp_send_json_success( $results );

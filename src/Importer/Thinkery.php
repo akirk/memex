@@ -29,12 +29,14 @@ class Thinkery extends Importer {
 	 * Does this file look like a Thinkery export (XML or JSON)?
 	 */
 	public static function sniff( string $path ): bool {
-		$fh = @fopen( $path, 'rb' );
+		// phpcs:disable WordPress.WP.AlternativeFunctions.file_system_operations_fopen,WordPress.WP.AlternativeFunctions.file_system_operations_fread,WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- reads the first bytes of the plugin's own upload in its work directory; WP_Filesystem has no partial read and would load the whole export into memory.
+		$fh = @fopen( $path, 'rb' ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 		if ( ! $fh ) {
 			return false;
 		}
 		$head = fread( $fh, 4096 );
 		fclose( $fh );
+		// phpcs:enable WordPress.WP.AlternativeFunctions.file_system_operations_fopen,WordPress.WP.AlternativeFunctions.file_system_operations_fread,WordPress.WP.AlternativeFunctions.file_system_operations_fclose
 
 		$head = ltrim( (string) $head, "\xEF\xBB\xBF \t\r\n" );
 		if ( preg_match( '/^(<\?xml[^>]*>\s*)?<thinkery\b/i', $head ) ) {
@@ -48,12 +50,14 @@ class Thinkery extends Importer {
 	}
 
 	public function prepare( string $path, string $work_dir, array &$state, callable $within ): array {
+		// phpcs:disable WordPress.WP.AlternativeFunctions.file_system_operations_fopen,WordPress.WP.AlternativeFunctions.file_system_operations_fread,WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- reads the first bytes of the plugin's own upload in its work directory; WP_Filesystem has no partial read and would load the whole export into memory.
 		$fh = @fopen( $path, 'rb' ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 		if ( ! $fh ) {
 			return self::failure( $state, 'Could not read Thinkery export.' );
 		}
 		$head = ltrim( (string) fread( $fh, 64 ), "\xEF\xBB\xBF \t\r\n" );
 		fclose( $fh );
+		// phpcs:enable WordPress.WP.AlternativeFunctions.file_system_operations_fopen,WordPress.WP.AlternativeFunctions.file_system_operations_fread,WordPress.WP.AlternativeFunctions.file_system_operations_fclose
 
 		if ( '[' !== substr( $head, 0, 1 ) ) {
 			// XML: stream `<thing>` elements, resuming after earlier calls.
