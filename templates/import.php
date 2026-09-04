@@ -64,16 +64,24 @@ $max_upload = wp_max_upload_size();
 <form class="memex-import-form" id="memex-import-form" method="post" enctype="multipart/form-data" action="<?php echo esc_url( admin_url( 'admin-ajax.php' ) ); ?>" aria-labelledby="import-notes-heading" data-ai-assistant-important
 	data-ajax-url="<?php echo esc_url( admin_url( 'admin-ajax.php' ) ); ?>"
 	data-nonce="<?php echo esc_attr( wp_create_nonce( 'memex_import' ) ); ?>"
+	<?php /* translators: %s: name of the file being uploaded. */ ?>
 	data-i18n-uploading="<?php esc_attr_e( 'Uploading %s…', 'memex' ); ?>"
+	<?php /* translators: %s: name of the file being read. */ ?>
 	data-i18n-preparing="<?php esc_attr_e( 'Reading %s…', 'memex' ); ?>"
+	<?php /* translators: %s: number of notes found so far. */ ?>
 	data-i18n-found="<?php esc_attr_e( '%s notes found so far', 'memex' ); ?>"
 	data-i18n-importing="<?php esc_attr_e( 'Importing notes…', 'memex' ); ?>"
 	data-i18n-resuming="<?php esc_attr_e( 'Resuming…', 'memex' ); ?>"
+	<?php /* translators: 1: current retry number, 2: maximum number of retries. */ ?>
 	data-i18n-retrying="<?php esc_attr_e( 'Connection lost, retrying (%1$s of %2$s)…', 'memex' ); ?>"
 	data-i18n-links="<?php esc_attr_e( 'Resolving links…', 'memex' ); ?>"
+	<?php /* translators: 1: number of notes imported, 2: total number of notes. */ ?>
 	data-i18n-progress="<?php esc_attr_e( '%1$s of %2$s', 'memex' ); ?>"
+	<?php /* translators: 1: number of notes imported, 2: name of the imported file. */ ?>
 	data-i18n-done="<?php esc_attr_e( 'Imported %1$s notes from %2$s.', 'memex' ); ?>"
+	<?php /* translators: %s: number of warnings. */ ?>
 	data-i18n-warnings="<?php esc_attr_e( 'View warnings (%s)', 'memex' ); ?>"
+	<?php /* translators: %s: error message. */ ?>
 	data-i18n-failed="<?php esc_attr_e( 'The import was interrupted: %s', 'memex' ); ?>"
 	data-i18n-leave="<?php esc_attr_e( 'An import is still running. Leave anyway?', 'memex' ); ?>"
 	<?php echo $active ? 'hidden' : ''; ?>>

@@ -13,7 +13,8 @@ $memex_title = __( 'Reminders', 'memex' );
 include __DIR__ . '/_header.php';
 
 $groups = Reminder::for_current_user();
-$error  = isset( $_GET['error'] ) ? sanitize_key( $_GET['error'] ) : '';
+// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only flag that only picks which notice to render.
+$error  = isset( $_GET['error'] ) ? sanitize_key( wp_unslash( $_GET['error'] ) ) : '';
 ?>
 <header class="memex-page-header">
 	<h1 id="reminders-heading"><?php esc_html_e( 'Reminders', 'memex' ); ?></h1>

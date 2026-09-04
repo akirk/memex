@@ -10,6 +10,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 $memex_title = __( 'All Notes', 'memex' );
 include __DIR__ . '/_header.php';
 
+// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only pagination parameter.
 $paged = max( 1, isset( $_GET['paged'] ) ? (int) $_GET['paged'] : 1 );
 $q     = new WP_Query(
 	array(

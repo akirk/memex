@@ -71,7 +71,8 @@ include __DIR__ . '/_header.php';
 	<?php if ( ! current_user_can( 'edit_post', $post->ID ) ) : ?>
 		<p class="memex-error" role="alert"><?php esc_html_e( 'You are not allowed to edit this note.', 'memex' ); ?></p>
 	<?php else : ?>
-		<?php if ( isset( $_GET['error'] ) && 'missing-title' === $_GET['error'] ) : ?>
+		<?php // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only flag that only picks which notice to render. ?>
+		<?php if ( isset( $_GET['error'] ) && 'missing-title' === sanitize_key( wp_unslash( $_GET['error'] ) ) ) : ?>
 			<div class="memex-notice memex-notice-error" role="alert"><?php esc_html_e( 'Please enter a title.', 'memex' ); ?></div>
 		<?php endif; ?>
 		<div class="memex-edit-shell">
@@ -88,7 +89,8 @@ include __DIR__ . '/_header.php';
 				<label>
 					<span><?php esc_html_e( 'Nested under', 'memex' ); ?></span>
 					<?php
-					wp_dropdown_pages( // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+					// phpcs:disable WordPress.Security.EscapeOutput.OutputNotEscaped -- wp_dropdown_pages() escapes the markup it prints.
+					wp_dropdown_pages(
 						array(
 							'post_type'        => CPT::POST_TYPE,
 							'post_status'      => CPT::readable_statuses(),
@@ -99,6 +101,7 @@ include __DIR__ . '/_header.php';
 							'sort_column'      => 'post_title',
 						)
 					);
+					// phpcs:enable WordPress.Security.EscapeOutput.OutputNotEscaped
 					?>
 				</label>
 

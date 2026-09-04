@@ -9,6 +9,7 @@ use Memex\Search;
 if ( ! defined( 'ABSPATH' ) ) {
 	exit; }
 
+// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only search term.
 $q           = isset( $_GET['q'] ) ? sanitize_text_field( wp_unslash( $_GET['q'] ) ) : '';
 $memex_title = $q ? sprintf( /* translators: %s: query */ __( 'Search: %s', 'memex' ), $q ) : __( 'Search', 'memex' );
 include __DIR__ . '/_header.php';

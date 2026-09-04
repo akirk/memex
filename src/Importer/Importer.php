@@ -132,12 +132,14 @@ abstract class Importer {
 	}
 
 	private static function sniff_xml_root( string $path, string $root ): bool {
-		$fh = @fopen( $path, 'rb' );
+		// phpcs:disable WordPress.WP.AlternativeFunctions.file_system_operations_fopen,WordPress.WP.AlternativeFunctions.file_system_operations_fread,WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- reads the first bytes of the plugin's own upload in its work directory; WP_Filesystem has no partial read and would load the whole export into memory.
+		$fh = @fopen( $path, 'rb' ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 		if ( ! $fh ) {
 			return false;
 		}
 		$head = fread( $fh, 4096 );
 		fclose( $fh );
+		// phpcs:enable WordPress.WP.AlternativeFunctions.file_system_operations_fopen,WordPress.WP.AlternativeFunctions.file_system_operations_fread,WordPress.WP.AlternativeFunctions.file_system_operations_fclose
 		return false !== stripos( $head, '<' . $root );
 	}
 
@@ -430,9 +432,10 @@ abstract class Importer {
 			if ( is_dir( $full ) && ! is_link( $full ) ) {
 				self::rrmdir( $full );
 			} else {
-				@unlink( $full ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+				wp_delete_file( $full );
 			}
 		}
-		@rmdir( $dir ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_system_operations_rmdir -- removes the plugin's own import work directory; WP_Filesystem would ask for FTP credentials during an AJAX or cron request.
+		@rmdir( $dir );
 	}
 }

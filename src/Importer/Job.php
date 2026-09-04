@@ -23,6 +23,11 @@ class Job {
 	const SAVE_EVERY = 10;
 	/** Abandoned jobs and work directories older than this are swept. */
 	const STALE_AFTER = DAY_IN_SECONDS;
+	/**
+	 * Extensions an uploaded export may keep. Anything else is stored without
+	 * one, so an upload can never land in wp-content/uploads as `source.php`.
+	 */
+	const SOURCE_EXTENSIONS = array( 'md', 'markdown', 'txt', 'zip', 'enex', 'json', 'xml' );
 
 	/** @var array<string,mixed> */
 	private array $data;
@@ -49,7 +54,9 @@ class Job {
 		if ( ! wp_mkdir_p( $work_dir ) ) {
 			return new \WP_Error( 'no-work-dir', __( 'Could not create the import directory.', 'memex' ) );
 		}
+		self::protect_base_dir();
 		$ext    = strtolower( pathinfo( $original_name, PATHINFO_EXTENSION ) );
+		$ext    = in_array( $ext, self::SOURCE_EXTENSIONS, true ) ? $ext : '';
 		$source = $work_dir . '/source' . ( $ext ? '.' . $ext : '' );
 		if ( ! self::store_upload( $upload_path, $source ) ) {
 			Importer::rrmdir( $work_dir );
@@ -246,9 +253,33 @@ class Job {
 
 	private static function store_upload( string $from, string $to ): bool {
 		if ( is_uploaded_file( $from ) ) {
+			// phpcs:ignore Generic.PHP.ForbiddenFunctions.Found -- the file goes into the plugin's own work directory, not the media library, so wp_handle_upload() (which enforces the media mime allowlist and its own destination) cannot be used.
 			return move_uploaded_file( $from, $to );
 		}
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_copy -- same work directory; used for imports handed over by WP-CLI or tests rather than an HTTP upload.
 		return (bool) copy( $from, $to );
+	}
+
+	/**
+	 * Deny web access to the import work directory.
+	 *
+	 * Work directories live under wp-content/uploads and hold whatever an
+	 * export archive contained, so refuse direct requests for them the way
+	 * WordPress protects its own private upload directories.
+	 */
+	private static function protect_base_dir(): void {
+		$base  = self::base_dir();
+		$files = array(
+			'.htaccess' => "Require all denied\n<IfModule !mod_authz_core.c>\nDeny from all\n</IfModule>\n",
+			'index.php' => "<?php\n// Silence is golden.\n",
+		);
+		foreach ( $files as $name => $contents ) {
+			$path = $base . '/' . $name;
+			if ( ! file_exists( $path ) ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- the plugin's own upload directory; WP_Filesystem would ask for FTP credentials during an AJAX request.
+				file_put_contents( $path, $contents );
+			}
+		}
 	}
 
 	public static function schedule_cleanup(): void {
