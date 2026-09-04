@@ -1,13 +1,19 @@
 <?php
 /**
  * Plugin Name: Memex
- * Description: Turns WordPress into a note-taking app — bi-directional links, automatic backlinks, daily notes, tags, reminders, and one-click import from Obsidian, Notion, Evernote, and Roam Research.
+ * Plugin URI: https://github.com/akirk/memex
+ * Description: Turn WordPress into a note-taking app: wiki-style links between notes, automatic backlinks, daily notes, tags, reminders and Markdown import.
  * Version: 0.1.0
- * Author: Alex Kirk
- * Author URI: https://alex.kirk.at/
- * Text Domain: memex
+ * Requires at least: 6.0
  * Tested up to: 7.1
  * Requires PHP: 7.4
+ * Author: Alex Kirk
+ * Author URI: https://alex.kirk.at/
+ * License: GPL-2.0-or-later
+ * License URI: https://www.gnu.org/licenses/gpl-2.0.html
+ * Text Domain: memex
+ *
+ * @package Memex
  */
 
 namespace Memex;
