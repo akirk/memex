@@ -124,6 +124,7 @@ It creates a stub note, so the link resolves and the missing note shows up under
 ## Screenshots
 
 1. A note in the Memex app, with the note tree, the note body and its backlinks.
+2. A note on a phone, with the note tree behind the menu button and the task list still editable in place.
 
 ## Changelog
 
