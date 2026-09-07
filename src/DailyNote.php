@@ -1,4 +1,5 @@
 <?php
+// phpcs:disable WordPress.DB.SlowDBQuery.slow_db_query_meta_key,WordPress.DB.SlowDBQuery.slow_db_query_meta_value -- Daily-note lookup intentionally uses note date metadata.
 /**
  * Daily-notes helper: get-or-create one note per day keyed by YYYY-MM-DD.
  */
