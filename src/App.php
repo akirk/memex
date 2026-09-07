@@ -1,5 +1,5 @@
 <?php
-
+// phpcs:disable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- base_app_initialized is provided by the shared base app.
 namespace Memex;
 
 use WpApp\WpApp;

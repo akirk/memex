@@ -188,10 +188,16 @@ include __DIR__ . '/_header.php';
 								</div>
 								<div id="memex-revision-diff-<?php echo (int) $revision->ID; ?>" class="memex-revision-diff" data-memex-revision-panel="<?php echo (int) $revision->ID; ?>" hidden>
 									<?php if ( $title_diff ) : ?>
-										<div class="memex-diff-block"><?php echo $title_diff; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></div>
+										<div class="memex-diff-block">
+											<?php // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Revision title diff is generated markup from the diff renderer. ?>
+											<?php echo $title_diff; ?>
+										</div>
 									<?php endif; ?>
 									<?php if ( $content_diff ) : ?>
-										<div class="memex-diff-block"><?php echo $content_diff; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></div>
+										<div class="memex-diff-block">
+											<?php // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Revision content diff is generated markup from the diff renderer. ?>
+											<?php echo $content_diff; ?>
+										</div>
 									<?php endif; ?>
 								</div>
 							</li>

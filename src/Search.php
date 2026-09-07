@@ -1,4 +1,5 @@
 <?php
+// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Search suggestions intentionally use a prepared direct read.
 /**
  * Simple in-app search across notes.
  *

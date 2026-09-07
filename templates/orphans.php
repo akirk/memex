@@ -1,4 +1,5 @@
 <?php
+// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPressVIPMinimum.Performance.WPQueryParams.PostNotIn_post__not_in -- Orphan-note report intentionally performs aggregate reads and excludes known posts.
 // phpcs:disable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound -- Template variables are render-local state.
 /**
  * Orphan notes — notes that are not linked to by any other note.

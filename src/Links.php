@@ -1,4 +1,5 @@
 <?php
+// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.SlowDBQuery.slow_db_query_meta_key,WordPress.DB.SlowDBQuery.slow_db_query_meta_value,WordPressVIPMinimum.Performance.WPQueryParams.PostNotIn_post__not_in -- Link graph queries intentionally use relationship metadata and aggregate reads.
 /**
  * Links between notes: stub creation, backlink tracking, and link styling.
  *
