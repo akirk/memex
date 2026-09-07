@@ -1,4 +1,5 @@
 <?php
+// phpcs:disable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound -- Template variables are render-local state.
 /**
  * Daily note route — `/memex/daily` (today) and `/memex/daily/{date}`.
  */
