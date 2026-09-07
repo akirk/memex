@@ -1,5 +1,4 @@
 <?php
-// phpcs:disable WordPress.Security.EscapeOutput.OutputNotEscaped -- Revision diff variables contain generated markup from the WordPress diff renderer.
 // phpcs:disable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound -- Template variables are render-local state.
 /**
  * In-app note editor: /memex/edit/{slug}
@@ -190,12 +189,12 @@ include __DIR__ . '/_header.php';
 								<div id="memex-revision-diff-<?php echo (int) $revision->ID; ?>" class="memex-revision-diff" data-memex-revision-panel="<?php echo (int) $revision->ID; ?>" hidden>
 									<?php if ( $title_diff ) : ?>
 										<div class="memex-diff-block">
-											<?php echo $title_diff; ?>
+											<?php echo wp_kses_post( $title_diff ); ?>
 										</div>
 									<?php endif; ?>
 									<?php if ( $content_diff ) : ?>
 										<div class="memex-diff-block">
-											<?php echo $content_diff; ?>
+											<?php echo wp_kses_post( $content_diff ); ?>
 										</div>
 									<?php endif; ?>
 								</div>
