@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: Memex
- * Plugin URI: https://github.com/akirk/memex
+ * Plugin URI: https://wpapps.kirk.at/apps/memex/
  * Description: Turn WordPress into a note-taking app: wiki-style links between notes, automatic backlinks, daily notes, tags, reminders and Markdown import.
  * Version: 1.0.0
  * Requires at least: 6.0
