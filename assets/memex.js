@@ -7,6 +7,8 @@
 (function () {
 	'use strict';
 
+	document.documentElement.classList.add('memex-js');
+
 	// --- Graph view --------------------------------------------------------
 
 	function renderGraph(host) {

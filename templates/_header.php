@@ -53,7 +53,6 @@ $memex_open_ids    = $memex_current_id ? CPT::ancestor_ids( $memex_current_id ) 
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title><?php wp_app_the_title( isset( $memex_title ) ? $memex_title : '' ); ?></title>
 	<?php wp_app_head(); ?>
-	<script>document.documentElement.classList.add( 'memex-js' );</script>
 </head>
 <body class="wp-app-body memex">
 	<?php wp_app_body_open(); ?>
