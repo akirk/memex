@@ -9,13 +9,17 @@ $start_of_week = (int) get_option( 'start_of_week', 0 );
 $offset        = ( (int) $first->format( 'w' ) - $start_of_week + 7 ) % 7;
 $day_count     = (int) $first->format( 't' );
 $refresh_after = ( new DateTimeImmutable( $today, wp_timezone() ) )->modify( '+1 day' )->getTimestamp();
+/* translators: %s: daily note date in YYYY-MM-DD format. */
+$date_label = __( 'Open daily note for %s', 'memex' );
+/* translators: %s: daily note date in YYYY-MM-DD format. */
+$draft_label = __( 'Write a draft daily note for %s', 'memex' );
 global $wp_locale;
 $month_names = array();
 for ( $number = 1; $number <= 12; $number++ ) {
 	$month_names[] = $wp_locale->get_month( $number );
 }
 ?>
-<section class="memex-daily-calendar" aria-label="<?php esc_attr_e( 'Daily notes calendar', 'memex' ); ?>" data-daily-calendar data-selected="<?php echo esc_attr( $selected ); ?>" data-month="<?php echo esc_attr( $month ); ?>" data-server-time="<?php echo (int) time(); ?>" data-refresh-after="<?php echo (int) $refresh_after; ?>" data-timezone="<?php echo esc_attr( wp_timezone()->getName() ); ?>" data-start-of-week="<?php echo (int) $start_of_week; ?>" data-month-names="<?php echo esc_attr( wp_json_encode( $month_names ) ); ?>" data-date-label="<?php echo esc_attr( __( 'Open daily note for %s', 'memex' ) ); ?>" data-draft-label="<?php echo esc_attr( __( 'Write a draft daily note for %s', 'memex' ) ); ?>" data-new-daily-url="<?php echo esc_url( home_url( '/memex/new?daily=' ) ); ?>">
+<section class="memex-daily-calendar" aria-label="<?php esc_attr_e( 'Daily notes calendar', 'memex' ); ?>" data-daily-calendar data-selected="<?php echo esc_attr( $selected ); ?>" data-month="<?php echo esc_attr( $month ); ?>" data-server-time="<?php echo (int) time(); ?>" data-refresh-after="<?php echo (int) $refresh_after; ?>" data-timezone="<?php echo esc_attr( wp_timezone()->getName() ); ?>" data-start-of-week="<?php echo (int) $start_of_week; ?>" data-month-names="<?php echo esc_attr( wp_json_encode( $month_names ) ); ?>" data-date-label="<?php echo esc_attr( $date_label ); ?>" data-draft-label="<?php echo esc_attr( $draft_label ); ?>" data-new-daily-url="<?php echo esc_url( home_url( '/memex/new?daily=' ) ); ?>">
 	<div class="memex-calendar-heading">
 		<?php $previous = $first->modify( '-1 month' )->format( 'Y-m' ); ?>
 		<a href="<?php echo esc_url( add_query_arg( 'month', $previous ) ); ?>" data-calendar-month="<?php echo esc_attr( $previous ); ?>" aria-label="<?php esc_attr_e( 'Previous month', 'memex' ); ?>">&larr;</a>

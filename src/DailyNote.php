@@ -95,6 +95,7 @@ class DailyNote {
 		if ( ! current_user_can( 'edit_posts' ) ) {
 			wp_send_json_error( array( 'message' => __( 'Not allowed.', 'memex' ) ), 403 );
 		}
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only, capability-gated lookup; no expiring nonce for calendars left open across days.
 		$month    = isset( $_GET['month'] ) ? sanitize_text_field( wp_unslash( $_GET['month'] ) ) : '';
 		if ( ! self::is_valid_date( $month . '-01' ) ) {
 			wp_send_json_error( array( 'message' => __( 'Invalid month.', 'memex' ) ), 400 );
