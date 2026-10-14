@@ -278,7 +278,21 @@ class App extends BaseApp {
 			wp_safe_redirect( home_url( '/memex/' ) );
 			exit;
 		}
-		$existing = Links::resolve( $title );
+		$parent = isset( $_POST['parent'] ) ? self::valid_parent( (int) $_POST['parent'] ) : 0;
+		if ( $parent ) {
+			$matches = get_posts(
+				array(
+					'post_type'      => CPT::POST_TYPE,
+					'post_status'    => CPT::readable_statuses(),
+					'post_parent'    => $parent,
+					'title'          => $title,
+					'posts_per_page' => 1,
+				)
+			);
+			$existing = $matches ? $matches[0]->ID : 0;
+		} else {
+			$existing = Links::resolve( $title );
+		}
 		if ( $existing ) {
 			wp_safe_redirect( CPT::url( $existing ) );
 			exit;
@@ -288,7 +302,7 @@ class App extends BaseApp {
 				'post_type'   => CPT::POST_TYPE,
 				'post_title'  => $title,
 				'post_status' => 'publish',
-				'post_parent' => isset( $_POST['parent'] ) ? self::valid_parent( (int) $_POST['parent'] ) : 0,
+				'post_parent' => $parent,
 			),
 			true
 		);
