@@ -300,21 +300,14 @@ body.memex {
 .memex-quick-capture-inline textarea {
 	display: block;
 	background: transparent;
-	color: var(--wp-app-color-text, #1f2937);
-	caret-color: var(--wp-app-color-text, #1f2937);
 	border: 0;
 	border-radius: 0;
 	padding: 0.5rem 0;
 	font: inherit;
 }
 
-.memex-quick-capture-inline textarea::placeholder {
-	color: var(--wp-app-color-text, #1f2937);
-	opacity: 1;
-}
-
 .memex-quick-capture-inline textarea:focus {
-	outline: 1px solid var(--wp-app-color-primary, #2563eb);
+	outline: 1px solid var(--wp-app-color-border);
 	outline-offset: 0.25rem;
 }
 
