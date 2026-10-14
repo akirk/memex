@@ -26,6 +26,11 @@ if ( ! DailyNote::is_valid_date( $date ) ) {
 	return;
 }
 
+if ( $date === DailyNote::today() && ! DailyNote::find( $date ) ) {
+	include __DIR__ . '/_today.php';
+	return;
+}
+
 $note = DailyNote::get_or_create( $date );
 if ( ! $note ) {
 	wp_die( esc_html__( 'Could not open daily note.', 'memex' ) );

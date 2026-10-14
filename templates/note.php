@@ -10,6 +10,7 @@
 use Memex\Content;
 use Memex\CPT;
 use Memex\Links;
+use Memex\DailyNote;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit; }
@@ -100,6 +101,7 @@ if ( ! $post ) {
 
 $memex_title        = $post->post_title;
 $memex_current_note = $post;
+$memex_inline_capture = DailyNote::today() === get_post_meta( $post->ID, CPT::META_DAILY, true ) && current_user_can( 'edit_post', $post->ID );
 include __DIR__ . '/_header.php';
 
 $is_stub      = (bool) get_post_meta( $post->ID, CPT::META_STUB, true );
@@ -181,10 +183,13 @@ $export_link  = wp_nonce_url(
 		<?php endif; ?>
 	>
 		<?php
-		if ( '' === trim( $post->post_content ) ) {
+		if ( '' === trim( $post->post_content ) && ! $memex_inline_capture ) {
 			echo '<p class="memex-muted"><em>' . esc_html__( 'This note is empty.', 'memex' ) . '</em> <a href="' . esc_url( $edit_link ) . '">' . esc_html__( 'Start writing →', 'memex' ) . '</a></p>';
 		} else {
 			echo Content::filter_task_checkboxes( apply_filters( 'the_content', $post->post_content ), $can_edit_note ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+		}
+		if ( $memex_inline_capture ) {
+			include __DIR__ . '/_quick-capture-form.php';
 		}
 		?>
 	</section>
