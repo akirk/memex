@@ -292,6 +292,9 @@ body.memex {
 
 .memex-quick-capture-inline {
 	clear: right;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	gap: 0.4rem 0.75rem;
 	width: 100%;
 	margin: 1rem 0;
 	font: inherit;
@@ -299,6 +302,7 @@ body.memex {
 
 .memex-quick-capture-inline input[type="text"] {
 	display: block;
+	min-width: 0;
 	width: 100%;
 	box-sizing: border-box;
 	background: var(--wp-app-color-surface);
@@ -307,6 +311,21 @@ body.memex {
 	border-radius: 4px;
 	padding: 0.5rem 0.6rem;
 	font: inherit;
+}
+
+.memex-quick-capture-inline .memex-quick-capture-actions {
+	display: contents;
+}
+
+.memex-quick-capture-inline .memex-server-time {
+	grid-column: 1;
+	grid-row: 2;
+}
+
+.memex-quick-capture-inline button {
+	grid-column: 2;
+	grid-row: 1;
+	align-self: stretch;
 }
 
 .memex-quick-capture-inline input[type="text"]:focus {
