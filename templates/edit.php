@@ -8,6 +8,7 @@ use Memex\App;
 use Memex\CPT;
 use Memex\Links;
 use Memex\RevisionDiff;
+use Memex\DailyNote;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit; }
@@ -38,6 +39,16 @@ if ( $slug ) {
 	}
 }
 
+$is_new_daily = ! empty( $memex_new_daily );
+if ( $is_new_daily ) {
+	$post = DailyNote::find( $memex_new_daily );
+	if ( $post ) {
+		$is_new_daily = false;
+	} else {
+		$post = new WP_Post( (object) array( 'ID' => 0, 'post_type' => CPT::POST_TYPE, 'post_title' => $memex_new_daily, 'post_content' => '', 'post_status' => 'draft', 'post_parent' => 0 ) );
+	}
+}
+
 if ( ! $post ) {
 	status_header( 404 );
 	$memex_title = __( 'Note not found', 'memex' );
@@ -51,7 +62,10 @@ if ( ! $post ) {
 }
 
 $memex_title = sprintf( /* translators: %s: note title */ __( 'Edit %s', 'memex' ), $post->post_title );
-$revisions = current_user_can( 'edit_post', $post->ID ) ? wp_get_post_revisions(
+$can_edit = $is_new_daily ? current_user_can( 'edit_posts' ) : current_user_can( 'edit_post', $post->ID );
+$is_daily_draft = $is_new_daily || ( 'draft' === $post->post_status && get_post_meta( $post->ID, CPT::META_DAILY, true ) );
+$back_link = $is_new_daily ? home_url( '/memex/tag/daily' ) : CPT::url( $post );
+$revisions = ! $is_new_daily && $can_edit ? wp_get_post_revisions(
 	$post->ID,
 	array(
 		'orderby' => 'date ID',
@@ -65,11 +79,11 @@ include __DIR__ . '/_header.php';
 	<header class="memex-page-header">
 		<h1 id="memex-page-title"><?php echo esc_html( $memex_title ); ?></h1>
 		<p class="memex-muted">
-			<a href="<?php echo esc_url( CPT::url( $post ) ); ?>">&larr; <?php esc_html_e( 'Back to the note', 'memex' ); ?></a>
+			<a href="<?php echo esc_url( $back_link ); ?>">&larr; <?php echo $is_new_daily ? esc_html__( 'Back to dailies', 'memex' ) : esc_html__( 'Back to the note', 'memex' ); ?></a>
 		</p>
 	</header>
 
-	<?php if ( ! current_user_can( 'edit_post', $post->ID ) ) : ?>
+	<?php if ( ! $can_edit ) : ?>
 		<p class="memex-error" role="alert"><?php esc_html_e( 'You are not allowed to edit this note.', 'memex' ); ?></p>
 	<?php else : ?>
 		<?php // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only flag that only picks which notice to render. ?>
@@ -78,9 +92,13 @@ include __DIR__ . '/_header.php';
 		<?php endif; ?>
 		<div class="memex-edit-shell">
 			<form class="memex-edit-form" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" aria-labelledby="memex-page-title" data-ai-assistant-important>
-				<input type="hidden" name="action" value="memex_update_note">
+				<input type="hidden" name="action" value="<?php echo $is_new_daily ? 'memex_create_note' : 'memex_update_note'; ?>">
 				<input type="hidden" name="id" value="<?php echo (int) $post->ID; ?>">
-				<?php wp_nonce_field( 'memex_update_note_' . $post->ID ); ?>
+				<?php wp_nonce_field( $is_new_daily ? 'memex_create_note' : 'memex_update_note_' . $post->ID ); ?>
+				<?php if ( $is_new_daily ) : ?>
+					<input type="hidden" name="daily" value="<?php echo esc_attr( $memex_new_daily ); ?>">
+					<p class="memex-muted"><?php esc_html_e( 'Unsaved daily draft. Save to keep it unpublished, or publish when ready.', 'memex' ); ?></p>
+				<?php endif; ?>
 
 				<label>
 					<span><?php esc_html_e( 'Title', 'memex' ); ?></span>
@@ -113,8 +131,11 @@ include __DIR__ . '/_header.php';
 				</label>
 
 				<div class="memex-edit-actions">
-					<button type="submit" class="memex-button memex-button-primary"><?php esc_html_e( 'Save note', 'memex' ); ?></button>
-					<a class="memex-button" href="<?php echo esc_url( CPT::url( $post ) ); ?>"><?php esc_html_e( 'Cancel', 'memex' ); ?></a>
+					<button type="submit" class="memex-button memex-button-primary"><?php echo $is_daily_draft ? esc_html__( 'Save draft', 'memex' ) : esc_html__( 'Save note', 'memex' ); ?></button>
+					<?php if ( $is_daily_draft ) : ?>
+						<button type="submit" name="publish" value="1" class="memex-button"><?php esc_html_e( 'Publish', 'memex' ); ?></button>
+					<?php endif; ?>
+					<a class="memex-button" href="<?php echo esc_url( $back_link ); ?>"><?php esc_html_e( 'Cancel', 'memex' ); ?></a>
 				</div>
 			</form>
 

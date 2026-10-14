@@ -105,6 +105,7 @@ class App extends BaseApp {
 
 		do_action( 'base_app_initialized', $this );
 
+		DailyNote::register();
 		Links::register();
 		Reminder::register();
 		AI::register();
@@ -259,6 +260,20 @@ class App extends BaseApp {
 			wp_die( esc_html__( 'Please log in.', 'memex' ) );
 		}
 		$title = isset( $_POST['title'] ) ? sanitize_text_field( wp_unslash( $_POST['title'] ) ) : '';
+		if ( ! empty( $_POST['daily'] ) ) {
+			if ( ! current_user_can( 'edit_posts' ) ) {
+				wp_die( esc_html__( 'Not allowed.', 'memex' ) );
+			}
+			$date = sanitize_text_field( wp_unslash( $_POST['daily'] ) );
+			// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- markdown is converted and sanitized by wp_insert_post().
+			$text = isset( $_POST['content'] ) ? trim( wp_unslash( $_POST['content'] ) ) : '';
+			$result = DailyNote::save_new( $date, $title, self::markdown_to_html( $text ), ! empty( $_POST['publish'] ) );
+			if ( is_wp_error( $result ) ) {
+				wp_die( esc_html( $result->get_error_message() ) );
+			}
+			wp_safe_redirect( home_url( '/memex/edit/' . rawurlencode( $result->post_name ?: (string) $result->ID ) ) );
+			exit;
+		}
 		if ( '' === $title ) {
 			wp_safe_redirect( home_url( '/memex/' ) );
 			exit;
@@ -325,7 +340,7 @@ class App extends BaseApp {
 			'ID'           => $id,
 			'post_title'   => $title,
 			'post_content' => $content,
-			'post_status'  => 'publish',
+			'post_status'  => 'draft' === $post->post_status && get_post_meta( $id, CPT::META_DAILY, true ) && empty( $_POST['publish'] ) ? 'draft' : 'publish',
 		);
 		if ( isset( $_POST['parent'] ) ) {
 			$update['post_parent'] = self::valid_parent( (int) $_POST['parent'], $id );

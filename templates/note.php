@@ -133,12 +133,19 @@ $export_link  = wp_nonce_url(
 );
 ?>
 
-<article id="selected-note" class="memex-note" aria-labelledby="selected-note-heading" data-ai-assistant-important>
+<article id="selected-note" class="memex-note<?php echo $daily ? ' memex-note-with-calendar' : ''; ?>" aria-labelledby="selected-note-heading" data-ai-assistant-important>
 	<?php if ( $parent ) : ?>
 		<nav class="memex-breadcrumb">
 			<a href="<?php echo esc_url( CPT::url( $parent ) ); ?>">&larr; <?php echo esc_html( $parent->post_title ); ?></a>
 		</nav>
 	<?php endif; ?>
+
+	<?php
+	if ( $daily ) {
+		$memex_calendar_date = $daily;
+		include __DIR__ . '/_daily-calendar.php';
+	}
+	?>
 
 	<header class="memex-note-header">
 		<h1 id="selected-note-heading">
@@ -147,7 +154,7 @@ $export_link  = wp_nonce_url(
 				<span class="memex-badge memex-badge-stub"><?php esc_html_e( 'stub', 'memex' ); ?></span>
 			<?php endif; ?>
 			<?php if ( $daily ) : ?>
-				<span class="memex-badge memex-badge-daily"><?php esc_html_e( 'daily', 'memex' ); ?></span>
+				<a class="memex-badge memex-badge-daily" href="<?php echo esc_url( home_url( '/memex/tag/daily' ) ); ?>"><?php esc_html_e( 'daily', 'memex' ); ?></a>
 			<?php endif; ?>
 		</h1>
 		<div class="memex-note-meta">

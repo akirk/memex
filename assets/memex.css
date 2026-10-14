@@ -398,6 +398,104 @@ body.memex {
 .memex-badge-daily {
 	background: var(--memex-daily-bg);
 	color: var(--memex-daily);
+	text-decoration: none;
+}
+
+.memex-daily-calendar {
+	float: right;
+	width: 14rem;
+	max-width: 100%;
+	margin: 0 0 0.75rem 1rem;
+	padding: 0.4rem;
+	font-size: 0.75rem;
+	border: 1px solid var(--wp-app-color-border);
+	border-radius: 6px;
+	box-sizing: border-box;
+}
+
+.memex-header-with-calendar {
+	display: flow-root;
+}
+
+.memex-note-with-calendar {
+	display: flow-root;
+}
+
+.memex-note-with-calendar .memex-panel {
+	clear: right;
+}
+
+.memex-calendar-heading [aria-disabled="true"] {
+	opacity: 0.3;
+	cursor: default;
+}
+
+@media (max-width: 540px) {
+	.memex-daily-calendar {
+		float: none;
+		margin-left: auto;
+	}
+}
+
+.memex-calendar-heading {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5rem;
+}
+
+.memex-calendar-heading a {
+	padding: 0.25rem 0.4rem;
+	text-decoration: none;
+}
+
+.memex-daily-calendar table {
+	width: 100%;
+	table-layout: fixed;
+	border-collapse: collapse;
+	text-align: center;
+}
+
+.memex-daily-calendar th,
+.memex-daily-calendar td {
+	padding: 0.1rem;
+}
+
+.memex-daily-calendar td a,
+.memex-daily-calendar td span {
+	display: block;
+	padding: 0.2rem 0;
+	border-radius: 4px;
+}
+
+.memex-daily-calendar td a {
+	color: var(--wp-app-color-text);
+	text-decoration: none;
+}
+
+.memex-daily-calendar td a.has-daily {
+	background: var(--memex-daily-bg);
+	color: var(--memex-daily);
+	font-weight: 600;
+	text-decoration: none;
+}
+
+.memex-daily-calendar [aria-current="date"] {
+	outline: 2px solid var(--memex-daily);
+	outline-offset: -2px;
+}
+
+.memex-daily-calendar .is-today {
+	text-decoration: underline;
+}
+
+.memex-daily-calendar p {
+	font-size: 0.8rem;
+	margin: 0.5rem 0 0;
+}
+
+.memex-daily-calendar[aria-busy="true"] table {
+	opacity: 0.6;
 }
 
 /* Note view */

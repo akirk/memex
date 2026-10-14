@@ -6,6 +6,7 @@
  */
 
 use Memex\CPT;
+use Memex\DailyNote;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit; }
@@ -25,11 +26,14 @@ if ( ! $term ) :
 	return;
 endif;
 
+// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only pagination.
+$paged = max( 1, isset( $_GET['paged'] ) ? (int) $_GET['paged'] : 1 );
 $q = new WP_Query(
 	array(
 		'post_type'      => CPT::POST_TYPE,
-		'posts_per_page' => 100,
-		'post_status'    => array( 'publish', 'draft', 'private' ),
+		'posts_per_page' => 25,
+		'paged'          => $paged,
+		'post_status'    => CPT::readable_statuses(),
 		'tax_query'      => array(
 			array(
 				'taxonomy' => CPT::TAXONOMY,
@@ -40,7 +44,14 @@ $q = new WP_Query(
 	)
 );
 ?>
-<header class="memex-page-header">
+<header class="memex-page-header<?php echo 'daily' === $term->slug ? ' memex-header-with-calendar' : ''; ?>">
+<?php
+if ( 'daily' === $term->slug ) {
+	$memex_calendar_date = DailyNote::today();
+	include __DIR__ . '/_daily-calendar.php';
+}
+?>
+
 	<h1 id="tag-notes-heading">#<?php echo esc_html( $term->name ); ?></h1>
 	<p class="memex-muted">
 		<?php
@@ -70,4 +81,9 @@ $q = new WP_Query(
 
 <?php
 wp_reset_postdata();
+if ( $q->max_num_pages > 1 ) {
+	echo '<nav class="memex-pagination">';
+	echo wp_kses_post( paginate_links( array( 'base' => add_query_arg( 'paged', '%#%', home_url( '/memex/tag/' . $term->slug ) ), 'current' => $paged, 'total' => $q->max_num_pages ) ) );
+	echo '</nav>';
+}
 include __DIR__ . '/_footer.php';
