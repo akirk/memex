@@ -7,7 +7,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 <form class="memex-quick-capture<?php echo ! empty( $memex_inline_capture ) ? ' memex-quick-capture-inline' : ''; ?>" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" aria-label="<?php esc_attr_e( 'Quick capture', 'memex' ); ?>">
 	<input type="hidden" name="action" value="memex_quick_capture">
 	<?php wp_nonce_field( 'memex_quick_capture' ); ?>
-	<textarea name="content" rows="<?php echo ! empty( $memex_inline_capture ) ? '4' : '2'; ?>" aria-label="<?php esc_attr_e( 'Quick capture text', 'memex' ); ?>" placeholder="<?php esc_attr_e( 'Quick capture — appends to today', 'memex' ); ?>"></textarea>
+	<?php if ( ! empty( $memex_inline_capture ) ) : ?>
+		<input type="text" name="content" aria-label="<?php esc_attr_e( 'Quick capture text', 'memex' ); ?>" placeholder="<?php esc_attr_e( 'Add an entry', 'memex' ); ?>" autocomplete="off" required>
+	<?php else : ?>
+		<textarea name="content" rows="2" aria-label="<?php esc_attr_e( 'Quick capture text', 'memex' ); ?>" placeholder="<?php esc_attr_e( 'Quick capture — appends to today', 'memex' ); ?>"></textarea>
+	<?php endif; ?>
 	<div class="memex-quick-capture-actions">
 		<div class="memex-server-time">
 			<a href="<?php echo esc_url( admin_url( 'options-general.php' ) ); ?>" aria-label="<?php esc_attr_e( 'Site time. Open timezone settings.', 'memex' ); ?>">

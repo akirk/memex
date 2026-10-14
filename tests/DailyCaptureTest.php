@@ -24,6 +24,8 @@ class DailyCaptureTest extends WP_UnitTestCase {
 		$this->assertGreaterThan( strpos( $html, 'Last captured entry' ), strpos( $html, 'memex-quick-capture-inline' ) );
 		$sidebar = substr( $html, strpos( $html, '<aside' ), strpos( $html, '</aside>' ) - strpos( $html, '<aside' ) );
 		$this->assertStringNotContainsString( 'memex_quick_capture', $sidebar );
+		$this->assertStringContainsString( '<input type="text" name="content"', $html );
+		$this->assertStringNotContainsString( '<textarea name="content"', $html );
 	}
 
 	public function test_empty_today_shows_capture_instead_of_empty_note_notice(): void {

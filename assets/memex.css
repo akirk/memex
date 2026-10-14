@@ -297,16 +297,19 @@ body.memex {
 	font: inherit;
 }
 
-.memex-quick-capture-inline textarea {
+.memex-quick-capture-inline input[type="text"] {
 	display: block;
-	background: transparent;
-	border: 0;
-	border-radius: 0;
-	padding: 0.5rem 0;
+	width: 100%;
+	box-sizing: border-box;
+	background: var(--wp-app-color-surface);
+	color: var(--wp-app-color-text);
+	border: 1px solid var(--wp-app-color-border);
+	border-radius: 4px;
+	padding: 0.5rem 0.6rem;
 	font: inherit;
 }
 
-.memex-quick-capture-inline textarea:focus {
+.memex-quick-capture-inline input[type="text"]:focus {
 	outline: 1px solid var(--wp-app-color-border);
 	outline-offset: 0.25rem;
 }

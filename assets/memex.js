@@ -840,7 +840,7 @@
 
 	function setupAutocomplete() {
 		var textareas = document.querySelectorAll(
-			'.memex-quick-capture textarea, .memex-quick-capture-full textarea, .memex-edit-form textarea'
+			'.memex-quick-capture textarea, .memex-quick-capture-inline input[name="content"], .memex-quick-capture-full textarea, .memex-edit-form textarea'
 		);
 		Array.prototype.forEach.call(textareas, function (ta) {
 			if (ta.classList.contains('memex-markdown-source-hidden')) return;
