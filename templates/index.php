@@ -69,13 +69,13 @@ $total_notes   = (int) ( $counts->publish ?? 0 ) + (int) ( $counts->draft ?? 0 )
 			<li class="memex-note-list-item <?php echo $is_stub ? 'is-stub' : ''; ?>" data-note-id="<?php echo (int) $post->ID; ?>" data-note-status="<?php echo esc_attr( $post->post_status ); ?>">
 				<a class="memex-note-list-title" href="<?php echo esc_url( CPT::url( $post ) ); ?>">
 					<?php echo esc_html( $post->post_title ); ?>
-					<?php if ( $daily ) : ?>
-						<span class="memex-badge memex-badge-daily"><?php esc_html_e( 'daily', 'memex' ); ?></span>
-					<?php endif; ?>
 					<?php if ( $is_stub ) : ?>
 						<span class="memex-badge memex-badge-stub"><?php esc_html_e( 'stub', 'memex' ); ?></span>
 					<?php endif; ?>
 				</a>
+				<?php if ( $daily ) : ?>
+					<a class="memex-badge memex-badge-daily" href="<?php echo esc_url( home_url( '/memex/tag/daily' ) ); ?>"><?php esc_html_e( 'daily', 'memex' ); ?></a>
+				<?php endif; ?>
 				<?php if ( $excerpt ) : ?>
 					<p class="memex-note-list-excerpt"><?php echo esc_html( $excerpt ); ?></p>
 				<?php endif; ?>

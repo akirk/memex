@@ -6,9 +6,20 @@
 
 use Memex\Links;
 use Memex\CPT;
+use Memex\DailyNote;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit; }
+
+// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- opens an unsaved editor only.
+$memex_new_daily = isset( $_GET['daily'] ) ? sanitize_text_field( wp_unslash( $_GET['daily'] ) ) : '';
+if ( $memex_new_daily ) {
+	if ( ! DailyNote::is_valid_date( $memex_new_daily ) || $memex_new_daily > DailyNote::today() ) {
+		wp_die( esc_html__( 'Invalid daily note date.', 'memex' ), '', array( 'response' => 400 ) );
+	}
+	include __DIR__ . '/edit.php';
+	return;
+}
 
 // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only prefill for the new-note form.
 $title = isset( $_GET['title'] ) ? sanitize_text_field( wp_unslash( $_GET['title'] ) ) : '';

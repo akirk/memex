@@ -9,6 +9,158 @@
 
 	document.documentElement.classList.add('memex-js');
 
+	function calendarClock(calendar) {
+		if (!calendar.dataset.clockOffset) calendar.dataset.clockOffset = String(Number(calendar.dataset.serverTime) * 1000 - Date.now());
+		return Date.now() + Number(calendar.dataset.clockOffset);
+	}
+
+	function calendarToday(calendar) {
+		var now = new Date(calendarClock(calendar));
+		var zone = calendar.dataset.timezone;
+		if (/^[+-]\d{2}:\d{2}$/.test(zone)) {
+			var offset = (Number(zone.slice(1, 3)) * 60 + Number(zone.slice(4))) * (zone[0] === '-' ? -1 : 1);
+			return new Date(now.getTime() + offset * 60000).toISOString().slice(0, 10);
+		}
+		var parts = new Intl.DateTimeFormat('en', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now);
+		function part(type) { return parts.find(function (value) { return value.type === type; }).value; }
+		return part('year') + '-' + part('month') + '-' + part('day');
+	}
+
+	function calendarNeedsRefresh(calendar) {
+		return calendarClock(calendar) >= Number(calendar.dataset.refreshAfter) * 1000;
+	}
+
+	function calendarMonthDate(month) {
+		var date = new Date(0);
+		date.setUTCFullYear(Number(month.slice(0, 4)), Number(month.slice(5)) - 1, 1);
+		return date;
+	}
+
+	function shiftCalendarMonth(month, amount) {
+		var date = calendarMonthDate(month);
+		date.setUTCMonth(date.getUTCMonth() + amount);
+		return date.toISOString().slice(0, 7);
+	}
+
+	function updateCalendarArrows(calendar, today) {
+		var month = calendar.dataset.month;
+		var arrows = calendar.querySelectorAll('[data-calendar-month]');
+		arrows.forEach(function (arrow, index) {
+			var target = shiftCalendarMonth(month, index === 0 ? -1 : 1);
+			arrow.dataset.calendarMonth = target;
+			if (target > today.slice(0, 7)) {
+				arrow.setAttribute('aria-disabled', 'true');
+				arrow.setAttribute('tabindex', '-1');
+				arrow.removeAttribute('href');
+			} else {
+				arrow.removeAttribute('aria-disabled');
+				arrow.removeAttribute('tabindex');
+				var fallback = new URL(window.location.href);
+				fallback.searchParams.set('month', target);
+				arrow.href = fallback.href;
+			}
+		});
+	}
+
+	function drawCalendarMonth(calendar, month) {
+		var today = calendarToday(calendar);
+		if (month > today.slice(0, 7)) month = today.slice(0, 7);
+		calendar.dataset.month = month;
+		var first = calendarMonthDate(month);
+		var last = calendarMonthDate(month);
+		last.setUTCMonth(last.getUTCMonth() + 1, 0);
+		var count = last.getUTCDate();
+		var offset = (first.getUTCDay() - Number(calendar.dataset.startOfWeek) + 7) % 7;
+		var names = JSON.parse(calendar.dataset.monthNames);
+		calendar.querySelector('.memex-calendar-heading strong').textContent = names[first.getUTCMonth()] + ' ' + first.getUTCFullYear();
+		var body = calendar.querySelector('tbody');
+		body.replaceChildren();
+		var row;
+		for (var cell = 0; cell < Math.ceil((offset + count) / 7) * 7; cell++) {
+			if (cell % 7 === 0) { row = document.createElement('tr'); body.appendChild(row); }
+			var td = document.createElement('td');
+			var day = cell - offset + 1;
+			if (day > 0 && day <= count) {
+				var date = month + '-' + String(day).padStart(2, '0');
+				td.dataset.calendarDate = date;
+				td.classList.toggle('is-today', date === today);
+				var text = document.createElement('span');
+				text.textContent = day;
+				td.appendChild(text);
+			}
+			row.appendChild(td);
+		}
+		updateCalendarArrows(calendar, today);
+		return month;
+	}
+
+	function augmentCalendar(calendar, data) {
+		var today = data.today;
+		calendar.querySelectorAll('[data-calendar-date]').forEach(function (td) {
+			var date = td.dataset.calendarDate;
+			if (date.slice(0, 7) !== calendar.dataset.month || date > today) return;
+			var exists = Object.prototype.hasOwnProperty.call(data.days, date);
+			var link = document.createElement('a');
+			link.textContent = Number(date.slice(8));
+			link.href = exists ? data.days[date] : calendar.dataset.newDailyUrl + encodeURIComponent(date);
+			link.classList.toggle('has-daily', exists);
+			link.setAttribute('aria-label', (exists ? calendar.dataset.dateLabel : calendar.dataset.draftLabel).replace('%s', date));
+			if (date === calendar.dataset.selected && exists) link.setAttribute('aria-current', 'date');
+			td.replaceChildren(link);
+		});
+	}
+
+	async function loadCalendar(calendar, month) {
+		// Draw immediately; another arrow click is allowed while the request is pending.
+		month = drawCalendarMonth(calendar, month);
+		var request = Number(calendar.dataset.request || 0) + 1;
+		calendar.dataset.request = String(request);
+		calendar.setAttribute('aria-busy', 'true');
+		calendar.querySelector('.memex-calendar-error').hidden = true;
+		var url = new URL(window.memexAjaxUrl, window.location.href);
+		url.searchParams.set('action', 'memex_daily_calendar');
+		url.searchParams.set('month', month);
+		try {
+			var response = await fetch(url, { credentials: 'same-origin', cache: 'no-store' });
+			var result = await response.json();
+			if (Number(calendar.dataset.request) !== request) return;
+			if (!response.ok || !result.success) throw new Error('Calendar request failed');
+			var data = result.data;
+			calendar.dataset.serverTime = String(data.serverTime);
+			calendar.dataset.clockOffset = String(data.serverTime * 1000 - Date.now());
+			calendar.dataset.refreshAfter = String(data.refreshAfter);
+			if (data.month !== calendar.dataset.month) drawCalendarMonth(calendar, data.month);
+			updateCalendarArrows(calendar, data.today);
+			augmentCalendar(calendar, data);
+		} catch (error) {
+			if (Number(calendar.dataset.request) === request) calendar.querySelector('.memex-calendar-error').hidden = false;
+		} finally {
+			if (Number(calendar.dataset.request) === request) calendar.removeAttribute('aria-busy');
+		}
+	}
+
+	document.addEventListener('click', function (event) {
+		var arrow = event.target.closest('[data-calendar-month]');
+		if (!arrow) return;
+		var calendar = arrow.closest('[data-daily-calendar]');
+		if (!calendar) return;
+		event.preventDefault();
+		updateCalendarArrows(calendar, calendarToday(calendar));
+		if (arrow.getAttribute('aria-disabled') !== 'true') loadCalendar(calendar, arrow.dataset.calendarMonth);
+	});
+
+	function refreshCalendars() {
+		if (document.hidden) return;
+		document.querySelectorAll('[data-daily-calendar]').forEach(function (calendar) {
+			if (calendarNeedsRefresh(calendar) && calendar.getAttribute('aria-busy') !== 'true') loadCalendar(calendar, calendar.dataset.month);
+		});
+	}
+
+	document.addEventListener('DOMContentLoaded', refreshCalendars);
+	document.addEventListener('visibilitychange', refreshCalendars);
+	window.addEventListener('focus', refreshCalendars);
+	window.setInterval(refreshCalendars, 60000);
+
 	// --- Graph view --------------------------------------------------------
 
 	function renderGraph(host) {
@@ -688,7 +840,7 @@
 
 	function setupAutocomplete() {
 		var textareas = document.querySelectorAll(
-			'.memex-quick-capture textarea, .memex-quick-capture-full textarea, .memex-edit-form textarea'
+			'.memex-quick-capture textarea, .memex-quick-capture-inline input[name="content"], .memex-quick-capture-full textarea, .memex-edit-form textarea'
 		);
 		Array.prototype.forEach.call(textareas, function (ta) {
 			if (ta.classList.contains('memex-markdown-source-hidden')) return;

@@ -25,7 +25,7 @@ Notes are private by default: the note post type is registered as non-public and
 
 - **Wiki-style links.** Type `[[` in the Memex editor to link notes. Matching note titles are suggested inline, and missing targets become stub notes.
 - **Automatic backlinks.** Every note has a backlinks panel showing what links to it. Forward links are tracked too.
-- **Daily notes.** `/memex/daily` opens today's note (creates it on demand). Quick-capture appends a timestamped paragraph from anywhere in the app.
+- **Daily notes.** `/memex/daily` opens today's note with a wide capture field below its entries; if no note exists yet, the first capture creates it. Daily notes are automatically tagged `daily`; click the daily badge to browse them. Each daily note shows a monthly calendar linking to other daily notes. Quick-capture appends a timestamped paragraph from anywhere in the app.
 - **Tags.** A note tag taxonomy with a per-tag listing at `/memex/tag/{slug}`.
 - **Reminders.** Create reminders at `/memex/reminders`; the plugin schedules a 5-minute cron and emails you when one is due.
 - **Graph, orphans, broken links.** Built-in views for navigating the link structure of your notes.
