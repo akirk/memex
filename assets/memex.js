@@ -383,6 +383,32 @@
 
 	// --- Site time ---------------------------------------------------------
 
+	function setupCaptureTasks() {
+		document.querySelectorAll('[data-memex-capture-task]').forEach(function (toggle) {
+			if (toggle.dataset.taskReady) return;
+			var input = toggle.form.querySelector('[name="content"]');
+			if (!input) return;
+			toggle.dataset.taskReady = 'true';
+			var marker = /^\[[ xX]\](?:[\t ]+|$)/;
+			function sync() {
+				toggle.setAttribute('aria-pressed', marker.test(input.value) ? 'true' : 'false');
+			}
+			input.addEventListener('input', sync);
+			toggle.addEventListener('click', function () {
+				var start = input.selectionStart;
+				var end = input.selectionEnd;
+				var match = input.value.match(marker);
+				var shift = match ? -match[0].length : 4;
+				input.value = match ? input.value.slice(match[0].length) : '[ ] ' + input.value;
+				input.focus();
+				input.setSelectionRange(Math.max(0, start + shift), Math.max(0, end + shift));
+				input.dispatchEvent(new Event('input', { bubbles: true }));
+			});
+			input.form.addEventListener('reset', function () { window.setTimeout(sync, 0); });
+			sync();
+		});
+	}
+
 	function setupServerTime() {
 		var clocks = document.querySelectorAll('[data-memex-server-time]');
 		if (!clocks.length) return;
@@ -618,6 +644,7 @@
 	// Everything that has to run again when the main content is replaced. The
 	// sidebar, its clock and the menu toggle stay put, so they are not in here.
 	function setupMainContent() {
+		setupCaptureTasks();
 		var graph = document.getElementById('memex-graph');
 		if (graph) renderGraph(graph);
 		initQuickDue();

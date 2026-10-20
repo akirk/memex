@@ -269,6 +269,7 @@ body.memex {
 .memex-server-time {
 	display: flex;
 	align-items: baseline;
+	gap: 0.5rem;
 	font-size: 0.76rem;
 	line-height: 1.3;
 	min-width: 0;
@@ -283,6 +284,20 @@ body.memex {
 .memex-server-time time {
 	font-variant-numeric: tabular-nums;
 	white-space: nowrap;
+}
+
+.memex-quick-capture .memex-server-time button[data-memex-capture-task] {
+	align-self: baseline;
+	background: none;
+	color: var(--wp-app-color-text);
+	padding: 0;
+	font: inherit;
+	text-decoration: underline dotted;
+	text-underline-offset: 3px;
+}
+
+.memex-quick-capture .memex-server-time button[data-memex-capture-task][aria-pressed="true"] {
+	font-weight: bold;
 }
 
 .memex-quick-capture-actions button {
