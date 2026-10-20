@@ -386,7 +386,7 @@
 	function setupCaptureTasks() {
 		document.querySelectorAll('[data-memex-capture-task]').forEach(function (toggle) {
 			if (toggle.dataset.taskReady) return;
-			var input = toggle.form.querySelector('[name="content"]');
+			var input = toggle.closest('form').querySelector('[name="content"]');
 			if (!input) return;
 			toggle.dataset.taskReady = 'true';
 			var marker = /^\[[ xX]\](?:[\t ]+|$)/;
@@ -394,7 +394,14 @@
 				toggle.setAttribute('aria-pressed', marker.test(input.value) ? 'true' : 'false');
 			}
 			input.addEventListener('input', sync);
-			toggle.addEventListener('click', function () {
+			toggle.addEventListener('keydown', function (event) {
+				if (event.key === ' ') {
+					event.preventDefault();
+					toggle.click();
+				}
+			});
+			toggle.addEventListener('click', function (event) {
+				event.preventDefault();
 				var start = input.selectionStart;
 				var end = input.selectionEnd;
 				var match = input.value.match(marker);

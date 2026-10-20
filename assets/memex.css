@@ -286,17 +286,7 @@ body.memex {
 	white-space: nowrap;
 }
 
-.memex-quick-capture .memex-server-time button[data-memex-capture-task] {
-	align-self: baseline;
-	background: none;
-	color: var(--wp-app-color-text);
-	padding: 0;
-	font: inherit;
-	text-decoration: underline dotted;
-	text-underline-offset: 3px;
-}
-
-.memex-quick-capture .memex-server-time button[data-memex-capture-task][aria-pressed="true"] {
+.memex-server-time a[data-memex-capture-task][aria-pressed="true"] {
 	font-weight: bold;
 }
 
