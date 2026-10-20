@@ -23,6 +23,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 					data-format="<?php echo esc_attr( get_option( 'time_format' ) ); ?>"
 				><?php echo esc_html( wp_date( get_option( 'time_format' ) ) ); ?></time>
 			</a>
+			<a href="#" role="button" data-memex-capture-task aria-pressed="false" aria-label="<?php esc_attr_e( 'Toggle checkbox at start of entry', 'memex' ); ?>">[ ]</a>
 		</div>
 		<button type="submit"><?php esc_html_e( 'Capture', 'memex' ); ?></button>
 	</div>

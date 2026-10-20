@@ -269,6 +269,7 @@ body.memex {
 .memex-server-time {
 	display: flex;
 	align-items: baseline;
+	gap: 0.5rem;
 	font-size: 0.76rem;
 	line-height: 1.3;
 	min-width: 0;
@@ -283,6 +284,10 @@ body.memex {
 .memex-server-time time {
 	font-variant-numeric: tabular-nums;
 	white-space: nowrap;
+}
+
+.memex-server-time a[data-memex-capture-task][aria-pressed="true"] {
+	font-weight: bold;
 }
 
 .memex-quick-capture-actions button {

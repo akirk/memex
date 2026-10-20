@@ -4,6 +4,25 @@ use Memex\App;
 use Memex\Content;
 
 class AppContentConversionTest extends WP_UnitTestCase {
+	public function test_daily_tasks_survive_capture_editing_and_toggling(): void {
+		$html = Content::plain_text_to_blocks( '[ ] Launch Shared Workers', '06:16' );
+		$this->assertStringContainsString( '<strong>06:16</strong> &middot; <input type="checkbox" class="memex-task-checkbox"> Launch Shared Workers', $html );
+		$editor = Content::editor_text_from_html( $html );
+		$this->assertSame( '**06:16** · [ ] Launch Shared Workers', $editor );
+		$saved = Content::markdown_to_html( $editor );
+		$this->assertStringContainsString( 'type="checkbox"', $saved );
+		$checked = Content::set_task_checked( $saved, 0, true );
+		$this->assertStringContainsString( ' checked>', $checked );
+		$this->assertSame( '**06:16** · [x] Launch Shared Workers', Content::editor_text_from_html( $checked ) );
+	}
+
+	public function test_resaving_existing_daily_recognizes_task_marker(): void {
+		$existing = '<!-- wp:paragraph --><p><strong>06:16</strong> &middot; [ ] Launch Shared Workers</p><!-- /wp:paragraph -->';
+		$html = Content::markdown_to_html( Content::editor_text_from_html( $existing ) );
+		$this->assertStringContainsString( '<strong>06:16</strong> · <input type="checkbox" class="memex-task-checkbox"> Launch Shared Workers', $html );
+		$this->assertStringNotContainsString( 'checkbox', Content::markdown_to_html( '**06:16** · \\[ ] Literal' ) );
+	}
+
 	public function test_content_to_editor_text_preserves_unsupported_html_between_markdown_blocks(): void {
 		$content = '<p>Hello</p><figure><img src="cover.jpg" alt="Cover"></figure><p>Bye</p>';
 
