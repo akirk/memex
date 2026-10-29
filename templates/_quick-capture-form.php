@@ -4,7 +4,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 ?>
-<form class="memex-quick-capture<?php echo ! empty( $memex_inline_capture ) ? ' memex-quick-capture-inline' : ''; ?>" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" aria-label="<?php esc_attr_e( 'Quick capture', 'memex' ); ?>">
+<form class="memex-quick-capture<?php echo ! empty( $memex_inline_capture ) ? ' memex-quick-capture-inline' : ''; ?>" data-memex-capture="daily" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" aria-label="<?php esc_attr_e( 'Quick capture', 'memex' ); ?>">
 	<input type="hidden" name="action" value="memex_quick_capture">
 	<?php wp_nonce_field( 'memex_quick_capture' ); ?>
 	<?php if ( ! empty( $memex_inline_capture ) ) : ?>
