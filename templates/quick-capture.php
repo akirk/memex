@@ -14,7 +14,7 @@ include __DIR__ . '/_header.php';
 	<h1 id="quick-capture-heading"><?php esc_html_e( 'Quick capture', 'memex' ); ?></h1>
 	<p class="memex-muted"><?php esc_html_e( 'Anything you type here is appended, with a timestamp, to today\'s daily note.', 'memex' ); ?></p>
 </header>
-<form class="memex-quick-capture memex-quick-capture-full" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" aria-labelledby="quick-capture-heading" data-ai-assistant-important>
+<form class="memex-quick-capture memex-quick-capture-full" data-memex-capture="daily" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" aria-labelledby="quick-capture-heading" data-ai-assistant-important>
 	<input type="hidden" name="action" value="memex_quick_capture">
 	<?php wp_nonce_field( 'memex_quick_capture' ); ?>
 	<label class="screen-reader-text" for="quick-capture-content"><?php esc_html_e( 'Capture text', 'memex' ); ?></label>
