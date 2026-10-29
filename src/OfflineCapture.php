@@ -31,6 +31,12 @@ class OfflineCapture {
 		);
 	}
 
+	/** Shared asset/cache version keeps enqueued URLs identical to worker precache URLs. */
+	public static function asset_version(): string {
+		$root = dirname( __DIR__ );
+		return md5( file_get_contents( $root . '/assets/memex-offline.js' ) . file_get_contents( $root . '/assets/memex-worker.js' ) . file_get_contents( $root . '/assets/memex.css' ) . file_get_contents( $root . '/templates/capture.php' ) );
+	}
+
 	public static function client_config(): array {
 		return array(
 			'ajaxUrl' => admin_url( 'admin-ajax.php' ),
@@ -82,6 +88,7 @@ class OfflineCapture {
 		}
 		// Serialize captures across tabs/devices, including appends to the same daily.
 		$lock = 'memex-capture-' . md5( $wpdb->prefix . DB_NAME );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Connection-scoped advisory locks require a live database call; cached lock results cannot serialize writes.
 		if ( '1' !== (string) $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, 10)', $lock ) ) ) {
 			return new \WP_Error( 'capture_busy', __( 'Another capture is syncing. Please retry.', 'memex' ) );
 		}
@@ -94,6 +101,7 @@ class OfflineCapture {
 			// The marker and content are written together. Recover even if a request
 			// stops after the post write but before persisting its receipt.
 			$marker = '<!-- memex-capture:' . get_current_user_id() . ':' . $id . ' -->';
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Check the exact durable marker under the lock; stale cached results could duplicate a capture after an interrupted write.
 			$post_id = (int) $wpdb->get_var( $wpdb->prepare( "SELECT ID FROM $wpdb->posts WHERE post_type = %s AND post_content LIKE %s LIMIT 1", CPT::POST_TYPE, '%' . $wpdb->esc_like( $marker ) . '%' ) );
 			if ( ! $post_id && 'daily' === $kind ) {
 				$note = DailyNote::find( $date );
@@ -124,6 +132,7 @@ class OfflineCapture {
 			update_option( $key, $receipt, false );
 			return $receipt;
 		} finally {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Release the advisory lock on this connection, which cannot be done through a cache or post API.
 			$wpdb->get_var( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock ) );
 		}
 	}

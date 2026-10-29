@@ -1,9 +1,16 @@
 <?php
 /** Minimal capture shell: safe to cache without the private folder tree or note contents. */
 if ( ! defined( 'ABSPATH' ) ) { exit; }
-$config = \Memex\OfflineCapture::client_config();
-$base = plugin_dir_url( dirname( __DIR__ ) . '/memex.php' );
+$memex_capture_version = \Memex\OfflineCapture::asset_version();
+$memex_capture_base = plugin_dir_url( dirname( __DIR__ ) . '/memex.php' );
 nocache_headers();
+wp_enqueue_style( 'memex-capture-shell', $memex_capture_base . 'assets/memex.css', array(), $memex_capture_version );
+wp_enqueue_script( 'memex-capture-shell', $memex_capture_base . 'assets/memex-offline.js', array(), $memex_capture_version, true );
+wp_add_inline_script(
+	'memex-capture-shell',
+	'window.memexOffline = ' . wp_json_encode( \Memex\OfflineCapture::client_config(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT ) . ';',
+	'before'
+);
 ?>
 <!DOCTYPE html>
 <html <?php language_attributes(); ?>>
@@ -14,8 +21,8 @@ nocache_headers();
 	<link rel="manifest" href="<?php echo esc_url( \WpApp\Pwa::get_manifest_url( 'memex' ) ); ?>">
 	<meta name="theme-color" content="#2271b1">
 	<meta name="apple-mobile-web-app-capable" content="yes">
-	<link rel="apple-touch-icon" href="<?php echo esc_url( $base . 'assets/icon-192.png' ); ?>">
-	<link rel="stylesheet" href="<?php echo esc_url( $base . 'assets/memex.css' ); ?>">
+	<link rel="apple-touch-icon" href="<?php echo esc_url( $memex_capture_base . 'assets/icon-192.png' ); ?>">
+	<?php wp_print_styles( array( 'memex-capture-shell' ) ); ?>
 </head>
 <body class="memex memex-capture-shell">
 <main>
@@ -35,7 +42,6 @@ nocache_headers();
 	<?php include __DIR__ . '/_offline-panel.php'; ?>
 	<p><?php esc_html_e( 'Open this screen online once before using it offline. Unsynced entries and drafts are stored on this device; clearing browser data removes them.', 'memex' ); ?></p>
 </main>
-<script>window.memexOffline = <?php echo wp_json_encode( $config, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT ); ?>;</script>
-<script src="<?php echo esc_url( $base . 'assets/memex-offline.js' ); ?>"></script>
+<?php wp_print_scripts( array( 'memex-capture-shell' ) ); ?>
 </body>
 </html>

@@ -103,6 +103,12 @@ class OfflineCaptureTest extends WP_UnitTestCase {
 		$this->assertStringNotContainsString( 'Private title', $html );
 		$this->assertStringNotContainsString( 'Private body', $html );
 		$this->assertStringContainsString( 'data-memex-capture="choice"', $html );
+		$version = OfflineCapture::asset_version();
+		$this->assertStringContainsString( 'assets/memex.css?ver=' . $version, $html );
+		$this->assertStringContainsString( 'assets/memex-offline.js?ver=' . $version, $html );
+		$this->assertStringContainsString( 'window.memexOffline = ', $html );
+		$this->assertSame( $version, wp_styles()->registered['memex-capture-shell']->ver );
+		$this->assertSame( $version, wp_scripts()->registered['memex-capture-shell']->ver );
 	}
 	public function test_worker_endpoint_never_redirects_but_other_routes_keep_their_redirect(): void {
 		$this->assertFalse( OfflineCapture::worker_redirect( 'canonical', home_url( '/memex/offline-worker' ) ) );
