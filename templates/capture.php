@@ -39,8 +39,10 @@ wp_add_inline_script(
 		<button type="submit"><?php esc_html_e( 'Save capture', 'memex' ); ?></button>
 		<p data-capture-status role="status" aria-live="polite"></p>
 	</form>
-	<?php include __DIR__ . '/_offline-panel.php'; ?>
 	<p><?php esc_html_e( 'Open this screen online once before using it offline. Unsynced entries and drafts are stored on this device; clearing browser data removes them.', 'memex' ); ?></p>
+	<footer class="memex-footer">
+		<?php include __DIR__ . '/_offline-panel.php'; ?>
+	</footer>
 </main>
 <?php wp_print_scripts( array( 'memex-capture-shell' ) ); ?>
 </body>

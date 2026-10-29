@@ -1498,6 +1498,8 @@ body.memex {
 }
 
 /* Offline capture and sync confidence panel. */
+.memex-footer { margin-top: 2rem; font-size: .85rem; }
+.memex-footer .memex-offline-panel { max-width: 44rem; }
 .memex-offline-panel { margin: 1rem 0; padding: .75rem; border: 1px solid var(--memex-border, #ccc); border-radius: .4rem; }
 .memex-offline-panel summary { cursor: pointer; }
 .memex-offline-panel dl { display: grid; grid-template-columns: 1fr 1fr; gap: .4rem; font-size: .85rem; }

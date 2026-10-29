@@ -70,7 +70,6 @@ $memex_open_ids    = $memex_current_id ? CPT::ancestor_ids( $memex_current_id ) 
 				<?php if ( empty( $memex_inline_capture ) ) : ?>
 					<?php include __DIR__ . '/_quick-capture-form.php'; ?>
 				<?php endif; ?>
-				<?php include __DIR__ . '/_offline-panel.php'; ?>
 				<nav class="memex-nav" aria-label="<?php esc_attr_e( 'Memex sections', 'memex' ); ?>">
 					<a href="<?php echo esc_url( home_url( '/memex/capture' ) ); ?>"><?php esc_html_e( 'Offline capture', 'memex' ); ?></a>
 					<a href="<?php echo esc_url( home_url( '/memex/' ) ); ?>"><?php esc_html_e( 'All notes', 'memex' ); ?></a>
