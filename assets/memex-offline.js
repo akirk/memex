@@ -99,15 +99,23 @@
         if (!entries.length) return;
         var session = await request({action: 'memex_capture_session'});
         if (Number(session.userId) !== Number(config.userId)) throw new Error('Sign in to the account that saved these entries. They have not been sent.');
+        var firstError;
         for (var entry of entries.sort(function (a, b) { return a.createdAt.localeCompare(b.createdAt); })) {
-            var receipt = await request({action: 'memex_capture_sync', nonce: session.nonce, capture: JSON.stringify(entry)});
-            if (receipt.id !== entry.id || !receipt.postId) throw new Error('Server did not acknowledge this entry. Kept for retry.');
+            try {
+                var receipt = await request({action: 'memex_capture_sync', nonce: session.nonce, capture: JSON.stringify(entry)});
+                if (receipt.id !== entry.id || !receipt.postId) throw new Error('Server did not acknowledge this entry. Kept for retry.');
+            } catch (error) {
+                // Keep this capture for retry without blocking independent entries.
+                firstError = firstError || error;
+                continue;
+            }
             await transaction(['entries', 'meta'], 'readwrite', function (tx) {
                 tx.objectStore('entries').delete(entry.id);
                 tx.objectStore('meta').put({id: 'lastSync', value: new Date().toISOString(), url: receipt.url});
             });
             changed();
         }
+        if (firstError) throw firstError;
     }
     async function sync() {
         if (running || !navigator.onLine) { refresh(); return; }

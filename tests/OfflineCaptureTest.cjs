@@ -11,6 +11,7 @@ const asset = name => fs.readFileSync(path.join(__dirname, '..', 'assets', name)
 async function fixture(t) {
     let account = 7;
     let mode = 'ok';
+    let rejectedContent = null;
     let posts = [];
     const server = http.createServer(async (req, res) => {
         const origin = `http://127.0.0.1:${server.address().port}`;
@@ -31,6 +32,7 @@ async function fixture(t) {
             if (data.get('action') === 'memex_capture_session') return res.end(JSON.stringify({success: true, data: {userId: account, nonce: 'fresh-nonce'}}));
             const entry = JSON.parse(data.get('capture'));
             posts.push(entry);
+            if (entry.content === rejectedContent) { res.statusCode = 409; return res.end(JSON.stringify({success: false, data: {message: 'You cannot edit this daily note.'}})); }
             if (mode === 'login') return res.end('<html>Log in</html>');
             if (mode === 'fail') { res.statusCode = 503; return res.end(JSON.stringify({success: false, data: {message: 'Temporary failure'}})); }
             return res.end(JSON.stringify({success: true, data: {id: mode === 'wrong-id' ? 'wrong-id' : entry.id, postId: 42, url: origin + '/memex/note/42'}}));
@@ -54,7 +56,7 @@ async function fixture(t) {
     await page.goto(`http://127.0.0.1:${server.address().port}/memex/capture`);
     await page.waitForFunction(() => document.querySelector('[data-offline-ready]').textContent.startsWith('Ready'));
     const pending = count => page.waitForFunction(n => document.querySelector('[data-offline-pending]').textContent === String(n), count);
-    return {page, context, posts, pending, account(value) {account = value;}, mode(value) {mode = value;}};
+    return {page, context, posts, pending, account(value) {account = value;}, mode(value) {mode = value;}, reject(value) {rejectedContent = value;}};
 }
 
 test('offline drafts survive reload; queued notes survive closing and sync on reconnect', async t => {
@@ -154,4 +156,32 @@ test('simultaneous tabs serialize replay and private navigation responses are ne
         return result;
     });
     assert.equal(urls.some(url => url.includes('/note/private')), false);
+});
+
+
+test('a rejected capture stays queued while later captures sync and can be retried', async t => {
+    const f = await fixture(t);
+    f.reject('Denied daily entry');
+    await f.context.setOffline(true);
+    await f.page.fill('[name=content]', 'Denied daily entry');
+    await f.page.click('button[type=submit]');
+    await f.pending(1);
+    await f.page.selectOption('[name=kind]', 'note');
+    await f.page.fill('[name=title]', 'Independent note');
+    await f.page.fill('[name=content]', 'Valid later note');
+    await f.page.click('button[type=submit]');
+    await f.pending(2);
+    await f.context.setOffline(false);
+    await f.page.click('[data-offline-sync]');
+    await f.pending(1);
+    await f.page.waitForFunction(() => document.querySelector('[data-offline-status]').textContent.includes('cannot edit this daily'));
+    assert.ok(f.posts.some(entry => entry.content === 'Valid later note'));
+    assert.match(await f.page.textContent('[data-offline-entries]'), /Denied daily entry/);
+    assert.doesNotMatch(await f.page.textContent('[data-offline-entries]'), /Valid later note/);
+    const rejectedId = f.posts.find(entry => entry.content === 'Denied daily entry').id;
+    f.reject(null);
+    await f.page.click('[data-offline-sync]');
+    await f.pending(0);
+    assert.equal(f.posts.at(-1).id, rejectedId);
+    assert.equal(f.posts.filter(entry => entry.content === 'Valid later note').length, 1);
 });
