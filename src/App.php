@@ -18,6 +18,7 @@ class App extends BaseApp {
 			array(
 				'require_login'                => true,
 				'app_name'                     => 'Memex',
+				'pwa'                          => OfflineCapture::pwa_config(),
 				'launcher'                     => true,
 				'app_icon'                     => plugins_url( 'assets/icon.svg', dirname( __DIR__ ) . '/memex.php' ),
 				'show_masterbar_for_anonymous' => false,
@@ -65,6 +66,8 @@ class App extends BaseApp {
 		$this->app->route( 'import' );
 		$this->app->route( 'export' );
 		$this->app->route( 'quick-capture' );
+		$this->app->route( 'capture' );
+		$this->app->route( 'offline-worker' );
 		$this->app->route( 'reminders' );
 	}
 
@@ -105,6 +108,7 @@ class App extends BaseApp {
 
 		do_action( 'base_app_initialized', $this );
 
+		OfflineCapture::register();
 		DailyNote::register();
 		Links::register();
 		Reminder::register();
@@ -190,7 +194,8 @@ class App extends BaseApp {
 		// an environment that redirects such a request to the real one (as the
 		// WordPress Playground service worker does for its /scope:.../ prefix)
 		// turns our POSTs into bodyless GETs.
-		$inline = 'window.memexAjaxUrl = ' . wp_json_encode( admin_url( 'admin-ajax.php' ) ) . ';';
+		$inline = 'window.memexOffline = ' . wp_json_encode( OfflineCapture::client_config() ) . ';';
+		$inline .= 'window.memexAjaxUrl = ' . wp_json_encode( admin_url( 'admin-ajax.php' ) ) . ';';
 		if ( function_exists( 'wp_app_enqueue_style' ) ) {
 			// wp_app_before_render fires for every app, and an omitted scope
 			// resolves to whichever one is rendering, so name ours explicitly.
@@ -199,11 +204,14 @@ class App extends BaseApp {
 			wp_app_enqueue_style( 'memex', $base . 'assets/memex.css?v=' . $css_ver, array(), false, $scope );
 			wp_app_add_inline_script( 'memex-config', $inline, false, $scope );
 			wp_app_enqueue_script( 'memex-overtype', $base . 'assets/vendor/overtype/overtype.min.js?v=' . $vend_ver, array(), false, true, $scope );
+			wp_app_enqueue_script( 'memex-offline', $base . 'assets/memex-offline.js?v=' . self::asset_version( 'assets/memex-offline.js' ), array(), false, true, $scope );
 			wp_app_enqueue_script( 'memex', $base . 'assets/memex.js?v=' . $js_ver, array( 'memex-overtype' ), false, true, $scope );
 		} else {
 			// Fallback if called outside an app request.
 			wp_enqueue_style( 'memex', $base . 'assets/memex.css', array(), $css_ver );
 			wp_enqueue_script( 'memex-overtype', $base . 'assets/vendor/overtype/overtype.min.js', array(), $vend_ver, true );
+			wp_enqueue_script( 'memex-offline', $base . 'assets/memex-offline.js', array(), self::asset_version( 'assets/memex-offline.js' ), true );
+			wp_add_inline_script( 'memex-offline', 'window.memexOffline = ' . wp_json_encode( OfflineCapture::client_config() ) . ';', 'before' );
 			wp_enqueue_script( 'memex', $base . 'assets/memex.js', array( 'memex-overtype' ), $js_ver, true );
 			wp_add_inline_script( 'memex', $inline, 'before' );
 		}
