@@ -4,7 +4,7 @@
 
 namespace Composer\Autoload;
 
-class ComposerStaticInitb05728559053fcef383b1d26caf3a29c
+class ComposerStaticInit647d335af55db13f933a647d86a5b8d2
 {
     public static $files = array (
         'e067338e5c837aa9b7fcaf247deab680' => __DIR__ . '/..' . '/akirk/wp-app/src/bootstrap.php',
@@ -75,10 +75,10 @@ class ComposerStaticInitb05728559053fcef383b1d26caf3a29c
     public static function getInitializer(ClassLoader $loader)
     {
         return \Closure::bind(function () use ($loader) {
-            $loader->prefixLengthsPsr4 = ComposerStaticInitb05728559053fcef383b1d26caf3a29c::$prefixLengthsPsr4;
-            $loader->prefixDirsPsr4 = ComposerStaticInitb05728559053fcef383b1d26caf3a29c::$prefixDirsPsr4;
-            $loader->prefixesPsr0 = ComposerStaticInitb05728559053fcef383b1d26caf3a29c::$prefixesPsr0;
-            $loader->classMap = ComposerStaticInitb05728559053fcef383b1d26caf3a29c::$classMap;
+            $loader->prefixLengthsPsr4 = ComposerStaticInit647d335af55db13f933a647d86a5b8d2::$prefixLengthsPsr4;
+            $loader->prefixDirsPsr4 = ComposerStaticInit647d335af55db13f933a647d86a5b8d2::$prefixDirsPsr4;
+            $loader->prefixesPsr0 = ComposerStaticInit647d335af55db13f933a647d86a5b8d2::$prefixesPsr0;
+            $loader->classMap = ComposerStaticInit647d335af55db13f933a647d86a5b8d2::$classMap;
 
         }, null, ClassLoader::class);
     }
