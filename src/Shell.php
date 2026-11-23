@@ -84,6 +84,7 @@ class Shell {
 				}
 			}
 			$data['content'] = App::content_to_editor_text( $post->post_content );
+			// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Render stored note HTML with the core content filters.
 			$data['html']    = wp_kses_post( apply_filters( 'the_content', $post->post_content ) );
 		}
 		return $data;
@@ -93,6 +94,7 @@ class Shell {
 		nocache_headers();
 		if ( ! current_user_can( 'edit_posts' ) ) {
 			wp_send_json_error( [ 'message' => 'Sign in to Memex.' ], 403 ); }
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only, capability-gated lookup for long-lived offline sessions.
 		$id = isset( $_GET['id'] ) ? sanitize_text_field( wp_unslash( $_GET['id'] ) ) : '';
 		if ( '' !== $id ) {
 			$matches = ctype_digit( $id ) ? [] : get_posts(
@@ -115,7 +117,8 @@ class Shell {
 				]
             );
 		}
-		$page  = max( 1, (int) ( $_GET['page'] ?? 1 ) );
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only, capability-gated pagination for long-lived offline sessions.
+		$page  = isset( $_GET['page'] ) ? max( 1, absint( wp_unslash( $_GET['page'] ) ) ) : 1;
 		$query = new \WP_Query(
             [
 				'post_type'      => CPT::POST_TYPE,
@@ -162,11 +165,13 @@ class Shell {
 		if ( ! is_string( $id ) || ! preg_match( $uuid, $id ) || ! is_string( $input['title'] ?? null ) || '' === trim( sanitize_text_field( $input['title'] ) ) || ! is_string( $input['content'] ?? null ) || ! is_string( $input['baseVersion'] ?? null ) ) {
 			return new \WP_Error( 'invalid', 'Invalid edit operation.' );
 		}
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Inspect actual table engines before starting an atomic save; cached metadata could be stale.
 		$engines = $wpdb->get_col( $wpdb->prepare( 'SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN (%s, %s, %s)', $wpdb->posts, $wpdb->options, $wpdb->postmeta ) );
 		if ( 3 !== count( $engines ) || array_diff( array_map( 'strtoupper', $engines ), [ 'INNODB' ] ) ) {
 			return new \WP_Error( 'storage', 'Offline editing needs transactional InnoDB tables. Your local edit has been retained.' );
 		}
 		$lock = 'memex-capture-' . md5( $wpdb->prefix . DB_NAME );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Connection-scoped advisory locks require live, uncached database calls.
 		if ( '1' !== (string) $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, 10)', $lock ) ) ) {
 			return new \WP_Error( 'busy', 'Another save is running. Retry shortly.' );
 		}
@@ -188,14 +193,18 @@ class Shell {
 			}
 			// A savepoint exists only in an active transaction; probing does not change data.
 			$previous_errors = $wpdb->suppress_errors( true );
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Transaction and savepoint statements must execute on the current database connection.
 			$wpdb->query( 'SAVEPOINT memex_transaction_probe' );
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Transaction and savepoint statements must execute on the current database connection.
 			$nested = false !== $wpdb->query( 'RELEASE SAVEPOINT memex_transaction_probe' );
 			$wpdb->suppress_errors( $previous_errors );
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Transaction and savepoint statements must execute on the current database connection.
 			$started = $nested ? $wpdb->query( 'SAVEPOINT memex_note_edit' ) : $wpdb->query( 'START TRANSACTION' );
 			if ( false === $started ) {
 				return new \WP_Error( 'storage', 'Could not start an atomic save.' );
 			}
 			$transaction = true;
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Lock and read the current row in the transaction; a cached post cannot provide a write lock.
 			$row         = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $wpdb->posts WHERE ID = %d FOR UPDATE", $target ) );
 			if ( ! $row || CPT::POST_TYPE !== $row->post_type || ! in_array( $row->post_status, CPT::readable_statuses(), true ) ) {
 				return new \WP_Error( 'missing', 'This note is no longer available.' );
@@ -249,6 +258,7 @@ class Shell {
 			if ( ! update_option( $key, $receipt, false ) ) {
 				return new \WP_Error( 'storage', 'Could not persist the save receipt.' );
 			}
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Transaction and savepoint statements must execute on the current database connection.
 			$committed = $nested ? $wpdb->query( 'RELEASE SAVEPOINT memex_note_edit' ) : $wpdb->query( 'COMMIT' );
 			if ( false === $committed ) {
 				return new \WP_Error( 'storage', 'Could not commit the note and its receipt.' );
@@ -258,9 +268,12 @@ class Shell {
 		} finally {
 			if ( $transaction ) {
 				if ( $nested ) {
+					// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Transaction and savepoint statements must execute on the current database connection.
 					$wpdb->query( 'ROLLBACK TO SAVEPOINT memex_note_edit' );
+					// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Transaction and savepoint statements must execute on the current database connection.
 					$wpdb->query( 'RELEASE SAVEPOINT memex_note_edit' );
 				} else {
+					// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Transaction and savepoint statements must execute on the current database connection.
 					$wpdb->query( 'ROLLBACK' );
 				}
 				wp_cache_delete( $key, 'options' );
@@ -268,6 +281,7 @@ class Shell {
 					clean_post_cache( $target );
 				}
 			}
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Connection-scoped advisory locks require live, uncached database calls.
 			$wpdb->get_var( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock ) );
 		}
 	}
