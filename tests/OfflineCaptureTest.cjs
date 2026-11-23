@@ -23,12 +23,16 @@ async function fixture(t, visited = false) {
         const config = {ajaxUrl: origin + '/ajax', scope: origin + '/memex/', workerUrl: origin + '/memex/offline-worker', captureUrl: origin + '/memex/capture', userId: 7, timezone: 'Pacific/Kiritimati'};
         const worker = (visited ? visitedWorker : generatedWorker).replaceAll('http://placeholder', origin);
         const workerConfig = JSON.parse(worker.split('\n')[0].slice('self.wpAppWorker = '.length, -1));
-        const runtimeUrls = workerConfig.precache.filter(url => /wp-app-(outbox|offline-pages)\.js/.test(url));
+        const runtimeUrls = workerConfig.precache.filter(url => /wp-app-(storage|outbox|offline-pages)\.js/.test(url));
         config.requiredUrls = workerConfig.precache;
         req.url = new URL(req.url, origin).pathname;
         if (req.url === '/memex/offline-worker') {
             res.setHeader('Content-Type', 'application/javascript');
             return res.end(worker);
+        }
+        if (req.url === '/assets/wp-app-storage.js') {
+            res.setHeader('Content-Type', 'application/javascript');
+            return res.end(fs.readFileSync(path.join(__dirname, '../vendor/akirk/wp-app/assets/wp-app-storage.js')));
         }
         if (req.url === '/assets/wp-app-offline-pages.js') {
             res.setHeader('Content-Type', 'application/javascript');

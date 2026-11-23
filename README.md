@@ -81,8 +81,9 @@ No custom database tables are created. Removing the plugin leaves a plain WordPr
 ### Development notes
 
 - Memex boots on `init:5` so post types and routes register before WordPress's `init:10` and the text domain is available (WP 6.7+).
-- Routes, the masterbar menu and access control are provided by [`akirk/wp-app`](https://github.com/akirk/wp-app). Offline capture and visited-page caching use wp-app 2.3 or newer. The Offline & sync panel lists pages whose HTML, scripts, and styles are confirmed cached. Regular editor saves still need a connection. See its [README](https://github.com/akirk/wp-app/blob/main/README.md) for routing and template details.
-- Server tests: `composer test`. Browser integration tests: install Playwright and its Chromium browser, then run `node --test tests/OfflineCaptureTest.cjs`.
+- Routes, the masterbar menu and access control are provided by [`akirk/wp-app`](https://github.com/akirk/wp-app). The JavaScript note shell uses wp-app 2.3 or newer for bootstrap, local storage, and acknowledged sync. Opening a note saves its content and editor data locally; the Offline & sync panel lists available notes. Offline edits and drafts persist on this device, and conflicting server edits require review before saving. See its [README](https://github.com/akirk/wp-app/blob/main/README.md) for routing and template details.
+- Server tests: `composer test`. Browser integration tests: install Playwright and its Chromium browser, then run `node --test tests/OfflineCaptureTest.cjs tests/AppShellTest.cjs`. Run the shell API authorization tests with `vendor/bin/phpunit --group ajax`.
+- The main note routes render `templates/shell.php` through wp-app. `assets/memex-shell.js` owns local note views, navigation, drafts, and conflict review; `src/Shell.php` owns the note API and optimistic server writes. Import, export, and reminders retain their existing server workflows. Images and embeds are not automatically downloaded. Atomic edit replay requires InnoDB WordPress posts, postmeta, and options tables.
 - Templates live in `templates/`; assets (CSS/JS, including the in-app `[[` autocomplete) live in `assets/`.
 
 Development happens [on GitHub](https://github.com/akirk/memex). Pull requests welcome.

@@ -1511,3 +1511,13 @@ body.memex {
 .memex-capture-shell label { display: block; margin: 1rem 0; }
 .memex-capture-shell label[hidden] { display: none; }
 .memex-capture-shell textarea, .memex-capture-shell input, .memex-capture-shell select { display: block; width: 100%; box-sizing: border-box; padding: .6rem; font: inherit; }
+
+/* Client-rendered shell uses the same note layout at every connection state. */
+[data-memex-shell] [data-shell-status]:empty { display: none; }
+[data-shell-conflict] pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 24rem; overflow: auto; }
+[data-shell-view] .memex-edit-form { max-width: 100%; }
+[data-shell-old-draft-list] pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 800px) {
+    [data-memex-shell].memex-layout { align-content: start; }
+    [data-memex-shell] .memex-nav { display: flex; }
+}

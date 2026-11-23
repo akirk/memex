@@ -45,7 +45,7 @@ if ( ! function_exists( 'memex_render_folder_tree' ) ) {
 $memex_folder_tree = CPT::folder_tree();
 $memex_current_id  = isset( $memex_current_note ) && CPT::is_note( $memex_current_note ) ? (int) $memex_current_note->ID : 0;
 $memex_open_ids    = $memex_current_id ? CPT::ancestor_ids( $memex_current_id ) : array();
-header( 'X-Wp-App-Offline: ' . get_current_user_id() );
+if ( ! headers_sent() ) { header( 'X-Wp-App-Offline: ' . get_current_user_id() ); }
 ?>
 <!DOCTYPE html>
 <html <?php wp_app_language_attributes(); ?>>

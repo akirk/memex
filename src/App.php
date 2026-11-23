@@ -50,24 +50,13 @@ class App extends BaseApp {
 	}
 
 	protected function setup_routes(): void {
-		$this->app->route( '' );
-		$this->app->route( 'note/{slug}' );
-		$this->app->route( 'edit/{slug}' );
-		$this->app->route( 'new' );
-		$this->app->route( 'search' );
-		$this->app->route( 'daily' );
-		$this->app->route( 'daily/{date}' );
-		$this->app->route( 'graph' );
-		$this->app->route( 'backlinks/{slug}' );
-		$this->app->route( 'tags' );
-		$this->app->route( 'tag/{slug}' );
-		$this->app->route( 'orphans' );
-		$this->app->route( 'broken' );
-		$this->app->route( 'import' );
-		$this->app->route( 'export' );
-		$this->app->route( 'quick-capture' );
-		$this->app->route( 'capture' );
-		$this->app->route( 'reminders' );
+		$shell = defined( 'WpApp\\Pwa::APP_SHELL_SUPPORTED' );
+		foreach ( array( '', 'note/{slug}', 'edit/{slug}', 'new', 'search', 'daily', 'daily/{date}', 'graph', 'backlinks/{slug}', 'tags', 'tag/{slug}', 'orphans', 'broken', 'quick-capture', 'capture' ) as $path ) {
+			if ( $shell ) { $this->app->route( $path, 'shell.php' ); }
+			else { $this->app->route( $path ); }
+		}
+		// Existing server-driven import, export, and reminder workflows remain available.
+		foreach ( array( 'import', 'export', 'reminders' ) as $path ) { $this->app->route( $path ); }
 	}
 
 	protected function setup_menu(): void {
@@ -108,6 +97,7 @@ class App extends BaseApp {
 		do_action( 'base_app_initialized', $this );
 
 		OfflineCapture::register();
+		Shell::register();
 		DailyNote::register();
 		Links::register();
 		Reminder::register();
@@ -172,17 +162,27 @@ class App extends BaseApp {
 		);
 	}
 
-	public function enqueue_assets() {
+	public function enqueue_assets( $template_path = '' ) {
+		if ( ! did_action( 'wp_enqueue_scripts' ) ) { do_action( 'wp_enqueue_scripts' ); }
 		$base     = plugin_dir_url( dirname( __DIR__ ) . '/memex.php' );
 		$css_ver  = OfflineCapture::asset_version();
 		$js_ver   = $css_ver;
 		$vend_ver = $css_ver;
+		if ( in_array( basename( $template_path ), array( 'shell.php', 'wp-app-shell.php' ), true ) ) {
+			$scope = $this->get_url_path();
+			wp_app_enqueue_style( 'memex', $base . 'assets/memex.css?ver=' . $css_ver, array(), false, $scope );
+			wp_app_enqueue_script( 'memex-overtype', $base . 'assets/vendor/overtype/overtype.min.js?ver=' . $css_ver, array(), false, true, $scope );
+			wp_app_enqueue_script( 'memex-shell', $base . 'assets/memex-shell.js?ver=' . $css_ver, array( 'memex-overtype' ), false, true, $scope );
+			if ( function_exists( 'wp_app_enqueue_block_styles' ) ) { wp_app_enqueue_block_styles(); }
+			return;
+		}
+
 		// The admin-ajax URL has to come from the server: guessing it from
 		// window.location.origin drops any subdirectory the site lives in, and
 		// an environment that redirects such a request to the real one (as the
 		// WordPress Playground service worker does for its /scope:.../ prefix)
 		// turns our POSTs into bodyless GETs.
-		$inline = 'window.memexOffline = ' . wp_json_encode( OfflineCapture::client_config() ) . ';';
+		$inline = defined( 'WpApp\\Pwa::APP_SHELL_SUPPORTED' ) ? '' : 'window.memexOffline = ' . wp_json_encode( OfflineCapture::client_config() ) . ';';
 		$inline .= 'window.memexAjaxUrl = ' . wp_json_encode( admin_url( 'admin-ajax.php' ) ) . ';';
 		if ( function_exists( 'wp_app_enqueue_style' ) ) {
 			// wp_app_before_render fires for every app, and an omitted scope
@@ -192,7 +192,7 @@ class App extends BaseApp {
 			wp_app_enqueue_style( 'memex', $base . 'assets/memex.css?ver=' . $css_ver, array(), false, $scope );
 			wp_app_add_inline_script( 'memex-config', $inline, false, $scope );
 			wp_app_enqueue_script( 'memex-overtype', $base . 'assets/vendor/overtype/overtype.min.js?ver=' . $vend_ver, array(), false, true, $scope );
-			wp_app_enqueue_script( 'memex-offline', $base . 'assets/memex-offline.js?ver=' . $css_ver, array(), false, true, $scope );
+			if ( ! defined( 'WpApp\\Pwa::APP_SHELL_SUPPORTED' ) ) { wp_app_enqueue_script( 'memex-offline', $base . 'assets/memex-offline.js?ver=' . $css_ver, array(), false, true, $scope ); }
 			wp_app_enqueue_script( 'memex', $base . 'assets/memex.js?ver=' . $js_ver, array( 'memex-overtype' ), false, true, $scope );
 		} else {
 			// Fallback if called outside an app request.

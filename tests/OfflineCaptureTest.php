@@ -101,26 +101,27 @@ class OfflineCaptureTest extends WP_UnitTestCase {
 		$previous_route = $wp_app_route;
 		$wp_app_route = array( 'app_path' => 'memex' );
 		\WpApp\Pwa::register( 'memex', OfflineCapture::pwa_config() );
-		memex_app()->enqueue_assets();
+		\Memex\memex_app()->enqueue_assets( dirname( __DIR__ ) . '/templates/shell.php' );
 		ob_start();
-		include dirname( __DIR__ ) . '/templates/capture.php';
+		include dirname( __DIR__ ) . '/templates/shell.php';
 		$html = ob_get_clean();
 		$wp_app_route = $previous_route;
 		$this->assertStringNotContainsString( 'Private title', $html );
 		$this->assertStringNotContainsString( 'Private body', $html );
-		$this->assertStringContainsString( 'data-memex-capture="choice"', $html );
+		$this->assertStringContainsString( 'data-memex-shell', $html );
 		$version = OfflineCapture::asset_version();
 		$this->assertStringContainsString( 'assets/memex.css?ver=' . $version, $html );
-		$this->assertStringContainsString( 'assets/memex-offline.js?ver=' . $version, $html );
-		$this->assertStringContainsString( 'window.memexOffline = ', $html );
+		$this->assertStringContainsString( 'assets/memex-shell.js?ver=' . $version, $html );
+		$this->assertStringNotContainsString( 'window.memexOffline = ', $html );
 		$this->assertStringContainsString( 'wp-app-outbox-js', $html );
-		$this->assertStringContainsString( 'wp-app-offline-pages-js', $html );
+		$this->assertStringContainsString( 'wp-app-bootstrap-js', $html );
 	}
 	public function test_framework_owns_worker_and_only_caches_capture_shell(): void {
 		$config = OfflineCapture::pwa_config();
 		$this->assertSame( 'shell', $config['cache_policy'] );
 		$this->assertTrue( $config['outbox'] );
-		$this->assertTrue( $config['visited_pages'] );
+		$this->assertFalse( $config['visited_pages'] );
+		$this->assertTrue( $config['local_data'] );
 		$this->assertSame( (string) get_current_user_id(), $config['cache_identity'] );
 		$this->assertSame( home_url( '/memex/' ), $config['start_url'] );
 		$this->assertSame( 'offline-worker', $config['service_worker_path'] );
