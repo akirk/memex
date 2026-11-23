@@ -81,15 +81,6 @@ class DailyNote {
 		);
 	}
 
-	public static function render_calendar( string $month, string $selected = '' ): void {
-		$data  = self::calendar_data( $month );
-		$month = $data['month'];
-		$today = $data['today'];
-		$days  = $data['days'];
-		$first = new \DateTimeImmutable( $month . '-01', wp_timezone() );
-		include dirname( __DIR__ ) . '/templates/_daily-calendar-grid.php';
-	}
-
 	public static function ajax_calendar(): void {
 		// Read-only and capability-gated, so long-lived pages need no expiring nonce.
 		if ( ! current_user_can( 'edit_posts' ) ) {

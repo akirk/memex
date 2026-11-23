@@ -64,6 +64,22 @@ class OfflineCaptureTest extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'C:\\notes\\today', $post->post_content );
 	}
 
+	public function test_new_note_can_be_published_and_retried_safely(): void {
+		$entry = $this->entry( array( 'kind' => 'note', 'title' => 'Published offline', 'publish' => true ) );
+		$result = OfflineCapture::save( $entry );
+		$this->assertIsArray( $result );
+		$this->assertSame( 'publish', get_post_status( $result['postId'] ) );
+		$this->assertSame( 'publish', $result['note']['status'] );
+		$this->assertSame( $result, OfflineCapture::save( $entry ) );
+	}
+
+	public function test_contributor_cannot_publish_a_new_note(): void {
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'contributor' ) ) );
+		$result = OfflineCapture::save( $this->entry( array( 'kind' => 'note', 'title' => 'Unpermitted publication', 'publish' => true ) ) );
+		$this->assertWPError( $result );
+		$this->assertSame( 'capture_permission', $result->get_error_code() );
+	}
+
 	public function test_rejects_wrong_account_and_read_only_users(): void {
 		$entry = $this->entry();
 		wp_set_current_user( self::factory()->user->create( array( 'role' => 'administrator' ) ) );
@@ -95,25 +111,78 @@ class OfflineCaptureTest extends WP_UnitTestCase {
 		}
 	}
 
-	public function test_capture_shell_has_no_private_note_tree_or_contents(): void {
+	public function test_app_shell_has_no_private_note_tree_or_contents(): void {
 		self::factory()->post->create( array( 'post_type' => CPT::POST_TYPE, 'post_title' => 'Private title', 'post_content' => 'Private body' ) );
+		global $wp_app_route;
+		$previous_route = $wp_app_route;
+		$wp_app_route = array( 'app_path' => 'memex' );
+		\WpApp\Pwa::register( 'memex', OfflineCapture::pwa_config() );
+		\Memex\memex_app()->enqueue_assets( dirname( __DIR__ ) . '/templates/index.php' );
 		ob_start();
-		include dirname( __DIR__ ) . '/templates/capture.php';
+		include dirname( __DIR__ ) . '/templates/index.php';
 		$html = ob_get_clean();
+		$wp_app_route = $previous_route;
 		$this->assertStringNotContainsString( 'Private title', $html );
 		$this->assertStringNotContainsString( 'Private body', $html );
-		$this->assertStringContainsString( 'data-memex-capture="choice"', $html );
+		$this->assertStringContainsString( 'data-memex-shell', $html );
 		$version = OfflineCapture::asset_version();
 		$this->assertStringContainsString( 'assets/memex.css?ver=' . $version, $html );
-		$this->assertStringContainsString( 'assets/memex-offline.js?ver=' . $version, $html );
-		$this->assertStringContainsString( 'window.memexOffline = ', $html );
-		$this->assertSame( $version, wp_styles()->registered['memex-capture-shell']->ver );
-		$this->assertSame( $version, wp_scripts()->registered['memex-capture-shell']->ver );
+		$this->assertStringContainsString( 'assets/memex-shell.js?ver=' . $version, $html );
+		$this->assertStringNotContainsString( 'window.memexOffline = ', $html );
+		$this->assertStringContainsString( 'wp-app-outbox-js', $html );
+		$this->assertStringContainsString( 'wp-app-offline-client-js', $html );
 	}
-	public function test_worker_endpoint_never_redirects_but_other_routes_keep_their_redirect(): void {
-		$this->assertFalse( OfflineCapture::worker_redirect( 'canonical', home_url( '/memex/offline-worker' ) ) );
-		$this->assertFalse( OfflineCapture::worker_redirect( 'canonical', home_url( '/memex/offline-worker/' ) ) );
-		$this->assertSame( 'canonical', OfflineCapture::worker_redirect( 'canonical', home_url( '/memex/note/example' ) ) );
+	public function test_framework_owns_worker_and_only_caches_capture_shell(): void {
+		$config = OfflineCapture::pwa_config();
+		$this->assertSame( 'shell', $config['cache_policy'] );
+		$this->assertTrue( $config['outbox'] );
+		$this->assertFalse( $config['visited_pages'] );
+		$this->assertTrue( $config['local_data'] );
+		$this->assertSame( (string) get_current_user_id(), $config['cache_identity'] );
+		$this->assertSame( home_url( '/memex/' ), $config['start_url'] );
+		$this->assertSame( 'offline-worker', $config['service_worker_path'] );
+		$this->assertSame( home_url( '/memex/capture/' ), $config['offline_url'] );
+		$this->assertNotContains( home_url( '/memex/' ), $config['precache'] );
+		$this->assertSame( OfflineCapture::required_urls(), $config['precache'] );
 	}
+
+    public function test_backfill_saves_a_daily_draft_and_retries_without_duplication(): void {
+        $entry = $this->entry( array( 'kind' => 'note', 'daily' => '2024-02-19', 'title' => 'Backfilled day', 'content' => 'Written later' ) );
+        $result = OfflineCapture::save( $entry );
+        $this->assertIsArray( $result );
+        $this->assertSame( 'draft', get_post_status( $result['postId'] ) );
+        $this->assertSame( '2024-02-19', get_post_meta( $result['postId'], CPT::META_DAILY, true ) );
+        $this->assertSame( $result, OfflineCapture::save( $entry ) );
+        $this->assertSame( $result['postId'], DailyNote::find( '2024-02-19' )->ID );
+    }
+
+    public function test_backfill_can_publish_but_cannot_replace_an_existing_daily(): void {
+        $entry = $this->entry( array( 'kind' => 'note', 'daily' => '2024-02-18', 'title' => 'Published day', 'publish' => true ) );
+        $result = OfflineCapture::save( $entry );
+        $this->assertSame( 'publish', get_post_status( $result['postId'] ) );
+        $entry['id'] = wp_generate_uuid4();
+        $entry['content'] = 'Do not overwrite';
+        $conflict = OfflineCapture::save( $entry );
+        $this->assertWPError( $conflict );
+        $this->assertSame( 'conflict', $conflict->get_error_code() );
+        $this->assertStringNotContainsString( 'Do not overwrite', get_post( $result['postId'] )->post_content );
+    }
+
+    public function test_backfill_rejects_invalid_or_future_dates(): void {
+        foreach ( array( '2024-02-30', '2999-01-01', array() ) as $date ) {
+            $this->assertWPError( OfflineCapture::save( $this->entry( array( 'kind' => 'note', 'title' => 'Invalid daily', 'daily' => $date ) ) ) );
+        }
+    }
+
+    public function test_registered_routes_resolve_existing_templates_after_framework_initialization(): void {
+        $app = \Memex\memex_app();
+        $property = new ReflectionProperty( $app, 'app' );
+        $property->setAccessible( true );
+        $routes = $property->getValue( $app )->get_router()->get_routes();
+        $this->assertSame( 'index.php', $routes['']['template'] );
+        foreach ( $routes as $route ) {
+            $this->assertFileExists( dirname( __DIR__ ) . '/templates/' . $route['template'] );
+        }
+    }
 
 }

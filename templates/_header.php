@@ -45,6 +45,7 @@ if ( ! function_exists( 'memex_render_folder_tree' ) ) {
 $memex_folder_tree = CPT::folder_tree();
 $memex_current_id  = isset( $memex_current_note ) && CPT::is_note( $memex_current_note ) ? (int) $memex_current_note->ID : 0;
 $memex_open_ids    = $memex_current_id ? CPT::ancestor_ids( $memex_current_id ) : array();
+if ( ! headers_sent() ) { header( 'X-Wp-App-Offline: ' . get_current_user_id() ); }
 ?>
 <!DOCTYPE html>
 <html <?php wp_app_language_attributes(); ?>>
@@ -70,19 +71,7 @@ $memex_open_ids    = $memex_current_id ? CPT::ancestor_ids( $memex_current_id ) 
 				<?php if ( empty( $memex_inline_capture ) ) : ?>
 					<?php include __DIR__ . '/_quick-capture-form.php'; ?>
 				<?php endif; ?>
-				<nav class="memex-nav" aria-label="<?php esc_attr_e( 'Memex sections', 'memex' ); ?>">
-					<a href="<?php echo esc_url( home_url( '/memex/capture' ) ); ?>"><?php esc_html_e( 'Offline capture', 'memex' ); ?></a>
-					<a href="<?php echo esc_url( home_url( '/memex/' ) ); ?>"><?php esc_html_e( 'All notes', 'memex' ); ?></a>
-					<a href="<?php echo esc_url( home_url( '/memex/daily' ) ); ?>"><?php esc_html_e( 'Today', 'memex' ); ?></a>
-					<a href="<?php echo esc_url( home_url( '/memex/reminders' ) ); ?>"><?php esc_html_e( 'Reminders', 'memex' ); ?></a>
-					<a href="<?php echo esc_url( home_url( '/memex/search' ) ); ?>"><?php esc_html_e( 'Search', 'memex' ); ?></a>
-					<a href="<?php echo esc_url( home_url( '/memex/graph' ) ); ?>"><?php esc_html_e( 'Graph', 'memex' ); ?></a>
-					<a href="<?php echo esc_url( home_url( '/memex/tags' ) ); ?>"><?php esc_html_e( 'Tags', 'memex' ); ?></a>
-					<a href="<?php echo esc_url( home_url( '/memex/orphans' ) ); ?>"><?php esc_html_e( 'Orphans', 'memex' ); ?></a>
-					<a href="<?php echo esc_url( home_url( '/memex/broken' ) ); ?>"><?php esc_html_e( 'Broken links', 'memex' ); ?></a>
-					<a href="<?php echo esc_url( home_url( '/memex/import' ) ); ?>"><?php esc_html_e( 'Import', 'memex' ); ?></a>
-					<a href="<?php echo esc_url( home_url( '/memex/export' ) ); ?>"><?php esc_html_e( 'Export', 'memex' ); ?></a>
-				</nav>
+				<?php include __DIR__ . '/_navigation.php'; ?>
 				<?php if ( $memex_folder_tree ) : ?>
 					<nav class="memex-folders" aria-labelledby="memex-folders-heading">
 						<h2 id="memex-folders-heading"><?php esc_html_e( 'Folders', 'memex' ); ?></h2>
