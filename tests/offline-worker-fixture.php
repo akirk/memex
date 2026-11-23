@@ -1,6 +1,6 @@
 <?php
 require dirname( __DIR__ ) . '/vendor/autoload.php';
-function plugins_url( $path, $file = '' ) { return 'http://placeholder/assets/' . basename( $path ); }
+function plugins_url( $path, $file = '' ) { return 'http://placeholder/assets/' . str_replace( '../assets/', '', $path ); }
 function home_url( $path ) { return 'http://placeholder' . $path; }
 function sanitize_key( $key ) { return $key; }
 function wp_parse_url( $url, $component = -1 ) { return parse_url( $url, $component ); }

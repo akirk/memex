@@ -23,24 +23,16 @@ async function fixture(t, visited = false) {
         const config = {ajaxUrl: origin + '/ajax', scope: origin + '/memex/', workerUrl: origin + '/memex/offline-worker', captureUrl: origin + '/memex/capture', userId: 7, timezone: 'Pacific/Kiritimati'};
         const worker = (visited ? visitedWorker : generatedWorker).replaceAll('http://placeholder', origin);
         const workerConfig = JSON.parse(worker.split('\n')[0].slice('self.wpAppWorker = '.length, -1));
-        const runtimeUrls = workerConfig.precache.filter(url => /wp-app-(storage|outbox|offline-pages)\.js/.test(url));
+        const runtimeUrls = workerConfig.precache.filter(url => new URL(url).pathname.startsWith('/assets/offline/'));
         config.requiredUrls = workerConfig.precache;
         req.url = new URL(req.url, origin).pathname;
         if (req.url === '/memex/offline-worker') {
             res.setHeader('Content-Type', 'application/javascript');
             return res.end(worker);
         }
-        if (req.url === '/assets/wp-app-storage.js') {
+        if (req.url.startsWith('/assets/offline/')) {
             res.setHeader('Content-Type', 'application/javascript');
-            return res.end(fs.readFileSync(path.join(__dirname, '../vendor/akirk/wp-app/assets/wp-app-storage.js')));
-        }
-        if (req.url === '/assets/wp-app-offline-pages.js') {
-            res.setHeader('Content-Type', 'application/javascript');
-            return res.end(fs.readFileSync(path.join(__dirname, '../vendor/akirk/wp-app/assets/wp-app-offline-pages.js')));
-        }
-        if (req.url === '/assets/wp-app-outbox.js') {
-            res.setHeader('Content-Type', 'application/javascript');
-            return res.end(fs.readFileSync(path.join(__dirname, '../vendor/akirk/wp-app/assets/wp-app-outbox.js')));
+            return res.end(fs.readFileSync(path.join(__dirname, '../vendor/akirk/wp-app/assets', req.url.slice('/assets/'.length))));
         }
         if (req.url === '/assets/memex-offline.js') {
             res.setHeader('Content-Type', 'application/javascript');
@@ -231,7 +223,7 @@ test('page inventory checks cache contents and excludes pages whose required ass
     const pages = await f.page.evaluate(async () => {
         for (const key of await caches.keys()) {
             const cache = await caches.open(key);
-            for (const request of await cache.keys()) if (new URL(request.url).pathname.endsWith('/wp-app-outbox.js')) await cache.delete(request);
+            for (const request of await cache.keys()) if (new URL(request.url).pathname.endsWith('/offline/outbox.js')) await cache.delete(request);
         }
         return wpAppOfflinePages.list(await navigator.serviceWorker.getRegistration(window.memexOffline.scope), 7);
     });

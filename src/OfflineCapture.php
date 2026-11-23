@@ -47,7 +47,7 @@ class OfflineCapture {
 	/** Shared asset/cache version keeps enqueued URLs identical to worker precache URLs. */
 	public static function asset_version(): string {
 		$root = dirname( __DIR__ );
-		$files = array( 'assets/memex-offline.js', 'assets/memex-shell.js', 'templates/_shell-content.php', 'assets/memex.js', 'assets/vendor/overtype/overtype.min.js', 'assets/memex.css', 'templates/capture.php' );
+		$files = array( 'assets/memex-shell.js', 'templates/_shell-content.php', 'assets/vendor/overtype/overtype.min.js', 'assets/memex.css' );
 		$hashes = array_map( static function ( $file ) use ( $root ) { return hash_file( 'sha256', $root . '/' . $file ); }, $files );
 		return md5( implode( '', $hashes ) );
 	}
@@ -58,8 +58,6 @@ class OfflineCapture {
 		return array(
 			home_url( '/memex/capture/' ),
 			add_query_arg( 'ver', $version, $base . 'assets/memex.css' ),
-			add_query_arg( 'ver', $version, $base . 'assets/memex-offline.js' ),
-			add_query_arg( 'ver', $version, $base . 'assets/memex.js' ),
 			add_query_arg( 'ver', $version, $base . 'assets/memex-shell.js' ),
 			add_query_arg( 'ver', $version, $base . 'assets/vendor/overtype/overtype.min.js' ),
 			$base . 'assets/icon.svg',

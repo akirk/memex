@@ -33,6 +33,7 @@
     }
     function decodeSlug(value) { try { return decodeURIComponent(value || ''); } catch (_) { return value; } }
     function findNote(value) { return allNotes().find(note => String(note.id) === String(value) || String(note.postId) === String(value) || (note.slug === value || decodeSlug(note.slug) === value) || note.title.toLowerCase() === String(value).toLowerCase()); }
+    function routeId(note) { return String(note.postId || note.id); }
     function related(entry, note) { return entry.noteId === note.id || entry.localId === note.id || (note.postId && String(entry.noteId) === String(note.postId)); }
     function localNote(value) { var note = findNote(value); return note && notes.find(local => local.id === note.id || (note.postId && local.postId === note.postId)); }
     async function request(action, params) {
@@ -66,7 +67,7 @@
         var syncError = state.error && /Failed to fetch|NetworkError|Load failed/.test(state.error) ? 'Waiting for a connection. Your changes remain on this device.' : state.error;
         root.querySelector('[data-shell-sync-status]').textContent = syncError || (state.running ? 'Syncing…' : entries.length ? entries.length + ' changes saved on this device.' : 'All changes synced.') + (!offline && navigator.onLine ? '' : ' Offline.');
         var available = root.querySelector('[data-shell-available]'); available.replaceChildren();
-        notes.slice().sort((a, b) => a.title.localeCompare(b.title)).forEach(note => { var li = node('li'); li.append(link(note.title, 'note/' + encodeURIComponent(note.id))); available.append(li); });
+        notes.slice().sort((a, b) => a.title.localeCompare(b.title)).forEach(note => { var li = node('li'); li.append(link(note.title, 'note/' + encodeURIComponent(routeId(note)))); available.append(li); });
         root.querySelector('[data-shell-available-count]').textContent = '(' + notes.length + ')';
         var conflicts = root.querySelector('[data-shell-conflicts]'); conflicts.replaceChildren();
         entries.filter(entry => entry.state === 'conflict').forEach(entry => {
@@ -79,7 +80,7 @@
             sorted.filter(note => Number(note.parent || 0) === parent).forEach(note => {
                 if (visited.has(note.id)) return;
                 var seen = new Set(visited); seen.add(note.id);
-                var li = node('li'); li.append(link(note.title + (note.pending ? ' •' : ''), 'note/' + encodeURIComponent(note.id)));
+                var li = node('li'); li.append(link(note.title + (note.pending ? ' •' : ''), 'note/' + encodeURIComponent(routeId(note))));
                 var children = branch(Number(note.postId || note.id), seen); if (children.childElementCount) li.append(children); ul.append(li);
             });
             return ul;
@@ -133,7 +134,7 @@
     function title(text) { view.append(node('h1', text)); document.title = text + ' — Memex'; }
     function list(items) {
         var ul = node('ul', null, {class: 'memex-note-list'});
-        items.forEach(note => { var li = node('li', null, {class: 'memex-note-list-item'}); li.append(link(note.title, 'note/' + encodeURIComponent(note.id))); if (note.pending) li.append(node('small', ' Saved locally')); if (note.excerpt) li.append(node('p', note.excerpt)); ul.append(li); });
+        items.forEach(note => { var li = node('li', null, {class: 'memex-note-list-item'}); li.append(link(note.title, 'note/' + encodeURIComponent(routeId(note)))); if (note.pending) li.append(node('small', ' Saved locally')); if (note.excerpt) li.append(node('p', note.excerpt)); ul.append(li); });
         view.append(ul); if (!items.length) view.append(node('p', 'No matching notes.'));
     }
     async function showNote(value) {
@@ -144,8 +145,9 @@
     }
     function unavailable(note, message) { view.replaceChildren(); title(note ? note.title : 'Note unavailable'); view.append(node('p', message || 'This note has not been downloaded. Open it online once to make its content and editor available offline.')); }
     function drawNote(note) {
+        if(note.postId&&location.pathname.endsWith('/note/'+encodeURIComponent(note.id))&&note.id!==String(note.postId)){var address=new URL(url('note/'+note.postId));address.search=location.search;address.hash=location.hash;history.replaceState(null,'',address.href);lastPath=address.href;}
         title(note.title);
-        var actions = node('p'); if (note.editable) actions.append(link('Edit note', 'edit/' + encodeURIComponent(note.id))); actions.append(document.createTextNode(' · '), link('Backlinks', 'backlinks/' + encodeURIComponent(note.id))); if(note.postId)actions.append(document.createTextNode(' · '),link('New nested note','new?parent='+note.postId)); view.append(actions);
+        var actions = node('p'); if (note.editable) actions.append(link('Edit note', 'edit/' + encodeURIComponent(routeId(note)))); actions.append(document.createTextNode(' · '), link('Backlinks', 'backlinks/' + encodeURIComponent(routeId(note)))); if(note.postId)actions.append(document.createTextNode(' · '),link('New nested note','new?parent='+note.postId)); view.append(actions);
         if (note.pending) view.append(node('p', 'Local changes — waiting for server confirmation.', {role: 'status'}));
         var article = node('article', null, {class: 'memex-note-body', id:'selected-note-content', 'data-ai-assistant-important':''}); article.append(safeHTML(note.pending ? preview(note.content) : note.html)); view.append(article);
         var tasks = Array.from(note.content.matchAll(/^(\s*(?:[-*+] |\d+[.)] )\[)([ xX])(\])/gm));
@@ -178,10 +180,10 @@
         var operation = Object.assign({}, values, {id: id, userId: config.userId, createdAt: new Date().toISOString(), kind: note ? 'edit' : 'note', title: values.title, content: values.content, parent: Number(values.parent || 0), publish: !!publish});
         if (note) { operation.noteId = note.postId ? String(note.postId) : key; operation.localId = key; operation.baseVersion = values.baseVersion || note.version || ''; if (previous) operation.baseOperation = previous.id; else if(values.baseOperation || (note.pending && note.lastOperation)) operation.baseOperation = values.baseOperation || note.lastOperation; }
         else operation.localId = key;
+        var updated = Object.assign({}, (note && localNote(note.id)) || note || {id: key, postId: 0, slug: '', tags: [], links: [], editable: true, status: 'draft'}, values, {id: key, pending: true, links: outgoingLinks(values.content), lastOperation: id, version: operation.baseVersion || '', excerpt: values.content.slice(0, 160)});
         await draftWrites;
-        await outbox.enqueue(operation, draftId);
-        var updated = Object.assign({}, note || {id: key, postId: 0, slug: '', tags: [], links: [], editable: true, status: 'draft'}, values, {id: key, pending: true, links: outgoingLinks(values.content), lastOperation: id, version: operation.baseVersion || '', excerpt: values.content.slice(0, 160)});
-        await data.put('notes', updated); await loadLocal();
+        await outbox.enqueue(operation, draftId, undefined, tx=>data.write(tx,'notes',updated));
+        await loadLocal();
         outbox.sync();
         return key;
     }
@@ -215,7 +217,7 @@
         var notice = node('p', draft ? 'Restored your draft from this device.' : '', {role: 'status'}); form.append(notice);
         var save = node('button', note ? 'Save note' : 'Save draft', {type: 'submit', class: 'memex-button memex-button-primary'}); form.append(save);
         if (note && note.status === 'draft') form.append(node('button', 'Publish', {type: 'submit', name: 'publish', value: '1', class: 'memex-button'}));
-        form.append(document.createTextNode(' '), link('Cancel', note ? 'note/' + encodeURIComponent(note.id) : ''));
+        form.append(document.createTextNode(' '), link('Cancel', note ? 'note/' + encodeURIComponent(routeId(note)) : ''));
         view.append(form);
         var editor, changed = false, saving = false;
         var baseline = draft && draft.baseVersion || note && note.version || '';
@@ -275,28 +277,21 @@
             var remote = conflict.conflict.note, box = node('section', null, {class: 'memex-notice', 'data-shell-conflict': ''});
             box.append(node('h2', 'This note changed on the server'), node('p', 'Your local edits are retained. Compare the server copy before choosing what to save.'), node('h3', remote.title), node('pre', remote.content));
             var keepServer = node('button', 'Use server version', {type: 'button'}), keepLocal = node('button', 'Save my reviewed version', {type: 'button'}); box.append(keepServer, keepLocal); view.prepend(box);
-            async function discardRelated(pendingIds) {
-                pendingIds = pendingIds || entries.filter(entry => related(entry, note)).map(entry => entry.id);
-                await outbox.transaction(['entries'], 'readwrite', tx => pendingIds.forEach(id => tx.objectStore('entries').delete(id)));
-                await loadLocal();
-            }
             keepServer.addEventListener('click', async function () {
                 keepServer.disabled=true;keepLocal.disabled=true;Array.from(form.elements).forEach(control=>control.disabled=true);
-                try { await draftWrites; await discardRelated(); await data.put('notes', Object.assign({}, remote, {id: note.id})); await outbox.transaction(['drafts'], 'readwrite', tx => tx.objectStore('drafts').delete(draftId)); await loadLocal(); await navigate('note/' + encodeURIComponent(note.id)); }
+                try { await draftWrites; var oldIds=entries.filter(entry=>related(entry,note)).map(entry=>entry.id); await outbox.transaction(['entries','drafts','records'],'readwrite',function(tx){oldIds.forEach(id=>tx.objectStore('entries').delete(id));tx.objectStore('drafts').delete(draftId);data.write(tx,'notes',Object.assign({},remote,{id:note.id}));});outbox.changed();await loadLocal(); await navigate('note/' + encodeURIComponent(routeId(note))); }
                 catch (error) { notice.textContent = error.message;keepServer.disabled=false;keepLocal.disabled=false;Array.from(form.elements).forEach(control=>control.disabled=false); }
             });
             keepLocal.addEventListener('click', async function () {
                 keepLocal.disabled = true;keepServer.disabled=true;Array.from(form.elements).forEach(control=>control.disabled=true);
                 try {
                     var reviewed = snapshot(); reviewed.baseVersion = remote.version; delete reviewed.baseOperation;
-                    // Persist the reviewed replacement before removing any older pending work.
+                    // Replace queued edits and their local view in one durable commit.
                     var replacedIds = entries.filter(entry => related(entry, note)).map(entry => entry.id);
                     var opId = uuid();
                     await draftWrites;
-                    await outbox.enqueue(Object.assign({}, reviewed, {id: opId, kind: 'edit', noteId: String(remote.postId), localId: note.id, userId: config.userId, createdAt: new Date().toISOString()}),draftId);
-                    await discardRelated(replacedIds);
-                    await data.put('notes', Object.assign({}, note, reviewed, {id:note.id,pending: true, lastOperation: opId, version: remote.version}));
-                    await loadLocal(); outbox.sync(); await navigate('note/' + encodeURIComponent(note.id));
+                    await outbox.enqueue(Object.assign({}, reviewed, {id: opId, kind: 'edit', noteId: String(remote.postId), localId: note.id, userId: config.userId, createdAt: new Date().toISOString()}),draftId,undefined,function(tx){replacedIds.forEach(id=>tx.objectStore('entries').delete(id));data.write(tx,'notes',Object.assign({},note,reviewed,{id:note.id,pending:true,lastOperation:opId,version:remote.version}));});
+                    await loadLocal(); outbox.sync(); await navigate('note/' + encodeURIComponent(routeId(note)));
                 } catch (error) { notice.textContent = error.message; keepLocal.disabled = false;keepServer.disabled=false;Array.from(form.elements).forEach(control=>control.disabled=false); }
             });
         }
@@ -344,7 +339,7 @@
         }
         if (kind === 'search') {
             title('Search'); var input = node('input', null, {type: 'search', 'aria-label': 'Search your notes', placeholder: 'Search notes…'}), results = node('section'); view.append(input, results);
-            function filter() { var query = input.value.toLowerCase(); results.replaceChildren(); allNotes().filter(note => (note.title + ' ' + (note.content || note.excerpt || '')).toLowerCase().includes(query)).forEach(note => { var p = node('p'); p.append(link(note.title, 'note/' + encodeURIComponent(note.id))); results.append(p); }); }
+            function filter() { var query = input.value.toLowerCase(); results.replaceChildren(); allNotes().filter(note => (note.title + ' ' + (note.content || note.excerpt || '')).toLowerCase().includes(query)).forEach(note => { var p = node('p'); p.append(link(note.title, 'note/' + encodeURIComponent(routeId(note)))); results.append(p); }); }
             input.addEventListener('input', filter); filter(); input.focus(); return;
         }
         if (kind === 'tags') {
@@ -357,7 +352,7 @@
             var graph = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); graph.setAttribute('viewBox', '0 0 800 600'); graph.setAttribute('role', 'img'); graph.setAttribute('aria-label', 'Links between notes');
             var linked = Array.from(new Map(edges.flat().map(note => [note.id, note])).values()), positions = new Map(linked.map((note, i) => [note.id, {x: 400 + 240 * Math.cos(i * Math.PI * 2 / linked.length), y: 300 + 220 * Math.sin(i * Math.PI * 2 / linked.length)}]));
             edges.forEach(edge => { var line = document.createElementNS(graph.namespaceURI, 'line'), a = positions.get(edge[0].id), b = positions.get(edge[1].id); Object.entries({x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:'currentColor',opacity:'.25'}).forEach(([key,value]) => line.setAttribute(key,value)); graph.append(line); });
-            linked.forEach(note => { var anchor = document.createElementNS(graph.namespaceURI, 'a'); anchor.setAttribute('href', url('note/' + note.id)); var point = positions.get(note.id), text = document.createElementNS(graph.namespaceURI, 'text'); text.setAttribute('x', point.x); text.setAttribute('y', point.y); text.setAttribute('text-anchor', 'middle'); text.textContent = note.title; anchor.append(text); graph.append(anchor); }); view.append(graph); if (!edges.length) view.append(node('p', 'No links between notes yet.')); return;
+            linked.forEach(note => { var anchor = document.createElementNS(graph.namespaceURI, 'a'); anchor.setAttribute('href', url('note/' + routeId(note))); var point = positions.get(note.id), text = document.createElementNS(graph.namespaceURI, 'text'); text.setAttribute('x', point.x); text.setAttribute('y', point.y); text.setAttribute('text-anchor', 'middle'); text.textContent = note.title; anchor.append(text); graph.append(anchor); }); view.append(graph); if (!edges.length) view.append(node('p', 'No links between notes yet.')); return;
         }
         var items = allNotes();
         if (kind === 'orphans') { var targets = new Set(items.flatMap(note => (note.links || []).map(String))); title('Unlinked notes'); items = items.filter(note => !(note.links || []).length && !targets.has(String(note.postId || note.id))); }
@@ -377,6 +372,7 @@
         if (pending.length && existing) Object.assign(saved, {content: existing.content, title: existing.title, parent: existing.parent, lastOperation: existing.lastOperation});
         await data.put('notes', saved);
         await data.put('index', remote);
+        if(existing && !activeEditor && location.pathname.endsWith('/note/' + encodeURIComponent(existing.id)) && existing.id !== String(remote.postId)){var address=new URL(url('note/'+remote.postId));address.search=location.search;address.hash=location.hash;history.replaceState(null,'',address.href);lastPath=address.href;}
     }
     async function boot() {
         try {

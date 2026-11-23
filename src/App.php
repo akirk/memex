@@ -166,7 +166,8 @@ class App extends BaseApp {
 		if ( ! did_action( 'wp_enqueue_scripts' ) ) { do_action( 'wp_enqueue_scripts' ); }
 		$base     = plugin_dir_url( dirname( __DIR__ ) . '/memex.php' );
 		$css_ver  = OfflineCapture::asset_version();
-		$js_ver   = $css_ver;
+		$js_ver   = hash_file( 'sha256', dirname( __DIR__ ) . '/assets/memex.js' );
+		$offline_ver = hash_file( 'sha256', dirname( __DIR__ ) . '/assets/memex-offline.js' );
 		$vend_ver = $css_ver;
 		if ( in_array( basename( $template_path ), array( 'shell.php', 'wp-app-shell.php' ), true ) ) {
 			$scope = $this->get_url_path();
@@ -192,13 +193,13 @@ class App extends BaseApp {
 			wp_app_enqueue_style( 'memex', $base . 'assets/memex.css?ver=' . $css_ver, array(), false, $scope );
 			wp_app_add_inline_script( 'memex-config', $inline, false, $scope );
 			wp_app_enqueue_script( 'memex-overtype', $base . 'assets/vendor/overtype/overtype.min.js?ver=' . $vend_ver, array(), false, true, $scope );
-			if ( ! defined( 'WpApp\\Pwa::APP_SHELL_SUPPORTED' ) ) { wp_app_enqueue_script( 'memex-offline', $base . 'assets/memex-offline.js?ver=' . $css_ver, array(), false, true, $scope ); }
+			if ( ! defined( 'WpApp\\Pwa::APP_SHELL_SUPPORTED' ) ) { wp_app_enqueue_script( 'memex-offline', $base . 'assets/memex-offline.js?ver=' . $offline_ver, array(), false, true, $scope ); }
 			wp_app_enqueue_script( 'memex', $base . 'assets/memex.js?ver=' . $js_ver, array( 'memex-overtype' ), false, true, $scope );
 		} else {
 			// Fallback if called outside an app request.
 			wp_enqueue_style( 'memex', $base . 'assets/memex.css', array(), $css_ver );
 			wp_enqueue_script( 'memex-overtype', $base . 'assets/vendor/overtype/overtype.min.js', array(), $vend_ver, true );
-			wp_enqueue_script( 'memex-offline', $base . 'assets/memex-offline.js', array(), $css_ver, true );
+			wp_enqueue_script( 'memex-offline', $base . 'assets/memex-offline.js', array(), $offline_ver, true );
 			wp_add_inline_script( 'memex-offline', 'window.memexOffline = ' . wp_json_encode( OfflineCapture::client_config() ) . ';', 'before' );
 			wp_enqueue_script( 'memex', $base . 'assets/memex.js', array( 'memex-overtype' ), $js_ver, true );
 			wp_add_inline_script( 'memex', $inline, 'before' );

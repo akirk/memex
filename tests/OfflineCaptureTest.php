@@ -114,7 +114,7 @@ class OfflineCaptureTest extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'assets/memex-shell.js?ver=' . $version, $html );
 		$this->assertStringNotContainsString( 'window.memexOffline = ', $html );
 		$this->assertStringContainsString( 'wp-app-outbox-js', $html );
-		$this->assertStringContainsString( 'wp-app-bootstrap-js', $html );
+		$this->assertStringContainsString( 'wp-app-offline-client-js', $html );
 	}
 	public function test_framework_owns_worker_and_only_caches_capture_shell(): void {
 		$config = OfflineCapture::pwa_config();

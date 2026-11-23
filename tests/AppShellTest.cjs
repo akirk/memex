@@ -17,7 +17,7 @@ async function fixture(t) {
         if (address.pathname.startsWith('/assets/')) {
             res.setHeader('Content-Type',address.pathname.endsWith('.css')?'text/css':'application/javascript');
             const name = path.basename(address.pathname);
-            const file = ['memex-shell.js','memex.css'].includes(name) ? path.join(__dirname,'../assets',name) : name === 'overtype.js' ? path.join(__dirname,'../assets/vendor/overtype/overtype.min.js') : path.join(__dirname,'../vendor/akirk/wp-app/assets',name);
+            const file = ['memex-shell.js','memex.css'].includes(name) ? path.join(__dirname,'../assets',name) : name === 'overtype.js' ? path.join(__dirname,'../assets/vendor/overtype/overtype.min.js') : path.join(__dirname,'../vendor/akirk/wp-app/assets',address.pathname.slice('/assets/'.length));
             return res.end(fs.readFileSync(file));
         }
         if (address.pathname === '/bootstrap') { res.setHeader('Content-Type','application/json'); return res.end(JSON.stringify({...config,userId:account})); }
@@ -48,7 +48,7 @@ async function fixture(t) {
         const settings={url:origin+'/bootstrap',offline:config,worker:{url:config.workerUrl,scope:config.scope}};
         const generated=worker.replaceAll('http://placeholder',origin), workerConfig=JSON.parse(generated.split('\n')[0].slice('self.wpAppWorker = '.length,-1));
         Object.assign(settings.worker,{cacheMessageType:workerConfig.cacheMessageType,cacheStatusMessageType:workerConfig.cacheStatusMessageType,cacheName:workerConfig.cacheName,offlineUrl:workerConfig.offlineUrl,requiredUrls:workerConfig.precache});
-        const runtimes=workerConfig.precache.filter(url=>url.includes('/wp-app-'));
+        const runtimes=workerConfig.precache.filter(url=>url.includes('/assets/offline/'));
         res.setHeader('Content-Type','text/html');res.setHeader('X-Wp-App-Offline','7');
         res.end(`<!doctype html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/assets/memex.css">${runtimes.map(url=>'<script src="'+url+'"></script>').join('')}</head><body class="memex"><div data-wp-app-bootstrap='${JSON.stringify(settings)}'>${shellContent.replaceAll('http://placeholder',origin).replace('data-shell-offline>', 'data-shell-offline open>')}</div><script src="/assets/overtype.js"></script><script src="/assets/memex-shell.js"></script></body>`);
     });
@@ -102,7 +102,7 @@ test('offline drafts restore and a changed signed-in account cannot open another
 
 test('a new offline note can be edited again before its server ID exists',async t=>{
     const f=await fixture(t);await f.context.setOffline(true);await f.go('new');await f.page.locator('input[name=title]').fill('Local creation');await f.page.locator('.overtype-input').fill('Initial local content');await f.page.getByRole('button',{name:'Save draft',exact:true}).click();await f.page.getByRole('link',{name:'Edit note',exact:true}).click();await edit(f,'Local creation','Updated before upload');
-    await f.context.setOffline(false);await f.page.getByRole('button',{name:'Sync now'}).click();await f.page.waitForFunction(()=>document.querySelector('[data-shell-pending]').textContent==='');assert.equal(f.records.get('2').content,'Updated before upload');assert.equal(f.records.size,2);
+    await f.context.setOffline(false);await f.page.getByRole('button',{name:'Sync now'}).click();await f.page.waitForFunction(()=>document.querySelector('[data-shell-pending]').textContent==='');assert.equal(f.records.get('2').content,'Updated before upload');assert.equal(f.records.size,2);assert.equal(new URL(f.page.url()).pathname,'/memex/note/2');
 });
 
 test('separate tabs preserve independent drafts for the same note',async t=>{
