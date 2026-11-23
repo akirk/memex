@@ -7,7 +7,19 @@ if ( ! defined( 'ABSPATH' ) ) {
 <aside class="memex-sidebar">
 <div class="memex-brand"><a data-route="" href="<?php echo esc_url( home_url( '/memex/' ) ); ?>">Memex</a><button type="button" class="memex-sidebar-toggle" data-shell-menu aria-expanded="false" aria-label="Menu"><span class="memex-sidebar-toggle-icon" aria-hidden="true"></span></button></div>
 <div class="memex-sidebar-body">
-<div data-shell-quick-capture></div>
+<div data-shell-quick-capture>
+<form class="memex-quick-capture" data-memex-capture="daily" aria-label="<?php esc_attr_e( 'Quick capture', 'memex' ); ?>" aria-busy="true">
+    <textarea name="content" rows="2" aria-label="<?php esc_attr_e( 'Quick capture text', 'memex' ); ?>" placeholder="<?php esc_attr_e( 'Quick capture — appends to today', 'memex' ); ?>" disabled></textarea>
+    <div class="memex-quick-capture-actions">
+        <div class="memex-server-time">
+            <a data-capture-settings aria-disabled="true" aria-label="<?php esc_attr_e( 'Site time. Open timezone settings.', 'memex' ); ?>"><time data-memex-server-time>--:--</time></a>
+            <a role="button" data-memex-capture-task aria-disabled="true" aria-pressed="false" aria-label="<?php esc_attr_e( 'Toggle checkbox at start of entry', 'memex' ); ?>">[ ]</a>
+        </div>
+        <button type="submit" disabled><?php esc_html_e( 'Capture', 'memex' ); ?></button>
+    </div>
+    <p data-capture-message role="status"></p>
+</form>
+</div>
     <?php include __DIR__ . '/_navigation.php'; ?>
     <nav class="memex-folders" data-shell-folders aria-label="<?php esc_attr_e( 'Notes and folders', 'memex' ); ?>"></nav>
 <form class="memex-create" data-shell-create aria-label="<?php esc_attr_e( 'Create note', 'memex' ); ?>">

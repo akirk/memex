@@ -7,7 +7,7 @@ const {execFileSync} = require('node:child_process');
 const {chromium} = require('playwright');
 const worker = execFileSync('php', [path.join(__dirname, 'offline-worker-fixture.php')], {encoding: 'utf8', env: {...process.env, TEST_APP_SHELL: '1'}});
 const shellContent=execFileSync('php',[path.join(__dirname,'shell-content-fixture.php')],{encoding:'utf8'});
-async function fixture(t) {
+async function fixture(t, {beforeOpen} = {}) {
     const records = new Map([['1', {id:'1', postId:1, slug:'project', title:'Project', content:'Original note', html:'<p>Original note</p>', parent:0, status:'publish', version:'v1', modified:'2026-01-01', tags:[], links:[], editable:true}]]);
     let account = 7; const receipts = new Map(), sent = [];
     const server = http.createServer(async (req, res) => {
@@ -55,6 +55,7 @@ async function fixture(t) {
     await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
     const browser=await chromium.launch(), context=await browser.newContext(), page=await context.newPage();
     t.after(async()=>{await browser.close();await new Promise(resolve=>server.close(resolve));});
+    if(beforeOpen)await beforeOpen(page);
     await page.goto(`http://127.0.0.1:${server.address().port}/memex/`);
     await page.waitForFunction(()=>document.querySelector('[data-shell-view]').textContent.includes('Project'));
     await page.waitForFunction(()=>navigator.serviceWorker.controller);
@@ -390,4 +391,27 @@ test('a failed consolidation rolls back before deleting existing notes or metada
     await f.page.evaluate(()=>sessionStorage.removeItem('fail-consolidation'));await f.page.reload();
     await f.page.locator('[data-shell-view]').getByRole('link',{name:'Project',exact:true}).waitFor();
     const after=await storedNotes(f);assert.equal(after.records.length,1);assert.equal(after.records[0].value.body.content,'Keep cached text');
+});
+
+
+test('sidebar capture is visible before app JavaScript starts and is enhanced without moving navigation', {timeout:20000}, async t=>{
+    let initial;
+    const f=await fixture(t,{beforeOpen:async page=>{
+        await page.route('**/assets/memex-shell.js',async route=>{
+            await page.locator('[data-shell-quick-capture] textarea').waitFor();
+            initial=await page.evaluate(()=>{
+                const field=document.querySelector('[data-shell-quick-capture] textarea'),form=field.form;
+                field.dataset.initialCapture='yes';
+                return {disabled:field.disabled,busy:form.getAttribute('aria-busy'),navTop:document.querySelector('.memex-nav').getBoundingClientRect().top,height:form.getBoundingClientRect().height};
+            });
+            await route.continue();
+        });
+    }});
+    const after=await f.page.evaluate(()=>{
+        const field=document.querySelector('[data-shell-quick-capture] textarea');
+        return {same:field.dataset.initialCapture==='yes',disabled:field.disabled,navTop:document.querySelector('.memex-nav').getBoundingClientRect().top,height:field.form.getBoundingClientRect().height};
+    });
+    assert.equal(initial.disabled,true);assert.equal(initial.busy,'true');
+    assert.equal(after.same,true);assert.equal(after.disabled,false);
+    assert.equal(after.navTop,initial.navTop);assert.equal(after.height,initial.height);
 });

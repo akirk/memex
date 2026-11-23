@@ -383,14 +383,17 @@
         });
     }
     function captureForm(container, inline, full) {
-        var form=node('form',null,{'aria-label':inline?'Add daily entry':'Quick capture','data-memex-capture':'daily',class:'memex-quick-capture'+(inline?' memex-quick-capture-inline':full?' memex-quick-capture-full':'')});
-        var input=node(inline?'input':'textarea',null,inline?{type:'text',name:'content','aria-label':'Quick capture text',placeholder:'Add an entry',autocomplete:'off',required:''}:{name:'content',rows:full?'10':'2','aria-label':'Quick capture text',placeholder:full?"What's on your mind?":'Quick capture — appends to today'});
-        var actions=node('div',null,{class:'memex-quick-capture-actions'}),clock=node('div',null,{class:'memex-server-time'});
-        var settings=node('a',null,{href:config.settingsUrl||new URL('/wp-admin/options-general.php',config.scope).href,'aria-label':'Site time. Open timezone settings.'});
-        settings.append(node('time','',{'data-memex-server-time':''}));
-        var task=node('a','[ ]',{href:'#',role:'button','data-memex-capture-task':'','aria-pressed':'false','aria-label':'Toggle checkbox at start of entry'});
-        clock.append(settings,task);var save=node('button',full?'Append to today':'Capture',{type:'submit'});actions.append(clock,save);
-        var message=node('p','',{role:'status'});form.append(input,actions,message);container.append(form);
+        var form=container.querySelector('[data-memex-capture="daily"]');
+        if(!form){form=root.querySelector('[data-shell-quick-capture] form').cloneNode(true);container.append(form);}
+        form.setAttribute('aria-label',inline?'Add daily entry':'Quick capture');form.removeAttribute('aria-busy');
+        form.className='memex-quick-capture'+(inline?' memex-quick-capture-inline':full?' memex-quick-capture-full':'');
+        var input=form.querySelector('[name=content]');
+        if(inline){var field=node('input',null,{type:'text',name:'content','aria-label':input.getAttribute('aria-label'),placeholder:'Add an entry',autocomplete:'off',required:''});input.replaceWith(field);input=field;}
+        else if(full){input.rows=10;input.placeholder="What's on your mind?";}
+        var settings=form.querySelector('[data-capture-settings]');settings.href=config.settingsUrl||new URL('/wp-admin/options-general.php',config.scope).href;settings.removeAttribute('aria-disabled');
+        var task=form.querySelector('[data-memex-capture-task]');task.href='#';task.removeAttribute('aria-disabled');
+        var save=form.querySelector('button[type=submit]');if(full)save.textContent='Append to today';
+        var message=form.querySelector('[data-capture-message]');message.textContent='';
         function persist(){captureText=input.value;syncCaptureFields();saveDraftRecord({id:captureDraftId,content:captureText});}
         input.addEventListener('input',persist);
         task.addEventListener('keydown',function(event){if(event.key===' '){event.preventDefault();task.click();}});

@@ -1518,6 +1518,8 @@ body.memex {
 @media (max-width: 800px) {
     [data-memex-shell].memex-layout { align-content: start; }
     [data-memex-shell] .memex-nav { display: flex; }
+    [data-memex-shell] .memex-sidebar-toggle { display: inline-flex; }
+    [data-memex-shell] .memex-sidebar:not(.is-open) .memex-sidebar-body { display: none; }
 }
 
 /* Offline controls stay with navigation, below the capture and creation forms. */
@@ -1549,5 +1551,5 @@ body.memex {
 }
 @media (max-width: 800px) {
     .memex-sidebar-offline { margin-top: 1rem; }
-    .memex-js [data-memex-shell] .memex-sidebar:not(.is-open) .memex-sidebar-offline { display: none; }
+    [data-memex-shell] .memex-sidebar:not(.is-open) .memex-sidebar-offline { display: none; }
 }
