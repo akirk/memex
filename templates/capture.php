@@ -6,12 +6,14 @@ $memex_capture_base = plugin_dir_url( dirname( __DIR__ ) . '/memex.php' );
 nocache_headers();
 wp_enqueue_style( 'memex-capture-shell', $memex_capture_base . 'assets/memex.css', array(), $memex_capture_version );
 wp_enqueue_script( 'wp-app-outbox', $memex_capture_base . 'vendor/akirk/wp-app/assets/wp-app-outbox.js', array(), $memex_capture_version, true );
-wp_enqueue_script( 'memex-capture-shell', $memex_capture_base . 'assets/memex-offline.js', array( 'wp-app-outbox' ), $memex_capture_version, true );
+wp_enqueue_script( 'wp-app-offline-pages', $memex_capture_base . 'vendor/akirk/wp-app/assets/wp-app-offline-pages.js', array(), $memex_capture_version, true );
+wp_enqueue_script( 'memex-capture-shell', $memex_capture_base . 'assets/memex-offline.js', array( 'wp-app-outbox', 'wp-app-offline-pages' ), $memex_capture_version, true );
 wp_add_inline_script(
 	'memex-capture-shell',
 	'window.memexOffline = ' . wp_json_encode( \Memex\OfflineCapture::client_config(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT ) . ';',
 	'before'
 );
+header( 'X-Wp-App-Offline: ' . get_current_user_id() );
 ?>
 <!DOCTYPE html>
 <html <?php language_attributes(); ?>>

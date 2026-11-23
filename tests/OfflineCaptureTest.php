@@ -113,6 +113,9 @@ class OfflineCaptureTest extends WP_UnitTestCase {
 	public function test_framework_owns_worker_and_only_caches_capture_shell(): void {
 		$config = OfflineCapture::pwa_config();
 		$this->assertSame( 'shell', $config['cache_policy'] );
+		$this->assertTrue( $config['visited_pages'] );
+		$this->assertSame( (string) get_current_user_id(), $config['cache_identity'] );
+		$this->assertSame( home_url( '/memex/' ), $config['start_url'] );
 		$this->assertSame( 'offline-worker', $config['service_worker_path'] );
 		$this->assertSame( home_url( '/memex/capture/' ), $config['offline_url'] );
 		$this->assertNotContains( home_url( '/memex/' ), $config['precache'] );

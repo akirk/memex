@@ -81,7 +81,7 @@ No custom database tables are created. Removing the plugin leaves a plain WordPr
 ### Development notes
 
 - Memex boots on `init:5` so post types and routes register before WordPress's `init:10` and the text domain is available (WP 6.7+).
-- Routes, the masterbar menu and access control are provided by [`akirk/wp-app`](https://github.com/akirk/wp-app). Offline capture uses wp-app 2.3 or newer for shell caching and the durable outbox. See its [README](https://github.com/akirk/wp-app/blob/main/README.md) for routing and template details.
+- Routes, the masterbar menu and access control are provided by [`akirk/wp-app`](https://github.com/akirk/wp-app). Offline capture and visited-page caching use wp-app 2.3 or newer. The Offline & sync panel lists pages whose HTML, scripts, and styles are confirmed cached. Regular editor saves still need a connection. See its [README](https://github.com/akirk/wp-app/blob/main/README.md) for routing and template details.
 - Server tests: `composer test`. Browser integration tests: install Playwright and its Chromium browser, then run `node --test tests/OfflineCaptureTest.cjs`.
 - Templates live in `templates/`; assets (CSS/JS, including the in-app `[[` autocomplete) live in `assets/`.
 

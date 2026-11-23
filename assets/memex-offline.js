@@ -15,6 +15,7 @@
     }
     async function refresh() {
         setText('[data-offline-connection]', navigator.onLine ? 'Online' : 'Offline');
+        document.querySelectorAll('[data-offline-page-notice]').forEach(function (node) { node.hidden = navigator.onLine; });
         setText('[data-offline-ready]', ready);
         try {
             var entries = await rows('entries');
@@ -138,7 +139,42 @@
             finally { saving = false; button.disabled = false; }
         });
     }
+    var pageRegistration;
+    async function refreshPages(remember) {
+        if (!pageRegistration || !window.wpAppOfflinePages) return;
+        try {
+            var warning = '';
+            if (remember && navigator.onLine) {
+                try { await window.wpAppOfflinePages.remember(pageRegistration, config.userId); }
+                catch (error) { warning = 'Could not refresh this page for offline use: ' + error.message; }
+            }
+            var pages = await window.wpAppOfflinePages.list(pageRegistration, config.userId);
+            setText('[data-offline-pages-count]', '(' + pages.length + ')');
+            setText('[data-offline-pages-status]', warning || (pages.length ? 'Saved pages are available on this device.' : 'No pages saved yet. Open a page online to prepare it.'));
+            document.querySelectorAll('[data-offline-pages]').forEach(function (list) {
+                list.replaceChildren();
+                pages.forEach(function (page) {
+                    var item = document.createElement('li');
+                    var link = document.createElement('a');
+                    link.href = page.url;
+                    link.textContent = page.title;
+                    item.append(link);
+                    list.append(item);
+                });
+            });
+        } catch (error) {
+            setText('[data-offline-pages-count]', '');
+            setText('[data-offline-pages-status]', error.message);
+            document.querySelectorAll('[data-offline-pages]').forEach(function (list) { list.replaceChildren(); });
+        }
+    }
     async function worker() {
+        if (config.workerSupported === false) {
+            ready = 'Unavailable — wp-app update required';
+            setText('[data-offline-pages-status]', ready);
+            refresh();
+            return;
+        }
         if (!window.isSecureContext || !navigator.serviceWorker) { ready = 'Unavailable (requires HTTPS and service worker support)'; refresh(); return; }
         try {
             navigator.serviceWorker.addEventListener('message', function (event) {
@@ -148,7 +184,9 @@
             });
             var registration = await navigator.serviceWorker.getRegistration(config.scope);
             if (navigator.onLine || !registration) registration = await navigator.serviceWorker.register(config.workerUrl, {scope: config.scope});
+            pageRegistration = registration;
             function check() {
+                refreshPages(true);
                 if (registration.active) registration.active.postMessage({type: 'memex-capture-cache', urls: config.requiredUrls, requiredUrls: config.requiredUrls});
             }
             navigator.serviceWorker.addEventListener('controllerchange', check);
@@ -158,9 +196,25 @@
     }
     function init() {
         outbox.subscribe(refresh);
+        document.addEventListener('submit', function (event) {
+            if (navigator.onLine || event.target.matches('[data-memex-capture]')) return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            var notice = event.target.querySelector('[data-offline-form-notice]');
+            if (!notice) {
+                notice = document.createElement('p');
+                notice.setAttribute('data-offline-form-notice', '');
+                notice.setAttribute('role', 'status');
+                event.target.append(notice);
+            }
+            notice.textContent = 'This action needs a connection. Keep this page open to preserve your changes.';
+        }, true);
         document.querySelectorAll('[data-memex-capture]').forEach(bindForm);
         document.querySelectorAll('[data-offline-sync]').forEach(function (button) { button.addEventListener('click', sync); });
         window.addEventListener('offline', refresh);
+        window.addEventListener('online', function () { refreshPages(true); });
+        window.addEventListener('focus', function () { refreshPages(false); });
+        document.querySelectorAll('[data-offline-pages-panel]').forEach(function (panel) { panel.addEventListener('toggle', function () { if (panel.open) refreshPages(false); }); });
         worker();
         sync();
         refresh();

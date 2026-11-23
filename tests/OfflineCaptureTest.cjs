@@ -11,7 +11,9 @@ const asset = name => fs.readFileSync(path.join(__dirname, '..', 'assets', name)
 
 const generatedWorker = execFileSync('php', [path.join(__dirname, 'offline-worker-fixture.php')], {encoding: 'utf8'});
 
-async function fixture(t) {
+const visitedWorker = execFileSync('php', [path.join(__dirname, 'offline-worker-fixture.php')], {encoding: 'utf8', env: {...process.env, TEST_VISITED_PAGES: '1'}});
+
+async function fixture(t, visited = false) {
     let account = 7;
     let mode = 'ok';
     let rejectedContent = null;
@@ -22,7 +24,11 @@ async function fixture(t) {
         config.requiredUrls = [config.captureUrl, origin + '/assets/memex-offline.js', origin + '/assets/wp-app-outbox.js'];
         if (req.url === '/memex/offline-worker') {
             res.setHeader('Content-Type', 'application/javascript');
-            return res.end(generatedWorker.replaceAll('http://placeholder', origin));
+            return res.end((visited ? visitedWorker : generatedWorker).replaceAll('http://placeholder', origin));
+        }
+        if (req.url === '/assets/wp-app-offline-pages.js') {
+            res.setHeader('Content-Type', 'application/javascript');
+            return res.end(fs.readFileSync(path.join(__dirname, '../vendor/akirk/wp-app/assets/wp-app-offline-pages.js')));
         }
         if (req.url === '/assets/wp-app-outbox.js') {
             res.setHeader('Content-Type', 'application/javascript');
@@ -45,16 +51,19 @@ async function fixture(t) {
             if (mode === 'fail') { res.statusCode = 503; return res.end(JSON.stringify({success: false, data: {message: 'Temporary failure'}})); }
             return res.end(JSON.stringify({success: true, data: {id: mode === 'wrong-id' ? 'wrong-id' : entry.id, postId: 42, url: origin + '/memex/note/42'}}));
         }
-        if (req.url !== '/memex/capture') { res.statusCode = 404; return res.end('Private page not cached'); }
+        if (req.url !== '/memex/capture' && !(visited && /^\/memex\/note\/(one|two)$/.test(req.url))) { res.statusCode = 404; return res.end('Private page not cached'); }
         res.setHeader('Content-Type', 'text/html');
-        res.end(`<!doctype html><title>Capture test</title>
+        if (visited) res.setHeader('X-Wp-App-Offline', String(account));
+        const title = req.url.includes('/note/') ? 'Project ' + req.url.split('/').pop() : 'Capture test';
+        res.end(`<!doctype html><title>${title}</title><h1>${title}</h1>
             <form data-memex-capture="choice"><select name="kind"><option value="daily">Daily</option><option value="note">Note</option></select>
             <label data-capture-title hidden><input name="title"></label><textarea name="content" required></textarea>
             <button type="submit">Save capture</button><p data-capture-status></p></form>
             <details data-memex-offline-panel open><span data-offline-ready></span><span data-offline-count></span><span data-offline-connection></span>
             <span data-offline-pending></span><span data-offline-last></span><p data-offline-status></p><a data-offline-login hidden>Login</a><a data-offline-saved hidden></a>
-            <button data-offline-sync>Sync now</button><ul data-offline-entries></ul></details>
-            <script>window.memexOffline=${JSON.stringify(config)};</script><script src="/assets/wp-app-outbox.js"></script><script src="/assets/memex-offline.js"></script>`);
+            <button data-offline-sync>Sync now</button><ul data-offline-entries></ul>
+            <details data-offline-pages-panel open><summary>Available offline <span data-offline-pages-count></span></summary><p data-offline-pages-status></p><ul data-offline-pages></ul></details></details>
+            <script>window.memexOffline=${JSON.stringify(config)};</script>${visited ? '<script src="/assets/wp-app-offline-pages.js"></script>' : ''}<script src="/assets/wp-app-outbox.js"></script><script src="/assets/memex-offline.js"></script>`);
     });
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     const browser = await chromium.launch({headless: true});
@@ -192,4 +201,75 @@ test('a rejected capture stays queued while later captures sync and can be retri
     await f.pending(0);
     assert.equal(f.posts.at(-1).id, rejectedId);
     assert.equal(f.posts.filter(entry => entry.content === 'Valid later note').length, 1);
+});
+
+
+test('visited pages are listed by title and reopen in the regular UI offline', async t => {
+    const f = await fixture(t, true);
+    await f.page.waitForFunction(() => document.querySelectorAll('[data-offline-pages] a').length === 1);
+    await f.page.goto(new URL('/memex/note/one', f.page.url()).href);
+    await f.page.waitForFunction(() => document.querySelectorAll('[data-offline-pages] a').length === 2);
+    assert.match(await f.page.locator('[data-offline-pages]').innerText(), /Project one/);
+    await f.context.setOffline(true);
+    await f.page.reload();
+    assert.equal(await f.page.title(), 'Project one');
+    await f.page.waitForFunction(() => document.querySelector('[data-offline-pages-status]').textContent.length > 0);
+    await f.page.waitForFunction(() => document.querySelectorAll('[data-offline-pages] a').length === 2);
+});
+
+test('page inventory checks cache contents and excludes pages whose required assets were evicted', async t => {
+    const f = await fixture(t, true);
+    await f.page.waitForFunction(() => document.querySelectorAll('[data-offline-pages] a').length === 1);
+    const pages = await f.page.evaluate(async () => {
+        for (const key of await caches.keys()) await (await caches.open(key)).delete(location.origin + '/assets/wp-app-outbox.js');
+        return wpAppOfflinePages.list(await navigator.serviceWorker.getRegistration(window.memexOffline.scope), 7);
+    });
+    assert.equal(pages.length, 0);
+});
+
+test('other-account pages are never advertised as available', async t => {
+    const f = await fixture(t, true);
+    await f.page.waitForFunction(() => document.querySelectorAll('[data-offline-pages] a').length === 1);
+    f.account(8);
+    await f.page.goto(new URL('/memex/note/two', f.page.url()).href);
+    await f.page.waitForFunction(() => document.querySelector('[data-offline-pages-status]').textContent.includes('could not be cached'));
+    assert.equal(await f.page.locator('[data-offline-pages] a').count(), 1);
+    assert.doesNotMatch(await f.page.locator('[data-offline-pages]').innerText(), /Project two/);
+});
+
+
+test('failed page or asset downloads do not add an offline page', async t => {
+    const f = await fixture(t, true);
+    await f.page.waitForFunction(() => document.querySelectorAll('[data-offline-pages] a').length === 1);
+    const result = await f.page.evaluate(async () => {
+        const registration = await navigator.serviceWorker.getRegistration(window.memexOffline.scope);
+        const failures = [];
+        history.pushState(null, '', '/memex/missing');
+        try { await wpAppOfflinePages.remember(registration, 7); } catch (error) { failures.push(error.message); }
+        history.replaceState(null, '', '/memex/note/two');
+        const script = document.createElement('script');
+        script.src = '/assets/missing.js';
+        document.head.append(script);
+        try { await wpAppOfflinePages.remember(registration, 7); } catch (error) { failures.push(error.message); }
+        return {failures, pages: await wpAppOfflinePages.list(registration, 7)};
+    });
+    assert.equal(result.failures.length, 2);
+    assert.equal(result.pages.length, 1);
+    assert.equal(new URL(result.pages[0].url).pathname, '/memex/capture');
+});
+
+test('regular forms stay on the page offline instead of losing edits to a failed POST', async t => {
+    const f = await fixture(t, true);
+    await f.page.waitForFunction(() => document.querySelectorAll('[data-offline-pages] a').length === 1);
+    await f.context.setOffline(true);
+    await f.page.evaluate(() => {
+        const form = document.createElement('form');
+        form.method = 'post'; form.action = '/save';
+        form.innerHTML = '<textarea name="content">My unsaved edits</textarea><button type="submit">Save</button>';
+        document.body.append(form);
+        form.requestSubmit();
+    });
+    assert.match(await f.page.locator('[data-offline-form-notice]').innerText(), /needs a connection/);
+    assert.equal(await f.page.locator('form:not([data-memex-capture]) textarea').inputValue(), 'My unsaved edits');
+    assert.equal(new URL(f.page.url()).pathname, '/memex/capture');
 });
