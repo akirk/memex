@@ -1,7 +1,7 @@
 (function () {
     'use strict';
     var config = window.memexOffline;
-    if (!config || !config.userId) return;
+    if (!config || !config.userId || !window.WpAppOutbox) return;
     var ready = 'Checking…';
     var outbox = new window.WpAppOutbox(Object.assign({}, config, {
         // Preserve queues and drafts saved before the framework migration.

@@ -1,18 +1,7 @@
 <?php
 /** Minimal capture shell: safe to cache without the private folder tree or note contents. */
 if ( ! defined( 'ABSPATH' ) ) { exit; }
-$memex_capture_version = \Memex\OfflineCapture::asset_version();
-$memex_capture_base = plugin_dir_url( dirname( __DIR__ ) . '/memex.php' );
 nocache_headers();
-wp_enqueue_style( 'memex-capture-shell', $memex_capture_base . 'assets/memex.css', array(), $memex_capture_version );
-wp_enqueue_script( 'wp-app-outbox', $memex_capture_base . 'vendor/akirk/wp-app/assets/wp-app-outbox.js', array(), $memex_capture_version, true );
-wp_enqueue_script( 'wp-app-offline-pages', $memex_capture_base . 'vendor/akirk/wp-app/assets/wp-app-offline-pages.js', array(), $memex_capture_version, true );
-wp_enqueue_script( 'memex-capture-shell', $memex_capture_base . 'assets/memex-offline.js', array( 'wp-app-outbox', 'wp-app-offline-pages' ), $memex_capture_version, true );
-wp_add_inline_script(
-	'memex-capture-shell',
-	'window.memexOffline = ' . wp_json_encode( \Memex\OfflineCapture::client_config(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT ) . ';',
-	'before'
-);
 header( 'X-Wp-App-Offline: ' . get_current_user_id() );
 ?>
 <!DOCTYPE html>
@@ -21,11 +10,7 @@ header( 'X-Wp-App-Offline: ' . get_current_user_id() );
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title><?php esc_html_e( 'Capture — Memex', 'memex' ); ?></title>
-	<link rel="manifest" href="<?php echo esc_url( \WpApp\Pwa::get_manifest_url( 'memex' ) ); ?>">
-	<meta name="theme-color" content="#2271b1">
-	<meta name="apple-mobile-web-app-capable" content="yes">
-	<link rel="apple-touch-icon" href="<?php echo esc_url( $memex_capture_base . 'assets/icon-192.png' ); ?>">
-	<?php wp_print_styles( array( 'memex-capture-shell' ) ); ?>
+	<?php wp_app_head(); ?>
 </head>
 <body class="memex memex-capture-shell">
 <main>
@@ -47,6 +32,6 @@ header( 'X-Wp-App-Offline: ' . get_current_user_id() );
 		<?php include __DIR__ . '/_offline-panel.php'; ?>
 	</footer>
 </main>
-<?php wp_print_scripts( array( 'memex-capture-shell' ) ); ?>
+<?php wp_app_body_close(); ?>
 </body>
 </html>

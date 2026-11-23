@@ -21,10 +21,14 @@ async function fixture(t, visited = false) {
     const server = http.createServer(async (req, res) => {
         const origin = `http://127.0.0.1:${server.address().port}`;
         const config = {ajaxUrl: origin + '/ajax', scope: origin + '/memex/', workerUrl: origin + '/memex/offline-worker', captureUrl: origin + '/memex/capture', userId: 7, timezone: 'Pacific/Kiritimati'};
-        config.requiredUrls = [config.captureUrl, origin + '/assets/memex-offline.js', origin + '/assets/wp-app-outbox.js'];
+        const worker = (visited ? visitedWorker : generatedWorker).replaceAll('http://placeholder', origin);
+        const workerConfig = JSON.parse(worker.split('\n')[0].slice('self.wpAppWorker = '.length, -1));
+        const runtimeUrls = workerConfig.precache.filter(url => /wp-app-(outbox|offline-pages)\.js/.test(url));
+        config.requiredUrls = workerConfig.precache;
+        req.url = new URL(req.url, origin).pathname;
         if (req.url === '/memex/offline-worker') {
             res.setHeader('Content-Type', 'application/javascript');
-            return res.end((visited ? visitedWorker : generatedWorker).replaceAll('http://placeholder', origin));
+            return res.end(worker);
         }
         if (req.url === '/assets/wp-app-offline-pages.js') {
             res.setHeader('Content-Type', 'application/javascript');
@@ -63,7 +67,7 @@ async function fixture(t, visited = false) {
             <span data-offline-pending></span><span data-offline-last></span><p data-offline-status></p><a data-offline-login hidden>Login</a><a data-offline-saved hidden></a>
             <button data-offline-sync>Sync now</button><ul data-offline-entries></ul>
             <details data-offline-pages-panel open><summary>Available offline <span data-offline-pages-count></span></summary><p data-offline-pages-status></p><ul data-offline-pages></ul></details></details>
-            <script>window.memexOffline=${JSON.stringify(config)};</script>${visited ? '<script src="/assets/wp-app-offline-pages.js"></script>' : ''}<script src="/assets/wp-app-outbox.js"></script><script src="/assets/memex-offline.js"></script>`);
+            <script>window.memexOffline=${JSON.stringify(config)};</script>${runtimeUrls.map(url => '<script src="' + url + '"></script>').join('')}<script src="/assets/memex-offline.js"></script>`);
     });
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     const browser = await chromium.launch({headless: true});
@@ -221,7 +225,10 @@ test('page inventory checks cache contents and excludes pages whose required ass
     const f = await fixture(t, true);
     await f.page.waitForFunction(() => document.querySelectorAll('[data-offline-pages] a').length === 1);
     const pages = await f.page.evaluate(async () => {
-        for (const key of await caches.keys()) await (await caches.open(key)).delete(location.origin + '/assets/wp-app-outbox.js');
+        for (const key of await caches.keys()) {
+            const cache = await caches.open(key);
+            for (const request of await cache.keys()) if (new URL(request.url).pathname.endsWith('/wp-app-outbox.js')) await cache.delete(request);
+        }
         return wpAppOfflinePages.list(await navigator.serviceWorker.getRegistration(window.memexOffline.scope), 7);
     });
     assert.equal(pages.length, 0);

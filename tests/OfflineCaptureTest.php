@@ -97,9 +97,15 @@ class OfflineCaptureTest extends WP_UnitTestCase {
 
 	public function test_capture_shell_has_no_private_note_tree_or_contents(): void {
 		self::factory()->post->create( array( 'post_type' => CPT::POST_TYPE, 'post_title' => 'Private title', 'post_content' => 'Private body' ) );
+		global $wp_app_route;
+		$previous_route = $wp_app_route;
+		$wp_app_route = array( 'app_path' => 'memex' );
+		\WpApp\Pwa::register( 'memex', OfflineCapture::pwa_config() );
+		memex_app()->enqueue_assets();
 		ob_start();
 		include dirname( __DIR__ ) . '/templates/capture.php';
 		$html = ob_get_clean();
+		$wp_app_route = $previous_route;
 		$this->assertStringNotContainsString( 'Private title', $html );
 		$this->assertStringNotContainsString( 'Private body', $html );
 		$this->assertStringContainsString( 'data-memex-capture="choice"', $html );
@@ -107,12 +113,13 @@ class OfflineCaptureTest extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'assets/memex.css?ver=' . $version, $html );
 		$this->assertStringContainsString( 'assets/memex-offline.js?ver=' . $version, $html );
 		$this->assertStringContainsString( 'window.memexOffline = ', $html );
-		$this->assertSame( $version, wp_styles()->registered['memex-capture-shell']->ver );
-		$this->assertSame( $version, wp_scripts()->registered['memex-capture-shell']->ver );
+		$this->assertStringContainsString( 'wp-app-outbox-js', $html );
+		$this->assertStringContainsString( 'wp-app-offline-pages-js', $html );
 	}
 	public function test_framework_owns_worker_and_only_caches_capture_shell(): void {
 		$config = OfflineCapture::pwa_config();
 		$this->assertSame( 'shell', $config['cache_policy'] );
+		$this->assertTrue( $config['outbox'] );
 		$this->assertTrue( $config['visited_pages'] );
 		$this->assertSame( (string) get_current_user_id(), $config['cache_identity'] );
 		$this->assertSame( home_url( '/memex/' ), $config['start_url'] );

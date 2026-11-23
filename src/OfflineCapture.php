@@ -22,6 +22,7 @@ class OfflineCapture {
 			'register_service_worker' => false, // Memex displays registration/readiness itself.
 			'service_worker_path' => defined( 'WpApp\\Pwa::OFFLINE_PAGES_SUPPORTED' ) ? 'offline-worker' : 'offline-update-required',
 			'cache_policy' => 'shell',
+			'outbox' => true,
 			'visited_pages' => get_current_user_id() > 0,
 			'cache_identity' => (string) get_current_user_id(),
 			'offline_url' => home_url( '/memex/capture/' ),
@@ -38,7 +39,9 @@ class OfflineCapture {
 	/** Shared asset/cache version keeps enqueued URLs identical to worker precache URLs. */
 	public static function asset_version(): string {
 		$root = dirname( __DIR__ );
-		return md5( file_get_contents( $root . '/assets/memex-offline.js' ) . file_get_contents( $root . '/vendor/akirk/wp-app/assets/wp-app-outbox.js' ) . file_get_contents( $root . '/vendor/akirk/wp-app/src/class-pwa.php' ) . file_get_contents( $root . '/vendor/akirk/wp-app/assets/wp-app-worker.js' ) . file_get_contents( $root . '/vendor/akirk/wp-app/assets/wp-app-offline-pages.js' ) . file_get_contents( $root . '/assets/memex.css' ) . file_get_contents( $root . '/templates/capture.php' ) );
+		$files = array( 'assets/memex-offline.js', 'assets/memex.js', 'assets/vendor/overtype/overtype.min.js', 'assets/memex.css', 'templates/capture.php' );
+		$hashes = array_map( static function ( $file ) use ( $root ) { return hash_file( 'sha256', $root . '/' . $file ); }, $files );
+		return md5( implode( '', $hashes ) );
 	}
 
 	public static function required_urls(): array {
@@ -48,8 +51,8 @@ class OfflineCapture {
 			home_url( '/memex/capture/' ),
 			add_query_arg( 'ver', $version, $base . 'assets/memex.css' ),
 			add_query_arg( 'ver', $version, $base . 'assets/memex-offline.js' ),
-			add_query_arg( 'ver', $version, $base . 'vendor/akirk/wp-app/assets/wp-app-outbox.js' ),
-			add_query_arg( 'ver', $version, $base . 'vendor/akirk/wp-app/assets/wp-app-offline-pages.js' ),
+			add_query_arg( 'ver', $version, $base . 'assets/memex.js' ),
+			add_query_arg( 'ver', $version, $base . 'assets/vendor/overtype/overtype.min.js' ),
 			$base . 'assets/icon.svg',
 		);
 	}
@@ -57,7 +60,7 @@ class OfflineCapture {
 	public static function client_config(): array {
 		return array(
 			'workerSupported' => defined( 'WpApp\\Pwa::OFFLINE_PAGES_SUPPORTED' ),
-			'requiredUrls' => self::required_urls(),
+			'requiredUrls' => \WpApp\Pwa::get_config( 'memex' )['precache'] ?? self::required_urls(),
 			'ajaxUrl' => admin_url( 'admin-ajax.php' ),
 			'userId' => get_current_user_id(),
 			'workerUrl' => home_url( '/memex/offline-worker/' ),

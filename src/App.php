@@ -172,22 +172,11 @@ class App extends BaseApp {
 		);
 	}
 
-	/**
-	 * Cache-busting version for a plugin asset: its mtime, so every edit gets a
-	 * fresh URL without bumping MEMEX_VERSION.
-	 *
-	 * @param string $relative Path relative to the plugin directory.
-	 */
-	private static function asset_version( string $relative ): string {
-		$mtime = @filemtime( dirname( __DIR__ ) . '/' . $relative ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
-		return $mtime ? MEMEX_VERSION . '.' . $mtime : MEMEX_VERSION;
-	}
-
 	public function enqueue_assets() {
 		$base     = plugin_dir_url( dirname( __DIR__ ) . '/memex.php' );
-		$css_ver  = self::asset_version( 'assets/memex.css' );
-		$js_ver   = self::asset_version( 'assets/memex.js' );
-		$vend_ver = self::asset_version( 'assets/vendor/overtype/overtype.min.js' );
+		$css_ver  = OfflineCapture::asset_version();
+		$js_ver   = $css_ver;
+		$vend_ver = $css_ver;
 		// The admin-ajax URL has to come from the server: guessing it from
 		// window.location.origin drops any subdirectory the site lives in, and
 		// an environment that redirects such a request to the real one (as the
@@ -200,20 +189,16 @@ class App extends BaseApp {
 			// resolves to whichever one is rendering, so name ours explicitly.
 			$scope = $this->get_url_path();
 
-			wp_app_enqueue_style( 'memex', $base . 'assets/memex.css?v=' . $css_ver, array(), false, $scope );
+			wp_app_enqueue_style( 'memex', $base . 'assets/memex.css?ver=' . $css_ver, array(), false, $scope );
 			wp_app_add_inline_script( 'memex-config', $inline, false, $scope );
-			wp_app_enqueue_script( 'memex-overtype', $base . 'assets/vendor/overtype/overtype.min.js?v=' . $vend_ver, array(), false, true, $scope );
-			wp_app_enqueue_script( 'wp-app-outbox', $base . 'vendor/akirk/wp-app/assets/wp-app-outbox.js?ver=' . OfflineCapture::asset_version(), array(), false, true, $scope );
-			wp_app_enqueue_script( 'wp-app-offline-pages', $base . 'vendor/akirk/wp-app/assets/wp-app-offline-pages.js?ver=' . OfflineCapture::asset_version(), array(), false, true, $scope );
-			wp_app_enqueue_script( 'memex-offline', $base . 'assets/memex-offline.js?v=' . self::asset_version( 'assets/memex-offline.js' ), array( 'wp-app-outbox', 'wp-app-offline-pages' ), false, true, $scope );
-			wp_app_enqueue_script( 'memex', $base . 'assets/memex.js?v=' . $js_ver, array( 'memex-overtype' ), false, true, $scope );
+			wp_app_enqueue_script( 'memex-overtype', $base . 'assets/vendor/overtype/overtype.min.js?ver=' . $vend_ver, array(), false, true, $scope );
+			wp_app_enqueue_script( 'memex-offline', $base . 'assets/memex-offline.js?ver=' . $css_ver, array(), false, true, $scope );
+			wp_app_enqueue_script( 'memex', $base . 'assets/memex.js?ver=' . $js_ver, array( 'memex-overtype' ), false, true, $scope );
 		} else {
 			// Fallback if called outside an app request.
 			wp_enqueue_style( 'memex', $base . 'assets/memex.css', array(), $css_ver );
 			wp_enqueue_script( 'memex-overtype', $base . 'assets/vendor/overtype/overtype.min.js', array(), $vend_ver, true );
-			wp_enqueue_script( 'wp-app-outbox', $base . 'vendor/akirk/wp-app/assets/wp-app-outbox.js', array(), OfflineCapture::asset_version(), true );
-			wp_enqueue_script( 'wp-app-offline-pages', $base . 'vendor/akirk/wp-app/assets/wp-app-offline-pages.js', array(), OfflineCapture::asset_version(), true );
-			wp_enqueue_script( 'memex-offline', $base . 'assets/memex-offline.js', array( 'wp-app-outbox', 'wp-app-offline-pages' ), self::asset_version( 'assets/memex-offline.js' ), true );
+			wp_enqueue_script( 'memex-offline', $base . 'assets/memex-offline.js', array(), $css_ver, true );
 			wp_add_inline_script( 'memex-offline', 'window.memexOffline = ' . wp_json_encode( OfflineCapture::client_config() ) . ';', 'before' );
 			wp_enqueue_script( 'memex', $base . 'assets/memex.js', array( 'memex-overtype' ), $js_ver, true );
 			wp_add_inline_script( 'memex', $inline, 'before' );
