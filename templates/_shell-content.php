@@ -7,6 +7,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 <aside class="memex-sidebar">
 <div class="memex-brand"><a data-route="" href="<?php echo esc_url( home_url( '/memex/' ) ); ?>">Memex</a><button type="button" class="memex-sidebar-toggle" data-shell-menu aria-expanded="false" aria-label="Menu"><span class="memex-sidebar-toggle-icon" aria-hidden="true"></span></button></div>
 <div class="memex-sidebar-body">
+<div data-shell-quick-capture></div>
     <nav class="memex-nav" aria-label="<?php esc_attr_e( 'Memex sections', 'memex' ); ?>">
     <?php
     foreach ( [

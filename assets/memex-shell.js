@@ -309,32 +309,36 @@
         if (/^[+-]\d{2}:\d{2}$/.test(config.timezone)) { var sign = config.timezone[0] === '-' ? -1 : 1; now = new Date(now.getTime() + sign * (Number(config.timezone.slice(1, 3)) * 60 + Number(config.timezone.slice(4))) * 60000); return now.toISOString().slice(0, 10); }
         var parts = new Intl.DateTimeFormat('en-CA', {timeZone: config.timezone, year: 'numeric', month: '2-digit', day: '2-digit'}).formatToParts(now), values = {}; parts.forEach(part => values[part.type] = part.value); return values.year + '-' + values.month + '-' + values.day;
     }
-    function dailyCapture(date, quick) {
-        title(quick ? 'Quick capture' : date);
-        if (quick) view.append(node('p', "Anything you type here is appended, with a timestamp, to today's daily note."));
-        var form = node('form'), area = node('textarea', null, {rows: '8', required: '', 'aria-label': 'Daily entry'}), save = node('button', 'Append to daily note', {type: 'submit'}), message = node('p', '', {role: 'status'}); form.className = 'memex-quick-capture memex-quick-capture-full';
-        area.placeholder = quick ? "What's on your mind?" : 'Add an entry';
+    function dailyCapture(date, quick, target) {
+        var inline = !!target; target = target || view;
+        if (!inline) title(quick ? 'Quick capture' : date);
+        if (quick && !inline) view.append(node('p', "Anything you type here is appended, with a timestamp, to today's daily note."));
+        var form = node('form'), area = node(inline ? 'input' : 'textarea', null, inline ? {type:'text', required:'', 'aria-label':'Quick capture text'} : {rows: '8', required: '', 'aria-label': 'Daily entry'}), save = node('button', 'Append to daily note', {type: 'submit'}), message = node('p', '', {role: 'status'}); form.className = 'memex-quick-capture ' + (inline ? 'memex-quick-capture-inline' : 'memex-quick-capture-full');
+        if (inline) { save.textContent = 'Capture'; form.setAttribute('aria-label', 'Quick capture'); }
+        area.placeholder = inline ? 'Add an entry' : quick ? "What's on your mind?" : 'Add an entry';
         var task = node('button', '[ ]', {type: 'button', 'aria-label': 'Toggle checkbox at start of entry', 'aria-pressed': 'false'});
         task.addEventListener('click', function () { area.value = area.value.startsWith('- [ ] ') ? area.value.slice(6) : '- [ ] ' + area.value; task.setAttribute('aria-pressed', String(area.value.startsWith('- [ ] '))); area.dispatchEvent(new Event('input')); area.focus(); });
-        form.append(area, task, save, message); view.append(form);
-        if (quick) area.focus();
+        var actions = node('div', null, {class:'memex-quick-capture-actions'}); actions.append(task, save);
+        form.append(area, actions, message); target.append(form);
+        if (quick && !inline) area.focus();
         var tabKey = 'memex-editor-tab:' + config.scope, tab;
         try { tab = sessionStorage.getItem(tabKey) || uuid(); sessionStorage.setItem(tabKey,tab); } catch (_) { tab=uuid(); }
-        var draftId = 'shell-daily:' + date + ':' + tab;
-        activeEditor = {form:form,clean:function(){return !area.value.trim() && document.activeElement !== area;}};
+        var draftId = (inline ? 'shell-sidebar:' : 'shell-daily:' + date + ':') + tab;
+        if (!inline) activeEditor = {form:form,clean:function(){return !area.value.trim() && document.activeElement !== area;}};
         outbox.rows('drafts').then(rows => { var draft = rows.find(row => row.id === draftId); if (draft && !area.value) area.value = draft.content; });
         area.addEventListener('input', () => { var text = area.value; saveDraftRecord({id:draftId,content:text}); });
         form.addEventListener('submit', async function (event) {
             event.preventDefault(); if(!area.value.trim())return; save.disabled = true; area.disabled = true; var text = area.value;
             try {
+                if (inline) date = dailyDate();
                 var clockParts = new Intl.DateTimeFormat('en-GB', {timeZone: /^[+-]/.test(config.timezone) ? 'UTC' : config.timezone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23'}).format(new Date());
                 if (/^[+-]/.test(config.timezone)) { var sign = config.timezone[0] === '-' ? -1 : 1; clockParts = new Date(Date.now() + sign * (Number(config.timezone.slice(1,3)) * 60 + Number(config.timezone.slice(4))) * 60000).toISOString().slice(11,16); }
                 await draftWrites; await outbox.enqueue({id: uuid(), kind: 'daily', date: date, clock: clockParts, title: '', content: text, userId: config.userId, createdAt: new Date().toISOString()}, draftId);
-                if (area.value === text) area.value = ''; message.textContent = 'Saved on this device.'; await loadLocal(); await render(); outbox.sync();
+                if (area.value === text) area.value = ''; message.textContent = 'Saved on this device.'; await loadLocal(); if (!inline || canRefreshView()) await render(); outbox.sync();
             } catch (error) { message.textContent = error.message; } finally { save.disabled = false; area.disabled = false; }
         });
         var pending = entries.filter(entry => entry.kind === 'daily' && entry.date === date);
-        pending.forEach(entry => view.append(node('pre', entry.clock + ' ' + entry.content)));
+        if (!inline) pending.forEach(entry => view.append(node('pre', entry.clock + ' ' + entry.content)));
     }
     async function render() {
         var token = ++generation; await draftWrites.catch(() => {}); activeEditor = null; view.replaceChildren(); status(lastMessage || (!offline && navigator.onLine ? '' : 'Offline — using notes saved on this device.'));
@@ -399,6 +403,7 @@
                 onAcknowledged: acknowledged
             }));
             data = new window.WpAppLocalData(outbox);
+            dailyCapture(dailyDate(), false, root.querySelector('[data-shell-quick-capture]'));
             await loadLocal();
             var oldDrafts = (await outbox.rows('drafts')).filter(draft => !draft.id.startsWith('shell-') && draft.content);
             if (oldDrafts.length) {

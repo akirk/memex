@@ -137,7 +137,7 @@ test('quick capture is accessible from navigation and retains a queued daily ent
     await f.page.getByRole('heading', {name:'Quick capture', exact:true}).waitFor();
     const area = f.page.getByRole('textbox', {name:'Daily entry', exact:true});
     await area.fill('Remember this');
-    await f.page.getByRole('button', {name:'Toggle checkbox at start of entry'}).click();
+    await f.page.locator('[data-shell-view]').getByRole('button', {name:'Toggle checkbox at start of entry'}).click();
     await f.page.getByRole('button', {name:'Append to daily note', exact:true}).click();
     await f.page.locator('[data-shell-view] pre').filter({hasText:'- [ ] Remember this'}).waitFor();
     await f.page.reload();
@@ -157,4 +157,24 @@ test('sidebar lists only folders and collapses nested branches', {timeout:15000}
     assert.equal(await folders.getByRole('link', {name:'Leaf note',exact:true,includeHidden:true}).count(), 0);
     assert.equal(await folders.locator('details').count(), 1);
     assert.equal(await folders.locator('details').evaluate(el => el.open), false);
+});
+
+
+test('sidebar quick capture remains above navigation and saves offline without leaving the note', async t => {
+    const f = await fixture(t);
+    await f.context.setOffline(true);
+    const input = f.page.getByRole('textbox', {name:'Quick capture text',exact:true});
+    await input.fill('Sidebar reminder');
+    await f.page.getByRole('link', {name:'Quick capture',exact:true}).click();
+    assert.equal(await input.inputValue(), 'Sidebar reminder');
+    await f.page.reload();
+    await input.waitFor();
+    await f.page.waitForFunction(() => document.querySelector('[data-shell-quick-capture] input').value === 'Sidebar reminder');
+    const before = f.page.url();
+    await f.page.locator('[data-shell-quick-capture]').getByRole('button', {name:'Capture',exact:true}).click();
+    await f.page.locator('[data-shell-view] pre').filter({hasText:'Sidebar reminder'}).waitFor();
+    assert.equal(f.page.url(), before);
+    assert.equal(await input.inputValue(), '');
+    assert.equal(await f.page.locator('.memex-sidebar-body').evaluate(el => el.firstElementChild.hasAttribute('data-shell-quick-capture')), true);
+    assert.equal(f.sent.length, 0);
 });
