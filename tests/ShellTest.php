@@ -173,4 +173,12 @@ class ShellTest extends WP_UnitTestCase {
         $this->assertSame( '04:53 · Login & sharing', $note['excerpt'] );
     }
 
+    public function test_shortened_preview_uses_a_text_ellipsis_instead_of_an_html_entity(): void {
+        $post = get_post( self::factory()->post->create( array( 'post_type' => CPT::POST_TYPE, 'post_content' => '<p>Daily &middot; ' . str_repeat( 'word ', 35 ) . '</p>' ) ) );
+        $excerpt = \Memex\Shell::note( $post, false )['excerpt'];
+        $this->assertStringContainsString( 'Daily · ', $excerpt );
+        $this->assertSame( '…', mb_substr( $excerpt, -1 ) );
+        $this->assertStringNotContainsString( '&hellip;', $excerpt );
+    }
+
 }

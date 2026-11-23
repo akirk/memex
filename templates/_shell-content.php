@@ -14,22 +14,24 @@ if ( ! defined( 'ABSPATH' ) ) {
     <input type="text" name="title" aria-label="<?php esc_attr_e( 'New note title', 'memex' ); ?>" placeholder="<?php esc_attr_e( 'New note title…', 'memex' ); ?>" autocomplete="off" required>
     <button type="submit"><?php esc_html_e( 'Create', 'memex' ); ?></button><p role="status"></p>
 </form>
+
 </div>
-</aside>
-<main id="memex-main" class="memex-main">
-<p data-shell-status role="status" aria-live="polite"><?php esc_html_e( 'Opening your notes…', 'memex' ); ?></p>
-<section data-shell-view></section>
-<footer class="memex-footer">
-    <details data-shell-offline><summary><?php esc_html_e( 'Offline & sync', 'memex' ); ?> <span data-shell-pending></span></summary>
+<footer class="memex-sidebar-offline">
+    <details id="memex-offline-sync" data-shell-offline><summary><?php esc_html_e( 'Offline & sync', 'memex' ); ?> <span data-shell-pending></span></summary>
     <p data-shell-cache-status role="status"><?php esc_html_e( 'Preparing offline app…', 'memex' ); ?></p>
     <p data-shell-sync-status role="status" aria-live="polite"></p>
-    <button type="button" data-shell-sync><?php esc_html_e( 'Sync now', 'memex' ); ?></button>
+    <button type="button" class="memex-button" data-shell-sync><?php esc_html_e( 'Sync now', 'memex' ); ?></button>
     <details><summary><?php esc_html_e( 'Available offline', 'memex' ); ?> <span data-shell-available-count></span></summary><ul data-shell-available></ul></details>
     <ul data-shell-conflicts></ul>
     <details data-shell-old-drafts hidden><summary><?php esc_html_e( 'Earlier capture drafts', 'memex' ); ?></summary><div data-shell-old-draft-list></div></details>
     <p><?php esc_html_e( 'Opened notes and local drafts are saved on this device. Clearing browser data removes unsynced work. Images and embedded media may need a connection.', 'memex' ); ?></p>
     </details>
 </footer>
+</aside>
+<main id="memex-main" class="memex-main">
+<p data-shell-status role="status" aria-live="polite"><?php esc_html_e( 'Opening your notes…', 'memex' ); ?></p>
+<section data-shell-view></section>
+
 </main>
 </div>
 <noscript><p><?php esc_html_e( 'Memex needs JavaScript to browse and edit local notes.', 'memex' ); ?></p></noscript>

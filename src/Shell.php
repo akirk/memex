@@ -69,7 +69,7 @@ class Shell {
 			'links'    => array_map( 'intval', get_post_meta( $post->ID, CPT::META_LINKS_TO, false ) ),
 			'stub'     => (bool) get_post_meta( $post->ID, CPT::META_STUB, true ),
 			'editable' => current_user_can( 'edit_post', $post->ID ),
-			'excerpt'  => wp_trim_words( html_entity_decode( wp_strip_all_tags( $post->post_content ), ENT_QUOTES | ENT_HTML5, get_bloginfo( 'charset' ) ?: 'UTF-8' ), 30 ),
+			'excerpt'  => wp_trim_words( html_entity_decode( wp_strip_all_tags( $post->post_content ), ENT_QUOTES | ENT_HTML5, get_bloginfo( 'charset' ) ?: 'UTF-8' ), 30, '…' ),
 		];
 		if ( $body ) {
 			$data['revisions'] = [];

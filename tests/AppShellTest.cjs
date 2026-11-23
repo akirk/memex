@@ -261,3 +261,21 @@ test('fresh previews replace encoded cached excerpts without replacing offline b
     await f.go('');await preview.filter({hasText:'Unsynced local body'}).waitFor();
     assert.equal(await preview.textContent(),'Unsynced local body');
 });
+
+test('backlink previews use refreshed text on both note and backlinks pages offline', {timeout:20000}, async t => {
+    const f=await fixture(t),base=f.records.get('1');
+    f.records.set('1',{...base,links:[2],excerpt:'04:53 &middot; Refers to target'});
+    f.records.set('2',{...base,id:'2',postId:2,slug:'target',title:'Target',excerpt:'Target note'});
+    await f.go('note/1');await f.page.getByRole('heading',{name:'Project',exact:true}).waitFor();
+    f.records.set('1',{...f.records.get('1'),excerpt:'04:53 · Refers to target'});
+    await f.go('note/2');
+    const preview=f.page.locator('[data-shell-view] .memex-note-list-item p');
+    await preview.filter({hasText:'04:53 · Refers to target'}).waitFor();
+    assert.equal(await preview.textContent(),'04:53 · Refers to target');
+    await f.page.getByRole('link',{name:'Backlinks',exact:true}).click();
+    await f.page.getByRole('heading',{name:'Backlinks: Target',exact:true}).waitFor();
+    assert.equal(await preview.textContent(),'04:53 · Refers to target');
+    await f.context.setOffline(true);await f.page.reload();
+    await preview.filter({hasText:'04:53 · Refers to target'}).waitFor();
+    assert.equal(await preview.textContent(),'04:53 · Refers to target');
+});
