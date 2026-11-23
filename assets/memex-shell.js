@@ -17,7 +17,10 @@
     }
     function status(text) { root.querySelector('[data-shell-status]').textContent = text || ''; }
     function uuid() { return crypto.randomUUID ? crypto.randomUUID() : '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, digit => (digit ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> digit / 4).toString(16)); }
-    function canRefreshView() { return !activeEditor || (activeEditor.clean && activeEditor.clean()); }
+    function canRefreshView() {
+        if (view.contains(document.activeElement) && document.activeElement.closest('[data-memex-capture]')) return false;
+        return !activeEditor || (activeEditor.clean && activeEditor.clean());
+    }
     function saveDraftRecord(value) {
         pendingDraftWrites++;
         draftWrites = draftWrites.catch(function(){}).then(function(){return outbox.transaction(['drafts'],'readwrite',tx=>tx.objectStore('drafts').put(value));}).then(function(){pendingDraftWrites--;draftFailure=false;},function(error){pendingDraftWrites--;draftFailure=true;status('Local saving failed. Keep this page open and copy your text.');throw error;});
@@ -225,7 +228,7 @@
                 catch (error) { status(error.message); checkbox.checked = !checkbox.checked; checkbox.disabled = false; }
             });
         });
-        if(note.daily){pendingDaily(article,note.daily);if(note.daily===dailyDate()&&note.editable)placeCapture(article,true);}
+        if(note.daily){pendingDaily(article,note.daily);if(note.daily===dailyDate()&&note.editable)captureForm(article,true);}
         var children = allNotes().filter(item => Number(item.parent) === Number(note.postId || note.id));
         if (children.length) { view.append(node('h2', 'Nested notes')); list(children); }
         var backlinks = allNotes().filter(item => (item.links || []).some(target => String(target) === String(note.postId || note.id)));
@@ -369,48 +372,51 @@
         var parts = new Intl.DateTimeFormat('en-CA', {timeZone: config.timezone, year: 'numeric', month: '2-digit', day: '2-digit'}).formatToParts(now), values = {}; parts.forEach(part => values[part.type] = part.value); return values.year + '-' + values.month + '-' + values.day;
     }
     var calendarMonths = {};
-    var captureForm, captureInput, captureTextarea, captureMessage, captureDraftId;
-    function captureValue() { return captureInput.hidden ? captureTextarea : captureInput; }
-    function placeCapture(container, inline) {
-        if (!captureForm) return;
-        var previous = captureValue(), value = previous.value;
-        captureInput.hidden = !inline; captureTextarea.hidden = inline;
-        captureInput.disabled = !inline; captureTextarea.disabled = inline;
-        captureValue().value = value;
-        captureForm.className = 'memex-quick-capture' + (inline ? ' memex-quick-capture-inline' : '');
-        container.append(captureForm);
+    var captureText = '', captureDraftId, captureSaving = false;
+    function syncCaptureFields() {
+        var marker = /^\[[ xX]\](?:[\t ]+|$)/;
+        root.querySelectorAll('[data-memex-capture="daily"]').forEach(function(form) {
+            var input=form.querySelector('[name=content]');
+            if(input.value!==captureText)input.value=captureText;
+            input.disabled=captureSaving;form.querySelector('button[type=submit]').disabled=captureSaving;
+            form.querySelector('[data-memex-capture-task]').setAttribute('aria-pressed',String(marker.test(captureText)));
+        });
     }
-    function setupCapture() {
-        captureForm = node('form', null, {'aria-label':'Quick capture', 'data-memex-capture':'daily'});
-        captureInput = node('input', null, {type:'text',name:'content','aria-label':'Quick capture text',placeholder:'Add an entry',autocomplete:'off',required:''});
-        captureInput.hidden = true; captureInput.disabled = true;
-        captureTextarea = node('textarea', null, {name:'content',rows:'2','aria-label':'Quick capture text',placeholder:'Quick capture — appends to today'});
-        var actions = node('div', null, {class:'memex-quick-capture-actions'}), clock = node('div', null, {class:'memex-server-time'});
-        var settings = node('a', null, {href:config.settingsUrl || new URL('/wp-admin/options-general.php',config.scope).href,'aria-label':'Site time. Open timezone settings.'});
-        settings.append(node('time', '', {'data-memex-server-time':''}));
-        var task = node('a','[ ]',{href:'#',role:'button','data-memex-capture-task':'','aria-pressed':'false','aria-label':'Toggle checkbox at start of entry'});
-        clock.append(settings, task); var save = node('button','Capture',{type:'submit'}); actions.append(clock,save);
-        captureMessage = node('p','',{role:'status'}); captureForm.append(captureTextarea,captureInput,actions,captureMessage);
-        var tabKey='memex-editor-tab:'+config.scope,tab;try{tab=sessionStorage.getItem(tabKey)||uuid();sessionStorage.setItem(tabKey,tab);}catch(_){tab=uuid();}
-        captureDraftId='shell-sidebar:'+tab;
-        var marker=/^\[[ xX]\](?:[\t ]+|$)/;
-        function persist() { var value=captureValue().value; task.setAttribute('aria-pressed',String(marker.test(value))); saveDraftRecord({id:captureDraftId,content:value}); }
-        captureForm.addEventListener('input',persist);
+    function captureForm(container, inline, full) {
+        var form=node('form',null,{'aria-label':inline?'Add daily entry':'Quick capture','data-memex-capture':'daily',class:'memex-quick-capture'+(inline?' memex-quick-capture-inline':full?' memex-quick-capture-full':'')});
+        var input=node(inline?'input':'textarea',null,inline?{type:'text',name:'content','aria-label':'Quick capture text',placeholder:'Add an entry',autocomplete:'off',required:''}:{name:'content',rows:full?'10':'2','aria-label':'Quick capture text',placeholder:full?"What's on your mind?":'Quick capture — appends to today'});
+        var actions=node('div',null,{class:'memex-quick-capture-actions'}),clock=node('div',null,{class:'memex-server-time'});
+        var settings=node('a',null,{href:config.settingsUrl||new URL('/wp-admin/options-general.php',config.scope).href,'aria-label':'Site time. Open timezone settings.'});
+        settings.append(node('time','',{'data-memex-server-time':''}));
+        var task=node('a','[ ]',{href:'#',role:'button','data-memex-capture-task':'','aria-pressed':'false','aria-label':'Toggle checkbox at start of entry'});
+        clock.append(settings,task);var save=node('button',full?'Append to today':'Capture',{type:'submit'});actions.append(clock,save);
+        var message=node('p','',{role:'status'});form.append(input,actions,message);container.append(form);
+        function persist(){captureText=input.value;syncCaptureFields();saveDraftRecord({id:captureDraftId,content:captureText});}
+        input.addEventListener('input',persist);
         task.addEventListener('keydown',function(event){if(event.key===' '){event.preventDefault();task.click();}});
-        task.addEventListener('click',function(event){event.preventDefault();var input=captureValue(),start=input.selectionStart,end=input.selectionEnd,match=input.value.match(marker),shift=match?-match[0].length:4;input.value=match?input.value.slice(match[0].length):'[ ] '+input.value;input.focus();input.setSelectionRange(Math.max(0,start+shift),Math.max(0,end+shift));persist();});
-        outbox.rows('drafts').then(function(rows){var draft=rows.find(row=>row.id===captureDraftId);if(draft&&!captureValue().value){captureValue().value=draft.content;task.setAttribute('aria-pressed',String(marker.test(draft.content)));}});
-        captureForm.addEventListener('submit',async function(event){
-            event.preventDefault();var input=captureValue(),text=input.value.trim();if(!text||save.disabled)return;
+        task.addEventListener('click',function(event){
+            event.preventDefault();if(captureSaving)return;
+            var start=input.selectionStart,end=input.selectionEnd,match=input.value.match(/^\[[ xX]\](?:[\t ]+|$)/),shift=match?-match[0].length:4;
+            input.value=match?input.value.slice(match[0].length):'[ ] '+input.value;input.focus();input.setSelectionRange(Math.max(0,start+shift),Math.max(0,end+shift));persist();
+        });
+        form.addEventListener('submit',async function(event){
+            event.preventDefault();var text=input.value.trim();if(!text||captureSaving)return;
             var date=dailyDate(),parts=getTimezoneParts(siteNow(),config.timezone),clock=pad(parts.hour,2)+':'+pad(parts.minute,2);
-            input.disabled=true;save.disabled=true;
+            captureSaving=true;syncCaptureFields();
             try{
                 await draftWrites;
                 await outbox.enqueue({id:uuid(),kind:'daily',date:date,clock:clock,title:'',content:text,userId:config.userId,createdAt:new Date().toISOString()},captureDraftId);
-                input.value='';task.setAttribute('aria-pressed','false');captureMessage.textContent='Saved on this device.';
-                await loadLocal(); await navigate('daily/'+date); outbox.sync();
-            }catch(error){captureMessage.textContent=error.message;}finally{save.disabled=false;captureValue().disabled=false;}
+                captureText='';syncCaptureFields();message.textContent='Saved on this device.';
+                await loadLocal();await navigate('daily/'+date);outbox.sync();
+            }catch(error){message.textContent=error.message;}finally{captureSaving=false;syncCaptureFields();}
         });
-        placeCapture(root.querySelector('[data-shell-quick-capture]'),false); updateClocks();
+        syncCaptureFields();updateClocks();return input;
+    }
+    function setupCapture() {
+        var tabKey='memex-editor-tab:'+config.scope,tab;try{tab=sessionStorage.getItem(tabKey)||uuid();sessionStorage.setItem(tabKey,tab);}catch(_){tab=uuid();}
+        captureDraftId='shell-sidebar:'+tab;
+        captureForm(root.querySelector('[data-shell-quick-capture]'));
+        outbox.rows('drafts').then(function(rows){var draft=rows.find(row=>row.id===captureDraftId);if(draft&&!captureText){captureText=draft.content;syncCaptureFields();}});
     }
     function siteNow() { return new Date(Date.now()+(config.clockOffset||0)); }
     function updateClocks() {
@@ -444,11 +450,11 @@
     function pendingDaily(container,date) { entries.filter(entry=>entry.kind==='daily'&&entry.date===date).forEach(function(entry){var p=node('p');p.append(node('strong',entry.clock),document.createTextNode(' · '+entry.content));container.append(p);}); }
     function emptyToday() {
         view.classList.add('memex-note-with-calendar');title(dailyDate());view.prepend(calendar(dailyDate()));var badge=link('daily','tag/daily');badge.className='memex-badge memex-badge-daily';view.querySelector('h1').append(document.createTextNode(' '),badge);
-        var body=node('section',null,{id:'selected-note-content',class:'memex-note-body'});view.append(body);pendingDaily(body,dailyDate());placeCapture(body,true);
+        var body=node('section',null,{id:'selected-note-content',class:'memex-note-body'});view.append(body);pendingDaily(body,dailyDate());captureForm(body,true);
     }
-    function dailyCapture(date, quick) {
+    function showQuickCapture() {
         title('Quick capture');view.append(node('p',"Anything you type here is appended, with a timestamp, to today's daily note."));
-        placeCapture(view,false);captureForm.classList.add('memex-quick-capture-full');captureTextarea.rows=10;captureTextarea.placeholder="What's on your mind?";captureForm.querySelector('button[type=submit]').textContent='Append to today';captureTextarea.focus();
+        captureForm(view,false,true).focus();
     }
 	function getTimezoneParts(date, timezone) {
 		var offsetMatch = timezone.match(/^([+-])(\d{2}):(\d{2})$/);
@@ -719,13 +725,13 @@
 	}
 
     async function render() {
-        var token = ++generation; await draftWrites.catch(() => {}); activeEditor = null; placeCapture(root.querySelector('[data-shell-quick-capture]'),false); captureTextarea.rows=2;captureTextarea.placeholder='Quick capture — appends to today';captureForm.querySelector('button[type=submit]').textContent='Capture';view.replaceChildren();view.classList.remove('memex-note-with-calendar'); status(lastMessage || (!offline && navigator.onLine ? '' : 'Offline — using notes saved on this device.'));
+        var token = ++generation; await draftWrites.catch(() => {}); activeEditor = null; view.replaceChildren();view.classList.remove('memex-note-with-calendar'); status(lastMessage || (!offline && navigator.onLine ? '' : 'Offline — using notes saved on this device.'));
         var path = decodeURIComponent(location.pathname.slice(new URL(config.scope).pathname.length)).replace(/\/$/, ''), parts = path.split('/'), kind = parts[0], id = parts.slice(1).join('/');
         if (['import','export','reminders'].includes(kind)) { title(kind.charAt(0).toUpperCase() + kind.slice(1)); view.append(node('p', 'This tool needs a connection. Your saved notes and editor remain available offline.')); return; }
         if (kind === 'note') return showNote(id);
         if (kind === 'edit') return editNote(id);
         if (kind === 'new') return editNote(undefined,new URL(location.href).searchParams.get('daily')||undefined);
-        if (kind === 'capture' || kind === 'quick-capture') { dailyCapture(dailyDate(),true); return; }
+        if (kind === 'capture' || kind === 'quick-capture') { showQuickCapture(); return; }
         if (kind === 'daily') {
             var date=id||dailyDate();if(!validDate(date)){title('Invalid date');view.append(node('p','Daily notes use YYYY-MM-DD.'));return;}
             var daily=allNotes().find(note=>note.daily===date);

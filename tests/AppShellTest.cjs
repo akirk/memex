@@ -144,12 +144,14 @@ test('sidebar lists only folders and collapses nested branches', {timeout:15000}
 });
 
 
-test('capture matches main: sidebar textarea, clock, plain task marker, then inline input on today', {timeout:20000}, async t => {
+test('sidebar capture stays mounted on today and shares its draft with the daily input', {timeout:20000}, async t => {
     const f=await fixture(t);
     await f.context.setOffline(true);
     const sidebar=f.page.locator('[data-shell-quick-capture]');
     const area=sidebar.locator('textarea[name=content]');
     await area.fill('Remember this');
+    await area.evaluate(el=>el.dataset.stableCapture='yes');
+    const sidebarBefore=await sidebar.boundingBox();
     assert.equal(await area.getAttribute('rows'),'2');
     await sidebar.getByRole('button',{name:'Toggle checkbox at start of entry'}).click();
     assert.equal(await area.inputValue(),'[ ] Remember this');
@@ -158,11 +160,19 @@ test('capture matches main: sidebar textarea, clock, plain task marker, then inl
     const input=f.page.locator('#selected-note-content input[name=content]');
     await input.waitFor();
     assert.equal(await input.inputValue(),'[ ] Remember this');
-    assert.equal(await sidebar.locator('form').count(),0);
+    assert.equal(await sidebar.locator('form').count(),1);
+    assert.equal(await area.getAttribute('data-stable-capture'),'yes');
+    assert.deepEqual(await sidebar.boundingBox(),sidebarBefore);
+    await input.fill('[ ] Updated from the daily input');
+    assert.equal(await area.inputValue(),'[ ] Updated from the daily input');
+    await input.evaluate(el=>el.dataset.stableCapture='daily');
+    await f.page.evaluate(()=>window.dispatchEvent(new Event('online')));
+    await f.page.waitForFunction(()=>document.querySelector('[data-shell-status]').textContent.includes('fetch'));
+    assert.equal(await input.getAttribute('data-stable-capture'),'daily');
     await f.page.reload();
-    await f.page.waitForFunction(()=>document.querySelector('#selected-note-content input[name=content]')?.value==='[ ] Remember this');
-    await f.page.getByRole('button',{name:'Capture',exact:true}).click();
-    await f.page.locator('#selected-note-content p').filter({hasText:'[ ] Remember this'}).waitFor();
+    await f.page.waitForFunction(()=>document.querySelector('#selected-note-content input[name=content]')?.value==='[ ] Updated from the daily input');
+    await f.page.locator('#selected-note-content').getByRole('button',{name:'Capture',exact:true}).click();
+    await f.page.locator('#selected-note-content p').filter({hasText:'[ ] Updated from the daily input'}).waitFor();
     assert.equal(f.sent.length,0);
     await f.page.getByRole('link',{name:'All notes',exact:true}).click();
     await sidebar.locator('textarea').waitFor();

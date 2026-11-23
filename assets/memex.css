@@ -38,11 +38,11 @@ body.memex {
 	background: var(--wp-app-color-surface-alt);
 	color: var(--wp-app-color-text);
 	padding: 1.25rem 1rem;
-	position: sticky;
-	top: 0;
+	position: static;
 	align-self: start;
-	height: 100vh;
-	overflow-y: auto;
+	min-height: 100vh;
+	height: auto;
+	overflow: visible;
 	box-sizing: border-box;
 }
 
@@ -1413,6 +1413,7 @@ body.memex {
 	.memex-sidebar {
 		position: static;
 		height: auto;
+		min-height: 0;
 		padding: 0.6rem 1rem;
 		border-bottom: 1px solid var(--wp-app-color-border);
 	}
@@ -1539,13 +1540,12 @@ body.memex {
 .memex-sidebar-offline p { margin: .5rem 0; color: var(--wp-app-color-muted); }
 .memex-sidebar-offline .memex-button { padding: .35rem .65rem; margin: .25rem 0 .5rem; }
 .memex-sidebar-offline ul { margin: .4rem 0; padding-left: 1.2rem; }
-.memex-sidebar-offline [data-shell-available] { max-height: 14rem; overflow-y: auto; }
 .memex-sidebar-offline [data-shell-conflicts]:empty { display: none; }
 .memex-sidebar-offline a { color: var(--wp-app-color-link, var(--wp-app-color-primary)); }
 @media (min-width: 801px) {
-    [data-memex-shell] .memex-sidebar { display: flex; flex-direction: column; overflow-y: hidden; }
-    [data-memex-shell] .memex-sidebar-body { flex: 1; min-height: 0; overflow-y: auto; padding-bottom: 1rem; }
-    .memex-sidebar-offline { flex: none; margin-top: auto; max-height: 50vh; overflow-y: auto; }
+    [data-memex-shell] .memex-sidebar { display: flex; flex-direction: column; }
+    [data-memex-shell] .memex-sidebar-body { flex: 1; padding-bottom: 1rem; }
+    .memex-sidebar-offline { margin-top: auto; }
 }
 @media (max-width: 800px) {
     .memex-sidebar-offline { margin-top: 1rem; }
