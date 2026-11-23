@@ -5,7 +5,7 @@
     if (!root) return;
     document.documentElement.classList.add('memex-js');
     window.addEventListener('wp-app:offline-status', function(event){var message=root.querySelector('[data-shell-cache-status]');if(message)message.textContent=event.detail.ready?'App shell is available offline.':'Offline app is not ready yet. Open Memex online to prepare it.';});
-    var config, outbox, data, notes = [], index = [], entries = [], activeEditor, generation = 0;
+    var config, outbox, data, notes = [], entries = [], activeEditor, generation = 0;
     var offline = false;
     var draftWrites = Promise.resolve(), pendingDraftWrites = 0, draftFailure = false, lastPath = location.href, lastMessage = '';
     var view = root.querySelector('[data-shell-view]');
@@ -26,20 +26,55 @@
     }
     function url(path) { return new URL(path || '', config.scope).href; }
     function link(text, path) { return node('a', text, {href: url(path), 'data-route': path}); }
-    function allNotes() {
-        var merged = new Map(index.map(note => [String(note.postId || note.id), note]));
-        notes.forEach(function (note) {
-            var key = String(note.postId || note.id), metadata = merged.get(key);
-            // Refresh previews without changing the cached body's edit baseline.
-            merged.set(key, !note.pending && metadata ? Object.assign({}, note, {excerpt: metadata.excerpt}) : note);
+    // One stored record per note. Downloaded content keeps its own edit baseline.
+    function noteRecord(note) {
+        var record = Object.assign({}, note);
+        if (typeof note.content === 'string') {
+            record.body = {content: note.content, html: note.html || '', revisions: note.revisions || [], version: note.version || ''};
+            delete record.content; delete record.html; delete record.revisions;
+        }
+        return record;
+    }
+    function replaceNote(current, note) {
+        return current.filter(item => item.id !== note.id && (!note.postId || item.postId !== note.postId)).concat([noteRecord(note)]);
+    }
+    function noteView(record) { return Object.assign({}, record, record.body || {}); }
+    function allNotes() { return notes.map(noteView); }
+    // Read current records and local work in the same transaction before merging metadata.
+    function updateNotes(update, removeLegacyIndex) {
+        return outbox.transaction(['records','entries','drafts'], 'readwrite', function (tx) {
+            var records, queued, drafts, remaining = 3;
+            function ready() {
+                if (--remaining) return;
+                var current = records.filter(row => row.collection === 'notes').map(row => row.value);
+                var legacy = records.filter(row => row.collection === 'index').map(row => row.value);
+                var updated = update(current, queued, drafts, legacy);
+                if (!updated) return;
+                var ids=new Set(updated.map(note=>note.id)), previous=new Map(current.map(note=>[note.id,note]));
+                records.forEach(function(row) { if ((row.collection === 'notes' && !ids.has(row.value.id)) || (removeLegacyIndex && row.collection === 'index')) tx.objectStore('records').delete(row.id); });
+                updated.forEach(function(note) { if(previous.get(note.id)!==note)data.write(tx, 'notes', note); });
+            }
+            tx.objectStore('records').getAll().onsuccess = function(event) { records=event.target.result;ready(); };
+            tx.objectStore('entries').getAll().onsuccess = function(event) { queued=event.target.result;ready(); };
+            tx.objectStore('drafts').getAll().onsuccess = function(event) { drafts=event.target.result;ready(); };
         });
-        return Array.from(merged.values());
+    }
+    function consolidateNotes() {
+        return updateNotes(function(current, queued, drafts, legacy) {
+            if (!legacy.length && !current.some(note => Object.prototype.hasOwnProperty.call(note,'content'))) return null;
+            var merged = new Map(legacy.map(note => [String(note.postId || note.id), noteRecord(note)]));
+            current.forEach(function(note) {
+                var key=String(note.postId || note.id), metadata=merged.get(key), record=noteRecord(note);
+                merged.set(key, !record.pending && metadata ? Object.assign({}, record, metadata, {id:record.id}) : record);
+            });
+            return Array.from(merged.values());
+        }, true);
     }
     function decodeSlug(value) { try { return decodeURIComponent(value || ''); } catch (_) { return value; } }
     function findNote(value) { return allNotes().find(note => String(note.id) === String(value) || String(note.postId) === String(value) || (note.slug === value || decodeSlug(note.slug) === value) || note.title.toLowerCase() === String(value).toLowerCase()); }
     function routeId(note) { return String(note.postId || note.id); }
     function related(entry, note) { return entry.noteId === note.id || entry.localId === note.id || (note.postId && String(entry.noteId) === String(note.postId)); }
-    function localNote(value) { var note = findNote(value); return note && notes.find(local => local.id === note.id || (note.postId && local.postId === note.postId)); }
+    function localNote(value) { var note = findNote(value); return note && note.body ? note : undefined; }
     async function request(action, params) {
         var address = new URL(config.ajaxUrl);
         address.searchParams.set('action', action);
@@ -52,15 +87,15 @@
         return result.data;
     }
     async function loadLocal() {
-        notes = await data.all('notes'); index = await data.all('index'); entries = await outbox.rows('entries');
+        notes = await data.all('notes'); entries = await outbox.rows('entries');
         // Recover the optimistic view even if the tab closed just after the queue committed.
         for (var entry of entries) {
             var key = entry.localId || entry.noteId;
             if (!key || !['note', 'edit'].includes(entry.kind)) continue;
-            var existing = localNote(key) || {id: String(key), postId: Number(entry.noteId) || 0, slug: '', tags: [], links: [], editable: true, status: 'draft'};
+            var existing = findNote(key) || {id: String(key), postId: Number(entry.noteId) || 0, slug: '', tags: [], links: [], editable: true, status: 'draft'};
             if (!existing.pending || existing.lastOperation !== entry.id) {
                 var overlay = Object.assign({}, existing, {title: entry.title, content: entry.content, parent: entry.parent || 0, version: entry.baseVersion || existing.version || '', pending: true, lastOperation: entry.id});
-                notes = notes.filter(note => note.id !== overlay.id); notes.push(overlay);
+                notes = notes.filter(note => note.id !== overlay.id); notes.push(noteRecord(overlay));
             }
         }
         chrome();
@@ -71,8 +106,9 @@
         var syncError = state.error && /Failed to fetch|NetworkError|Load failed/.test(state.error) ? 'Waiting for a connection. Your changes remain on this device.' : state.error;
         root.querySelector('[data-shell-sync-status]').textContent = syncError || (state.running ? 'Syncing…' : entries.length ? entries.length + ' changes saved on this device.' : 'All changes synced.') + (!offline && navigator.onLine ? '' : ' Offline.');
         var available = root.querySelector('[data-shell-available]'); available.replaceChildren();
-        notes.slice().sort((a, b) => a.title.localeCompare(b.title)).forEach(note => { var li = node('li'); li.append(link(note.title, 'note/' + encodeURIComponent(routeId(note)))); available.append(li); });
-        root.querySelector('[data-shell-available-count]').textContent = '(' + notes.length + ')';
+        var downloaded = allNotes().filter(note => note.body);
+        downloaded.sort((a, b) => a.title.localeCompare(b.title)).forEach(note => { var li = node('li'); li.append(link(note.title, 'note/' + encodeURIComponent(routeId(note)))); available.append(li); });
+        root.querySelector('[data-shell-available-count]').textContent = '(' + downloaded.length + ')';
         var conflicts = root.querySelector('[data-shell-conflicts]'); conflicts.replaceChildren();
         entries.filter(entry => entry.state === 'conflict').forEach(entry => {
             var item = node('li'); item.append(node('strong', 'Conflict: ' + entry.title), document.createTextNode(' '), link('Review versions', 'edit/' + encodeURIComponent(entry.noteId))); conflicts.append(item);
@@ -99,16 +135,24 @@
         folders.hidden = !sorted.length;
         if (sorted.length) folders.append(node('h2', 'Folders'), branch(0, new Set()));
     }
-    async function refreshIndex() {
+    async function refreshMetadata() {
         var page = 1, fresh = [];
         do { var result = await request('memex_shell_notes', {page: page}); fresh.push.apply(fresh, result.notes); page = result.next; } while (page);
-        await data.replace('index', fresh); index = fresh;
-        // Drop clean local bodies no longer readable; pending work is retained for review/export.
-        var ids = new Set(fresh.map(note => String(note.id))), drafts = await outbox.rows('drafts');
-        for (var note of notes.slice()) {
-            if (note.postId && !ids.has(String(note.postId)) && !entries.some(entry => related(entry, note)) && !drafts.some(draft => draft.id.startsWith('shell-edit:' + note.id + ':'))) { await data.remove('notes', note.id); notes = notes.filter(item => item.id !== note.id); }
-        }
-        chrome();
+        await updateNotes(function(current, queued, drafts) {
+            var existing = new Map(current.map(note => [String(note.postId || note.id), note]));
+            var refreshed = fresh.map(function(metadata) {
+                var note=existing.get(String(metadata.postId || metadata.id));
+                existing.delete(String(metadata.postId || metadata.id));
+                if(note && (note.pending || queued.some(entry=>related(entry,note)) || Object.keys(metadata).every(key=>key==='id' || JSON.stringify(note[key])===JSON.stringify(metadata[key]))))return note;
+                return Object.assign({}, note, metadata, {id:note ? note.id : metadata.id});
+            });
+            // Retain unsynced creations and work on notes missing from the server listing.
+            existing.forEach(function(note) {
+                if (!note.postId || note.pending || queued.some(entry=>related(entry,note)) || drafts.some(draft=>draft.id.startsWith('shell-edit:'+note.id+':'))) refreshed.push(note);
+            });
+            return refreshed;
+        });
+        await loadLocal();
     }
     async function fetchNote(value) {
         var cached = localNote(value);
@@ -116,7 +160,13 @@
         try {
             var result = await request('memex_shell_notes', {id: value});
             var note = Object.assign({}, result.note, {id: cached ? cached.id : String(result.note.id)});
-            await data.put('notes', note); notes = notes.filter(item => item.id !== note.id); notes.push(note); chrome(); return note;
+            await updateNotes(function(current, queued) {
+                var existing=current.find(item=>item.id===note.id || (note.postId && item.postId===note.postId));
+                if(existing && (existing.pending || queued.some(entry=>related(entry,existing)))) { note=noteView(existing);return null; }
+                if(existing)note.id=existing.id;
+                return replaceNote(current,note);
+            });
+            await loadLocal(); return localNote(note.id) || note;
         } catch (error) { if (error.accountMismatch || [401,403,404].includes(error.status)) throw error; if (cached) { status('Showing the saved copy. ' + error.message); return cached; } throw error; }
     }
     function safeHTML(html) {
@@ -153,7 +203,7 @@
         var token = generation, note = localNote(value) || findNote(value);
         if (note && localNote(note.id)) { note = localNote(note.id); drawNote(note); }
         try { var fresh = await fetchNote(note && note.postId || value); if (token === generation && fresh) { view.replaceChildren(); drawNote(fresh); } else if (token === generation && !fresh) unavailable(note); }
-        catch (error) { if (token === generation && (error.accountMismatch || [401,403,404].includes(error.status) || !localNote(value))) unavailable(note, error.message); }
+        catch (error) { if (token === generation && (error.accountMismatch || [401,403,404].includes(error.status) || !localNote(value))) unavailable(note, error.accountMismatch || error.status ? error.message : undefined); }
     }
     function unavailable(note, message) { view.replaceChildren(); title(note ? note.title : 'Note unavailable'); view.append(node('p', message || 'This note has not been downloaded. Open it online once to make its content and editor available offline.')); }
     function drawNote(note) {
@@ -196,7 +246,7 @@
         else operation.localId = key;
         var updated = Object.assign({}, (note && localNote(note.id)) || note || {id: key, postId: 0, slug: '', tags: [], links: [], editable: true, status: 'draft'}, values, {id: key, pending: true, links: outgoingLinks(values.content), lastOperation: id, version: operation.baseVersion || '', excerpt: values.content.slice(0, 160)});
         await draftWrites;
-        await outbox.enqueue(operation, draftId, undefined, tx=>data.write(tx,'notes',updated));
+        await outbox.enqueue(operation, draftId, undefined, tx=>data.write(tx,'notes',noteRecord(updated)));
         await loadLocal();
         outbox.sync();
         return key;
@@ -296,7 +346,7 @@
             var keepServer = node('button', 'Use server version', {type: 'button'}), keepLocal = node('button', 'Save my reviewed version', {type: 'button'}); box.append(keepServer, keepLocal); view.prepend(box);
             keepServer.addEventListener('click', async function () {
                 keepServer.disabled=true;keepLocal.disabled=true;Array.from(form.elements).forEach(control=>control.disabled=true);
-                try { await draftWrites; var oldIds=entries.filter(entry=>related(entry,note)).map(entry=>entry.id); await outbox.transaction(['entries','drafts','records'],'readwrite',function(tx){oldIds.forEach(id=>tx.objectStore('entries').delete(id));tx.objectStore('drafts').delete(draftId);data.write(tx,'notes',Object.assign({},remote,{id:note.id}));});outbox.changed();await loadLocal(); await navigate('note/' + encodeURIComponent(routeId(note))); }
+                try { await draftWrites; var oldIds=entries.filter(entry=>related(entry,note)).map(entry=>entry.id); await outbox.transaction(['entries','drafts','records'],'readwrite',function(tx){oldIds.forEach(id=>tx.objectStore('entries').delete(id));tx.objectStore('drafts').delete(draftId);data.write(tx,'notes',noteRecord(Object.assign({},remote,{id:note.id})));});outbox.changed();await loadLocal(); await navigate('note/' + encodeURIComponent(routeId(note))); }
                 catch (error) { notice.textContent = error.message;keepServer.disabled=false;keepLocal.disabled=false;Array.from(form.elements).forEach(control=>control.disabled=false); }
             });
             keepLocal.addEventListener('click', async function () {
@@ -307,7 +357,7 @@
                     var replacedIds = entries.filter(entry => related(entry, note)).map(entry => entry.id);
                     var opId = uuid();
                     await draftWrites;
-                    await outbox.enqueue(Object.assign({}, reviewed, {id: opId, kind: 'edit', noteId: String(remote.postId), localId: note.id, userId: config.userId, createdAt: new Date().toISOString()}),draftId,undefined,function(tx){replacedIds.forEach(id=>tx.objectStore('entries').delete(id));data.write(tx,'notes',Object.assign({},note,reviewed,{id:note.id,pending:true,lastOperation:opId,version:remote.version}));});
+                    await outbox.enqueue(Object.assign({}, reviewed, {id: opId, kind: 'edit', noteId: String(remote.postId), localId: note.id, userId: config.userId, createdAt: new Date().toISOString()}),draftId,undefined,function(tx){replacedIds.forEach(id=>tx.objectStore('entries').delete(id));data.write(tx,'notes',noteRecord(Object.assign({},note,reviewed,{id:note.id,pending:true,lastOperation:opId,version:remote.version})));});
                     await loadLocal(); outbox.sync(); await navigate('note/' + encodeURIComponent(routeId(note)));
                 } catch (error) { notice.textContent = error.message; keepLocal.disabled = false;keepServer.disabled=false;Array.from(form.elements).forEach(control=>control.disabled=false); }
             });
@@ -713,12 +763,14 @@
     async function acknowledged(receipt, entry) {
         offline = false;
         if (!receipt.note) return;
-        var remote = receipt.note, key = entry.localId || entry.noteId || String(receipt.postId), existing = localNote(key) || localNote(String(receipt.postId));
-        var pending = (await outbox.rows('entries')).filter(item => item.id !== entry.id && existing && related(item, existing));
-        var saved = Object.assign({}, remote, {id: existing ? existing.id : String(remote.id), pending: !!pending.length});
-        if (pending.length && existing) Object.assign(saved, {content: existing.content, title: existing.title, parent: existing.parent, lastOperation: existing.lastOperation});
-        await data.put('notes', saved);
-        await data.put('index', remote);
+        var remote = receipt.note, key = entry.localId || entry.noteId || String(receipt.postId), existing;
+        await updateNotes(function(current, queued) {
+            existing=current.find(note=>note.id===key) || current.find(note=>note.postId && String(note.postId)===String(receipt.postId));
+            var pending=queued.filter(item=>item.id!==entry.id && existing && related(item,existing));
+            var saved=Object.assign({},remote,{id:existing ? existing.id : String(remote.id),pending:!!pending.length});
+            if(pending.length && existing){var local=noteView(existing);Object.assign(saved,{content:local.content,title:local.title,parent:local.parent,lastOperation:local.lastOperation});}
+            return replaceNote(current,saved);
+        });
         if(entry.kind==='daily'&&remote.daily&&location.pathname.endsWith('/daily/'+remote.daily)){history.replaceState(null,'',url('note/'+encodeURIComponent(remote.slug||String(remote.postId))));lastPath=location.href;}
         if(existing && !activeEditor && location.pathname.endsWith('/note/' + encodeURIComponent(existing.id)) && existing.id !== String(remote.postId)){var address=new URL(url('note/'+remote.postId));address.search=location.search;address.hash=location.hash;history.replaceState(null,'',address.href);lastPath=address.href;}
     }
@@ -733,6 +785,7 @@
                 onAcknowledged: acknowledged
             }));
             data = new window.WpAppLocalData(outbox);
+            await consolidateNotes();
             setupCapture();
             window.setInterval(updateClocks,1000);
             await loadLocal();
@@ -750,7 +803,7 @@
                 try{var key=await queueNote(undefined,{title:input.value.trim(),content:'',parent:0});input.value='';await navigate('edit/'+encodeURIComponent(key));}
                 catch(error){message.textContent=error.message;}finally{button.disabled=false;input.disabled=false;}
             });
-            root.querySelector('[data-shell-sync]').addEventListener('click', async () => { await outbox.sync(); if (navigator.onLine) await refreshIndex().catch(error => status(error.message)); if (canRefreshView()) await render(); });
+            root.querySelector('[data-shell-sync]').addEventListener('click', async () => { await outbox.sync(); if (navigator.onLine) await refreshMetadata().catch(error => status(error.message)); if (canRefreshView()) await render(); });
             root.querySelector('[data-shell-menu]').addEventListener('click', function () { var sidebar = root.querySelector('.memex-sidebar'), opened = sidebar.classList.toggle('is-open'); this.setAttribute('aria-expanded', String(opened)); });
             document.addEventListener('click', function (event) {
                 var anchor = event.target.closest('a[href]'); if (!anchor || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || anchor.getAttribute('target') || anchor.hasAttribute('download')) return;
@@ -758,12 +811,12 @@
                 var path = address.pathname.slice(new URL(config.scope).pathname.length); if (['import','export','reminders'].includes(path.replace(/\/$/,''))) return;
                 event.preventDefault(); navigate(path + address.search + address.hash).catch(error => status(error.message));
             });
-            if (window.aiAssistant && typeof window.aiAssistant.onToolCall === 'function') window.aiAssistant.onToolCall(function(context){return !!(context&&context.success);},async function(){if(!activeEditor){await refreshIndex();await render();}});
+            if (window.aiAssistant && typeof window.aiAssistant.onToolCall === 'function') window.aiAssistant.onToolCall(function(context){return !!(context&&context.success);},async function(){if(!activeEditor){await refreshMetadata();await render();}});
             window.addEventListener('popstate', async function(){try{await draftWrites;await render();lastPath=location.href;}catch(error){history.pushState(null,'',lastPath);status('Could not save your draft. Keep this page open and copy your text.');}});
             window.addEventListener('beforeunload',function(event){if(pendingDraftWrites||draftFailure){event.preventDefault();event.returnValue='';}});
             window.addEventListener('offline', () => { offline = true; status('Offline — your drafts and changes are saved on this device.'); chrome(); });
-            window.addEventListener('online', async () => { await outbox.sync(); await refreshIndex().catch(error => status(error.message)); if (canRefreshView()) await render(); });
-            if (navigator.onLine) { try { await refreshIndex(); if (canRefreshView()) await render(); } catch (error) { status('Using local notes. ' + error.message); } outbox.sync(); }
+            window.addEventListener('online', async () => { await outbox.sync(); await refreshMetadata().catch(error => status(error.message)); if (canRefreshView()) await render(); });
+            if (navigator.onLine) { try { await refreshMetadata(); if (canRefreshView()) await render(); } catch (error) { status('Using local notes. ' + error.message); } outbox.sync(); }
 
         } catch (error) { status(error.message); view.replaceChildren(node('p', 'The app could not open its local data or verify the session. Your saved work has not been cleared. Reopen Memex online with the same account.')); }
     }

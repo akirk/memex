@@ -279,3 +279,105 @@ test('backlink previews use refreshed text on both note and backlinks pages offl
     await preview.filter({hasText:'04:53 · Refers to target'}).waitFor();
     assert.equal(await preview.textContent(),'04:53 · Refers to target');
 });
+
+async function storedNotes(f) {
+    return f.page.evaluate(async()=>{
+        const storage=new WpAppStorage({scope:location.origin+'/memex/',userId:7,databaseName:'memex-capture:'+location.origin+'/memex/:7'});
+        try{return {records:await storage.rows('records'),entries:await storage.rows('entries'),drafts:await storage.rows('drafts')};}finally{await storage.close();}
+    });
+}
+
+test('one notes collection distinguishes metadata from downloaded bodies', {timeout:20000}, async t=>{
+    const f=await fixture(t);
+    assert.equal(await f.page.locator('[data-shell-available-count]').textContent(),'(0)');
+    f.records.set('2',{...f.records.get('1'),id:'2',postId:2,slug:'second',title:'Second note'});
+    await f.go('note/1');await f.page.getByRole('heading',{name:'Project',exact:true}).waitFor();
+    await f.go('');await f.page.locator('[data-shell-view]').getByRole('link',{name:'Second note',exact:true}).waitFor();
+    const stored=await storedNotes(f),records=stored.records.map(row=>row.value);
+    assert.equal(stored.records.every(row=>row.collection==='notes'),true);
+    assert.equal(records.length,2);assert.equal(records.filter(note=>note.body).length,1);
+    assert.equal(records.find(note=>note.id==='1').body.content,'Original note');
+    assert.equal(records.some(note=>Object.hasOwn(note,'content')),false);
+    assert.equal(await f.page.locator('[data-shell-available-count]').textContent(),'(1)');
+    await f.context.setOffline(true);await f.go('note/2');
+    await f.page.getByText('This note has not been downloaded. Open it online once to make its content and editor available offline.',{exact:true}).waitFor();
+    await f.go('note/1');await f.page.locator('#selected-note-content').filter({hasText:'Original note'}).waitFor();
+});
+
+test('metadata refresh preserves the downloaded body version used for offline conflict checks', {timeout:20000}, async t=>{
+    const f=await fixture(t);await f.go('note/1');await f.page.getByRole('heading',{name:'Project',exact:true}).waitFor();await f.page.waitForLoadState('networkidle');
+    f.records.set('1',{...f.records.get('1'),content:'Changed elsewhere',html:'<p>Changed elsewhere</p>',excerpt:'New server preview',version:'v2'});
+    await f.go('');await f.page.getByText('New server preview',{exact:true}).waitFor();
+    const note=(await storedNotes(f)).records.find(row=>row.collection==='notes').value;
+    assert.equal(note.version,'v2');assert.equal(note.body.version,'v1');assert.equal(note.body.content,'Original note');
+    await f.context.setOffline(true);await f.go('edit/1');await edit(f,'My version','Offline edit from older body');
+    await f.context.setOffline(false);await f.page.getByRole('link',{name:'Review versions',exact:true}).waitFor();
+    assert.equal(f.sent[0].baseVersion,'v1');assert.equal(f.records.get('1').content,'Changed elsewhere');
+});
+
+test('consolidation preserves cached bodies, pending creations, drafts, and stable local IDs offline', {timeout:20000}, async t=>{
+    const f=await fixture(t);await f.context.setOffline(true);
+    await f.page.evaluate(async()=>{
+        const scope=location.origin+'/memex/',storage=new WpAppStorage({scope,userId:7,databaseName:'memex-capture:'+scope+':7'}),local=new WpAppLocalData(storage);
+        const base={id:'1',postId:1,slug:'project',title:'Project',parent:0,status:'publish',editable:true,links:[],tags:[],version:'v1'};
+        try{
+            await local.replace('index',[{...base,excerpt:'Fresh preview',version:'v2'},{...base,id:'2',postId:2,slug:'second',title:'Second note'}]);
+            await local.replace('notes',[{...base,content:'Cached original body',html:'<p>Cached original body</p>',excerpt:'Old preview'},{...base,id:'local-new',postId:0,title:'Unsynced creation',content:'Pending text',html:'',pending:true,lastOperation:'operation-1'}]);
+            await storage.transaction(['entries','drafts'],'readwrite',tx=>{
+                tx.objectStore('entries').put({id:'operation-1',localId:'local-new',kind:'note',title:'Unsynced creation',content:'Pending text',parent:0,userId:7,createdAt:'2026-01-01T12:00:00Z'});
+                tx.objectStore('drafts').put({id:'shell-edit:1:existing-tab',title:'Unsubmitted draft',content:'Keep this draft',baseVersion:'v1'});
+            });
+        }finally{await storage.close();}
+    });
+    await f.page.reload();await f.page.locator('[data-shell-view]').getByRole('link',{name:'Unsynced creation',exact:true}).waitFor();
+    const stored=await storedNotes(f),records=stored.records.map(row=>row.value),note=records.find(note=>note.id==='1');
+    assert.equal(stored.records.every(row=>row.collection==='notes'),true);
+    assert.equal(records.length,3);assert.equal(note.excerpt,'Fresh preview');assert.equal(note.version,'v2');assert.equal(note.body.version,'v1');
+    assert.equal(note.body.content,'Cached original body');assert.equal(records.find(note=>note.id==='local-new').body.content,'Pending text');
+    assert.equal(stored.entries.length,1);assert.equal(stored.drafts.find(draft=>draft.id==='shell-edit:1:existing-tab').content,'Keep this draft');
+    await f.page.reload();await f.page.locator('[data-shell-view]').getByRole('link',{name:'Unsynced creation',exact:true}).waitFor();
+    assert.equal((await storedNotes(f)).records.length,3);
+    await f.go('note/1');await f.page.locator('#selected-note-content').filter({hasText:'Cached original body'}).waitFor();
+});
+
+test('acknowledging a creation collapses metadata discovered under its server ID into the local record', {timeout:20000}, async t=>{
+    const f=await fixture(t);await f.context.setOffline(true);await f.go('new');
+    await f.page.locator('[data-shell-view] input[name=title]').fill('Created offline');
+    await f.page.locator('.overtype-input').fill('Local creation body');
+    await f.page.getByRole('button',{name:'Save draft',exact:true}).click();
+    await f.page.getByRole('heading',{name:'Created offline',exact:true}).waitFor();
+    const localId=(await storedNotes(f)).entries[0].localId;
+    await f.page.route('**/ajax',async route=>{
+        const params=new URLSearchParams(route.request().postData()||'');
+        if(params.get('action')!=='memex_capture_sync')return route.continue();
+        const response=await route.fetch(),receipt=(await response.json()).data;
+        await f.page.evaluate(async note=>{
+            const scope=location.origin+'/memex/',storage=new WpAppStorage({scope,userId:7,databaseName:'memex-capture:'+scope+':7'});
+            try{const {content,html,...metadata}=note;await new WpAppLocalData(storage).put('notes',metadata);}finally{await storage.close();}
+        },receipt.note);
+        await route.fulfill({response});
+    });
+    await f.context.setOffline(false);await f.page.getByRole('button',{name:'Sync now',exact:true}).click();
+    await f.page.waitForFunction(()=>document.querySelector('[data-shell-pending]').textContent==='');
+    const records=(await storedNotes(f)).records.filter(row=>row.collection==='notes'&&row.value.postId===2);
+    assert.equal(records.length,1);assert.equal(records[0].value.id,localId);assert.equal(records[0].value.body.content,'Local creation body');
+});
+
+test('a failed consolidation rolls back before deleting existing notes or metadata', {timeout:20000}, async t=>{
+    const f=await fixture(t);await f.context.setOffline(true);
+    await f.page.evaluate(async()=>{
+        const scope=location.origin+'/memex/',storage=new WpAppStorage({scope,userId:7,databaseName:'memex-capture:'+scope+':7'}),local=new WpAppLocalData(storage);
+        try{await local.replace('notes',[{id:'1',postId:1,title:'Project',content:'Keep cached text',html:'<p>Keep cached text</p>',version:'v1'}]);await local.replace('index',[{id:'1',postId:1,title:'Project',excerpt:'Preview',version:'v1'}]);}finally{await storage.close();}
+        sessionStorage.setItem('fail-consolidation','1');
+    });
+    await f.page.addInitScript(()=>{
+        const put=IDBObjectStore.prototype.put;
+        IDBObjectStore.prototype.put=function(value){if(sessionStorage.getItem('fail-consolidation')==='1'&&this.name==='records'&&value.value?.body)throw new DOMException('Quota exceeded','QuotaExceededError');return put.apply(this,arguments);};
+    });
+    await f.page.reload();await f.page.getByText('The app could not open its local data or verify the session. Your saved work has not been cleared. Reopen Memex online with the same account.',{exact:true}).waitFor();
+    const before=await storedNotes(f);
+    assert.equal(before.records.length,2);assert.equal(before.records.find(row=>row.collection==='notes').value.content,'Keep cached text');
+    await f.page.evaluate(()=>sessionStorage.removeItem('fail-consolidation'));await f.page.reload();
+    await f.page.locator('[data-shell-view]').getByRole('link',{name:'Project',exact:true}).waitFor();
+    const after=await storedNotes(f);assert.equal(after.records.length,1);assert.equal(after.records[0].value.body.content,'Keep cached text');
+});

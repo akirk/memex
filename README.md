@@ -67,6 +67,8 @@ wp-app caches an empty app shell and its assets. Notes are stored separately as 
 
 ### Storage model
 
+Browser storage uses one `notes` collection. Each record has metadata and, once downloaded, an optional `body` with its own version for offline conflict checks. Existing metadata and body collections are consolidated in one transaction, preserving drafts and queued work.
+
 - Notes: a hierarchical `memex_note` custom post type with `title`, `editor`, `excerpt`, `revisions`, `author`, `page-attributes` and `custom-fields` support.
 - Tags: a `memex_tag` taxonomy.
 - Forward links: `_memex_links_to` post meta — one row per target post ID. Backlinks come from a single `meta_query` on this key.
