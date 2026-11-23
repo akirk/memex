@@ -244,3 +244,20 @@ test('older dailies retain sidebar capture and the calendar follows leap years a
     await calendar.getByRole('link',{name:'Next month',exact:true}).click();
     assert.equal(await calendar.getAttribute('data-month'),'2024-02');
 });
+
+
+test('fresh previews replace encoded cached excerpts without replacing offline bodies or pending edits', {timeout:20000}, async t => {
+    const f=await fixture(t);
+    f.records.set('1',{...f.records.get('1'),excerpt:'04:53 &middot; Existing entry'});
+    await f.go('note/1');await f.page.getByRole('heading',{name:'Project',exact:true}).waitFor();
+    f.records.set('1',{...f.records.get('1'),excerpt:'04:53 · Existing entry'});
+    await f.go('');
+    const preview=f.page.locator('[data-shell-view] .memex-note-list-item p');
+    await preview.filter({hasText:'04:53 · Existing entry'}).waitFor();
+    assert.equal(await preview.textContent(),'04:53 · Existing entry');
+    await f.context.setOffline(true);await f.page.reload();
+    await preview.filter({hasText:'04:53 · Existing entry'}).waitFor();
+    await f.go('edit/1');await edit(f,'Local preview','Unsynced local body');
+    await f.go('');await preview.filter({hasText:'Unsynced local body'}).waitFor();
+    assert.equal(await preview.textContent(),'Unsynced local body');
+});

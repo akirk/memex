@@ -28,7 +28,11 @@
     function link(text, path) { return node('a', text, {href: url(path), 'data-route': path}); }
     function allNotes() {
         var merged = new Map(index.map(note => [String(note.postId || note.id), note]));
-        notes.forEach(note => merged.set(String(note.postId || note.id), note));
+        notes.forEach(function (note) {
+            var key = String(note.postId || note.id), metadata = merged.get(key);
+            // Refresh previews without changing the cached body's edit baseline.
+            merged.set(key, !note.pending && metadata ? Object.assign({}, note, {excerpt: metadata.excerpt}) : note);
+        });
         return Array.from(merged.values());
     }
     function decodeSlug(value) { try { return decodeURIComponent(value || ''); } catch (_) { return value; } }
