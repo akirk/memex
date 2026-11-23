@@ -129,3 +129,32 @@ test('failed local draft writes keep the editor open when navigating within the 
     await f.page.locator('.overtype-input').fill('Keep this unsaved text');await f.page.getByText('Could not save locally. Keep this page open and copy your text.',{exact:true}).waitFor();await f.page.getByRole('link',{name:'All notes',exact:true}).click();
     assert.equal(new URL(f.page.url()).pathname,'/memex/edit/1');assert.equal(await f.page.locator('.overtype-input').inputValue(),'Keep this unsaved text');
 });
+
+test('quick capture is accessible from navigation and retains a queued daily entry offline', async t => {
+    const f = await fixture(t);
+    await f.context.setOffline(true);
+    await f.page.getByRole('link', {name:'Quick capture', exact:true}).click();
+    await f.page.getByRole('heading', {name:'Quick capture', exact:true}).waitFor();
+    const area = f.page.getByRole('textbox', {name:'Daily entry', exact:true});
+    await area.fill('Remember this');
+    await f.page.getByRole('button', {name:'Toggle checkbox at start of entry'}).click();
+    await f.page.getByRole('button', {name:'Append to daily note', exact:true}).click();
+    await f.page.locator('[data-shell-view] pre').filter({hasText:'- [ ] Remember this'}).waitFor();
+    await f.page.reload();
+    await f.page.getByRole('heading', {name:'Quick capture', exact:true}).waitFor();
+    await f.page.locator('[data-shell-view] pre').filter({hasText:'- [ ] Remember this'}).waitFor();
+    assert.equal(f.sent.length, 0);
+});
+
+test('sidebar lists only folders and collapses nested branches', {timeout:15000}, async t => {
+    const f = await fixture(t);
+    const base = f.records.get('1');
+    f.records.set('2', {...base,id:'2',postId:2,slug:'subfolder',title:'Subfolder',parent:1});
+    f.records.set('3', {...base,id:'3',postId:3,slug:'leaf',title:'Leaf note',parent:2});
+    await f.page.reload();
+    const folders = f.page.locator('[data-shell-folders]');
+    await folders.getByRole('link', {name:'Subfolder',exact:true,includeHidden:true}).waitFor({state:'attached'});
+    assert.equal(await folders.getByRole('link', {name:'Leaf note',exact:true,includeHidden:true}).count(), 0);
+    assert.equal(await folders.locator('details').count(), 1);
+    assert.equal(await folders.locator('details').evaluate(el => el.open), false);
+});

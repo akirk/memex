@@ -74,18 +74,26 @@
             var item = node('li'); item.append(node('strong', 'Conflict: ' + entry.title), document.createTextNode(' '), link('Review versions', 'edit/' + encodeURIComponent(entry.noteId))); conflicts.append(item);
         });
         var folders = root.querySelector('[data-shell-folders]'); folders.replaceChildren();
-        var sorted = allNotes().sort((a, b) => a.title.localeCompare(b.title));
+        var all = allNotes(), parentIds = new Set(all.map(note => Number(note.parent || 0)).filter(Boolean));
+        var sorted = all.filter(note => parentIds.has(Number(note.postId || note.id))).sort((a, b) => a.title.localeCompare(b.title));
+        var folderIds = new Set(sorted.map(note => Number(note.postId || note.id)));
+        var currentPath = decodeURIComponent(location.pathname.split('/').pop() || ''), openIds = new Set();
+        var current = all.find(note => String(routeId(note)) === currentPath || note.slug === currentPath);
+        while (current && !openIds.has(current.id)) { openIds.add(current.id); current = all.find(note => Number(note.postId || note.id) === Number(current.parent) && Number(current.parent) > 0); }
         function branch(parent, visited) {
             var ul = node('ul');
-            sorted.filter(note => Number(note.parent || 0) === parent).forEach(note => {
+            sorted.filter(note => parent === 0 ? !folderIds.has(Number(note.parent || 0)) : Number(note.parent || 0) === parent).forEach(note => {
                 if (visited.has(note.id)) return;
                 var seen = new Set(visited); seen.add(note.id);
                 var li = node('li'); li.append(link(note.title + (note.pending ? ' •' : ''), 'note/' + encodeURIComponent(routeId(note))));
-                var children = branch(Number(note.postId || note.id), seen); if (children.childElementCount) li.append(children); ul.append(li);
+                var children = branch(Number(note.postId || note.id), seen);
+                if (children.childElementCount) { var details = node('details'), summary = node('summary'); summary.append(li.firstChild); details.open = openIds.has(note.id); details.append(summary, children); li.append(details); }
+                ul.append(li);
             });
             return ul;
         }
-        folders.append(branch(0, new Set()));
+        folders.hidden = !sorted.length;
+        if (sorted.length) folders.append(node('h2', 'Folders'), branch(0, new Set()));
     }
     async function refreshIndex() {
         var page = 1, fresh = [];
@@ -301,9 +309,15 @@
         if (/^[+-]\d{2}:\d{2}$/.test(config.timezone)) { var sign = config.timezone[0] === '-' ? -1 : 1; now = new Date(now.getTime() + sign * (Number(config.timezone.slice(1, 3)) * 60 + Number(config.timezone.slice(4))) * 60000); return now.toISOString().slice(0, 10); }
         var parts = new Intl.DateTimeFormat('en-CA', {timeZone: config.timezone, year: 'numeric', month: '2-digit', day: '2-digit'}).formatToParts(now), values = {}; parts.forEach(part => values[part.type] = part.value); return values.year + '-' + values.month + '-' + values.day;
     }
-    function dailyCapture(date) {
-        title(date);
-        var form = node('form'), area = node('textarea', null, {rows: '8', required: '', 'aria-label': 'Daily entry'}), save = node('button', 'Append to daily note', {type: 'submit'}), message = node('p', '', {role: 'status'}); form.append(area, save, message); view.append(form);
+    function dailyCapture(date, quick) {
+        title(quick ? 'Quick capture' : date);
+        if (quick) view.append(node('p', "Anything you type here is appended, with a timestamp, to today's daily note."));
+        var form = node('form'), area = node('textarea', null, {rows: '8', required: '', 'aria-label': 'Daily entry'}), save = node('button', 'Append to daily note', {type: 'submit'}), message = node('p', '', {role: 'status'}); form.className = 'memex-quick-capture memex-quick-capture-full';
+        area.placeholder = quick ? "What's on your mind?" : 'Add an entry';
+        var task = node('button', '[ ]', {type: 'button', 'aria-label': 'Toggle checkbox at start of entry', 'aria-pressed': 'false'});
+        task.addEventListener('click', function () { area.value = area.value.startsWith('- [ ] ') ? area.value.slice(6) : '- [ ] ' + area.value; task.setAttribute('aria-pressed', String(area.value.startsWith('- [ ] '))); area.dispatchEvent(new Event('input')); area.focus(); });
+        form.append(area, task, save, message); view.append(form);
+        if (quick) area.focus();
         var tabKey = 'memex-editor-tab:' + config.scope, tab;
         try { tab = sessionStorage.getItem(tabKey) || uuid(); sessionStorage.setItem(tabKey,tab); } catch (_) { tab=uuid(); }
         var draftId = 'shell-daily:' + date + ':' + tab;
@@ -332,6 +346,7 @@
         if (kind === 'daily' || kind === 'capture' || kind === 'quick-capture') {
             var date = id || dailyDate();
             if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(date + 'T12:00:00Z')) || new Date(date + 'T12:00:00Z').toISOString().slice(0,10) !== date || date > dailyDate()) { title('Invalid daily date'); return; }
+            if (kind === 'quick-capture' || kind === 'capture') { dailyCapture(date, true); return; }
             var daily = allNotes().find(note => note.daily === date);
             if (daily) { await showNote(daily.id); if (token === generation) { view.append(node('h2', 'Add an entry')); dailyCaptureForm(date); } }
             else dailyCapture(date);

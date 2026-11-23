@@ -12,6 +12,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     foreach ( [
 		''        => 'All notes',
 		'daily'   => 'Today',
+		'quick-capture' => 'Quick capture',
 		'new'     => 'New note',
 		'search'  => 'Search',
 		'tags'    => 'Tags',
