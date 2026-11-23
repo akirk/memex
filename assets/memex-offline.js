@@ -2,42 +2,14 @@
     'use strict';
     var config = window.memexOffline;
     if (!config || !config.userId) return;
-    var dbPromise;
-    var running = false;
-    var lastError = '';
     var ready = 'Checking…';
-    var channel;
-    var dbName = 'memex-capture:' + config.scope + ':' + config.userId;
-
-    function openDB() {
-        if (!dbPromise) dbPromise = new Promise(function (resolve, reject) {
-            if (!window.indexedDB) return reject(new Error('Local storage unavailable. Keep your text here and save online.'));
-            var request = indexedDB.open(dbName, 1);
-            request.onupgradeneeded = function () {
-                ['entries', 'drafts', 'meta'].forEach(function (name) { request.result.createObjectStore(name, {keyPath: 'id'}); });
-            };
-            request.onsuccess = function () { resolve(request.result); };
-            request.onerror = function () { reject(request.error); };
-            request.onblocked = function () { reject(new Error('Local storage is blocked. Close other Memex tabs and retry.')); };
-        });
-        return dbPromise;
-    }
-    function transaction(stores, mode, work) {
-        return openDB().then(function (db) {
-            return new Promise(function (resolve, reject) {
-                var tx = db.transaction(stores, mode);
-                var value;
-                tx.oncomplete = function () { resolve(value); };
-                tx.onerror = tx.onabort = function () { reject(tx.error || new Error('Local save failed. Your text has not been cleared.')); };
-                work(tx, function (result) { value = result; });
-            });
-        });
-    }
-    function rows(store) {
-        return transaction([store], 'readonly', function (tx, done) {
-            tx.objectStore(store).getAll().onsuccess = function (event) { done(event.target.result); };
-        });
-    }
+    var outbox = new window.WpAppOutbox(Object.assign({}, config, {
+        // Preserve queues and drafts saved before the framework migration.
+        databaseName: 'memex-capture:' + config.scope + ':' + config.userId,
+        sessionAction: 'memex_capture_session', syncAction: 'memex_capture_sync', payloadField: 'capture',
+        acknowledge: function (receipt, entry) { return receipt.id === entry.id && !!receipt.postId; }
+    }));
+    var rows = outbox.rows, transaction = outbox.transaction, sync = outbox.sync;
     function setText(selector, text) {
         document.querySelectorAll(selector).forEach(function (node) { node.textContent = text; });
     }
@@ -48,6 +20,7 @@
             var entries = await rows('entries');
             var meta = await rows('meta');
             var last = meta.find(function (item) { return item.id === 'lastSync'; });
+            document.querySelectorAll('[data-offline-login]').forEach(function (node) { node.hidden = !outbox.status().error; });
             setText('[data-offline-count]', entries.length ? '(' + entries.length + ')' : '');
             setText('[data-offline-pending]', String(entries.length));
             setText('[data-offline-last]', last ? new Date(last.value).toLocaleString() : 'None yet');
@@ -55,7 +28,7 @@
                 node.hidden = !last || !last.url;
                 if (last && last.url) node.href = last.url;
             });
-            setText('[data-offline-status]', lastError || (running ? 'Syncing…' : entries.length ? 'Saved on this device. Waiting to sync.' : 'No pending entries.'));
+            setText('[data-offline-status]', outbox.status().error || (outbox.status().running ? 'Syncing…' : entries.length ? 'Saved on this device. Waiting to sync.' : 'No pending entries.'));
             document.querySelectorAll('[data-offline-entries]').forEach(function (list) {
                 list.replaceChildren();
                 entries.forEach(function (entry) {
@@ -75,62 +48,7 @@
             setText('[data-offline-status]', error.message);
         }
     }
-    function changed() {
-        refresh();
-        if (channel) channel.postMessage('changed');
-    }
-    async function request(data) {
-        var controller = new AbortController();
-        var timer = setTimeout(function () { controller.abort(); }, 20000);
-        try {
-            var response = await fetch(config.ajaxUrl, {
-                method: 'POST', credentials: 'same-origin', cache: 'no-store',
-                headers: {'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'},
-                body: new URLSearchParams(data), signal: controller.signal
-            });
-            var result;
-            try { result = await response.json(); } catch (_) { throw new Error('Could not verify saving. Entry kept for retry; log in if your session expired.'); }
-            if (!response.ok || !result.success) throw new Error(result.data && result.data.message || 'Could not sync. Your entry remains on this device.');
-            return result.data;
-        } finally { clearTimeout(timer); }
-    }
-    async function replay() {
-        var entries = await rows('entries');
-        if (!entries.length) return;
-        var session = await request({action: 'memex_capture_session'});
-        if (Number(session.userId) !== Number(config.userId)) throw new Error('Sign in to the account that saved these entries. They have not been sent.');
-        var firstError;
-        for (var entry of entries.sort(function (a, b) { return a.createdAt.localeCompare(b.createdAt); })) {
-            try {
-                var receipt = await request({action: 'memex_capture_sync', nonce: session.nonce, capture: JSON.stringify(entry)});
-                if (receipt.id !== entry.id || !receipt.postId) throw new Error('Server did not acknowledge this entry. Kept for retry.');
-            } catch (error) {
-                // Keep this capture for retry without blocking independent entries.
-                firstError = firstError || error;
-                continue;
-            }
-            await transaction(['entries', 'meta'], 'readwrite', function (tx) {
-                tx.objectStore('entries').delete(entry.id);
-                tx.objectStore('meta').put({id: 'lastSync', value: new Date().toISOString(), url: receipt.url});
-            });
-            changed();
-        }
-        if (firstError) throw firstError;
-    }
-    async function sync() {
-        if (running || !navigator.onLine) { refresh(); return; }
-        running = true;
-        lastError = '';
-        refresh();
-        try {
-            if (navigator.locks) await navigator.locks.request(dbName + ':sync', replay);
-            else await replay(); // Server receipts also protect browsers without Web Locks.
-            document.querySelectorAll('[data-offline-login]').forEach(function (node) { node.hidden = true; });
-        } catch (error) {
-            lastError = error.message;
-            document.querySelectorAll('[data-offline-login]').forEach(function (node) { node.hidden = false; });
-        } finally { running = false; changed(); }
-    }
+    function changed() { outbox.changed(); }
     function uuid() {
         if (crypto.randomUUID) return crypto.randomUUID();
         return '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, function (digit) {
@@ -203,16 +121,12 @@
                 var time = captureTime(new Date(), config.timezone);
                 var entry = Object.assign({}, before, time, {id: uuid(), userId: config.userId, createdAt: new Date().toISOString()});
                 await draftWrites;
-                await transaction(['entries', 'drafts'], 'readwrite', function (tx) {
-                    tx.objectStore('entries').put(entry);
-                    if (JSON.stringify(snapshot()) === JSON.stringify(before)) tx.objectStore('drafts').delete(draftId);
-                });
+                await outbox.enqueue(entry, draftId, function () { return JSON.stringify(snapshot()) === JSON.stringify(before); });
                 if (JSON.stringify(snapshot()) === JSON.stringify(before)) {
                     content.value = '';
                     if (title) title.value = '';
                 }
                 status.textContent = 'Saved on this device. Check Offline & sync for server confirmation.';
-                if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {});
                 changed();
                 sync();
                 if (navigator.serviceWorker && window.SyncManager) {
@@ -230,12 +144,12 @@
             navigator.serviceWorker.addEventListener('message', function (event) {
                 if (!event.data) return;
                 if (event.data.type === 'memex-capture-sync') sync();
-                if (event.data.type === 'memex-capture-status') { ready = event.data.ready ? 'Ready — capture screen cached' : 'Not ready — open online first'; refresh(); }
+                if (event.data.type === 'memex-capture-status') { ready = event.data.ok ? 'Ready — capture screen cached' : 'Not ready — open online first'; refresh(); }
             });
             var registration = await navigator.serviceWorker.getRegistration(config.scope);
             if (navigator.onLine || !registration) registration = await navigator.serviceWorker.register(config.workerUrl, {scope: config.scope});
             function check() {
-                if (registration.active) registration.active.postMessage({type: 'memex-capture-status'});
+                if (registration.active) registration.active.postMessage({type: 'memex-capture-cache', urls: config.requiredUrls, requiredUrls: config.requiredUrls});
             }
             navigator.serviceWorker.addEventListener('controllerchange', check);
             check();
@@ -243,14 +157,10 @@
         } catch (_) { ready = 'Unavailable — open Memex online to prepare'; refresh(); }
     }
     function init() {
-        if (window.BroadcastChannel) { channel = new BroadcastChannel(dbName); channel.onmessage = refresh; }
+        outbox.subscribe(refresh);
         document.querySelectorAll('[data-memex-capture]').forEach(bindForm);
         document.querySelectorAll('[data-offline-sync]').forEach(function (button) { button.addEventListener('click', sync); });
-        window.addEventListener('online', sync);
         window.addEventListener('offline', refresh);
-        window.addEventListener('focus', sync);
-        document.addEventListener('visibilitychange', function () { if (!document.hidden) sync(); });
-        setInterval(function () { if (!document.hidden) sync(); }, 5000);
         worker();
         sync();
         refresh();

@@ -4,16 +4,8 @@ namespace Memex;
 /** Offline capture transport. Each saved operation carries a durable receipt. */
 class OfflineCapture {
 	public static function register(): void {
-		add_filter( 'redirect_canonical', array( __CLASS__, 'worker_redirect' ), 10, 2 );
 		add_action( 'wp_ajax_memex_capture_session', array( __CLASS__, 'session' ) );
 		add_action( 'wp_ajax_memex_capture_sync', array( __CLASS__, 'sync' ) );
-	}
-
-	/** Service worker script URLs must never redirect, including for a trailing slash. */
-	public static function worker_redirect( $redirect, $requested ) {
-		$path = wp_parse_url( $requested, PHP_URL_PATH );
-		$worker_path = wp_parse_url( home_url( '/memex/offline-worker/' ), PHP_URL_PATH );
-		return is_string( $path ) && untrailingslashit( $path ) === untrailingslashit( $worker_path ) ? false : $redirect;
 	}
 
 	public static function pwa_config(): array {
@@ -27,18 +19,41 @@ class OfflineCapture {
 				array( 'src' => plugins_url( 'assets/icon-512.png', dirname( __DIR__ ) . '/memex.php' ), 'sizes' => '512x512', 'type' => 'image/png' ),
 			),
 			// Our worker caches only the capture shell and assets, never private note pages.
-			'register_service_worker' => false,
+			'register_service_worker' => false, // Memex displays registration/readiness itself.
+			'service_worker_path' => 'offline-worker',
+			'cache_policy' => 'shell',
+			'offline_url' => home_url( '/memex/capture/' ),
+			'precache' => self::required_urls(),
+			'cache_prefix' => 'memex-capture-',
+			'cache_name' => 'memex-capture-' . self::asset_version(),
+			'cache_message_type' => 'memex-capture-cache',
+			'cache_status_message_type' => 'memex-capture-status',
+			'sync_tag' => 'memex-capture-sync',
+			'sync_message_type' => 'memex-capture-sync',
 		);
 	}
 
 	/** Shared asset/cache version keeps enqueued URLs identical to worker precache URLs. */
 	public static function asset_version(): string {
 		$root = dirname( __DIR__ );
-		return md5( file_get_contents( $root . '/assets/memex-offline.js' ) . file_get_contents( $root . '/assets/memex-worker.js' ) . file_get_contents( $root . '/assets/memex.css' ) . file_get_contents( $root . '/templates/capture.php' ) );
+		return md5( file_get_contents( $root . '/assets/memex-offline.js' ) . file_get_contents( $root . '/vendor/akirk/wp-app/assets/wp-app-outbox.js' ) . file_get_contents( $root . '/vendor/akirk/wp-app/src/class-pwa.php' ) . file_get_contents( $root . '/vendor/akirk/wp-app/assets/wp-app-worker.js' ) . file_get_contents( $root . '/assets/memex.css' ) . file_get_contents( $root . '/templates/capture.php' ) );
+	}
+
+	public static function required_urls(): array {
+		$base = plugins_url( '', dirname( __DIR__ ) . '/memex.php' ) . '/';
+		$version = self::asset_version();
+		return array(
+			home_url( '/memex/capture/' ),
+			add_query_arg( 'ver', $version, $base . 'assets/memex.css' ),
+			add_query_arg( 'ver', $version, $base . 'assets/memex-offline.js' ),
+			add_query_arg( 'ver', $version, $base . 'vendor/akirk/wp-app/assets/wp-app-outbox.js' ),
+			$base . 'assets/icon.svg',
+		);
 	}
 
 	public static function client_config(): array {
 		return array(
+			'requiredUrls' => self::required_urls(),
 			'ajaxUrl' => admin_url( 'admin-ajax.php' ),
 			'userId' => get_current_user_id(),
 			'workerUrl' => home_url( '/memex/offline-worker/' ),

@@ -5,7 +5,8 @@ $memex_capture_version = \Memex\OfflineCapture::asset_version();
 $memex_capture_base = plugin_dir_url( dirname( __DIR__ ) . '/memex.php' );
 nocache_headers();
 wp_enqueue_style( 'memex-capture-shell', $memex_capture_base . 'assets/memex.css', array(), $memex_capture_version );
-wp_enqueue_script( 'memex-capture-shell', $memex_capture_base . 'assets/memex-offline.js', array(), $memex_capture_version, true );
+wp_enqueue_script( 'wp-app-outbox', $memex_capture_base . 'vendor/akirk/wp-app/assets/wp-app-outbox.js', array(), $memex_capture_version, true );
+wp_enqueue_script( 'memex-capture-shell', $memex_capture_base . 'assets/memex-offline.js', array( 'wp-app-outbox' ), $memex_capture_version, true );
 wp_add_inline_script(
 	'memex-capture-shell',
 	'window.memexOffline = ' . wp_json_encode( \Memex\OfflineCapture::client_config(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT ) . ';',

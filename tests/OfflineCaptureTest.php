@@ -110,10 +110,13 @@ class OfflineCaptureTest extends WP_UnitTestCase {
 		$this->assertSame( $version, wp_styles()->registered['memex-capture-shell']->ver );
 		$this->assertSame( $version, wp_scripts()->registered['memex-capture-shell']->ver );
 	}
-	public function test_worker_endpoint_never_redirects_but_other_routes_keep_their_redirect(): void {
-		$this->assertFalse( OfflineCapture::worker_redirect( 'canonical', home_url( '/memex/offline-worker' ) ) );
-		$this->assertFalse( OfflineCapture::worker_redirect( 'canonical', home_url( '/memex/offline-worker/' ) ) );
-		$this->assertSame( 'canonical', OfflineCapture::worker_redirect( 'canonical', home_url( '/memex/note/example' ) ) );
+	public function test_framework_owns_worker_and_only_caches_capture_shell(): void {
+		$config = OfflineCapture::pwa_config();
+		$this->assertSame( 'shell', $config['cache_policy'] );
+		$this->assertSame( 'offline-worker', $config['service_worker_path'] );
+		$this->assertSame( home_url( '/memex/capture/' ), $config['offline_url'] );
+		$this->assertNotContains( home_url( '/memex/' ), $config['precache'] );
+		$this->assertSame( OfflineCapture::required_urls(), $config['precache'] );
 	}
 
 }

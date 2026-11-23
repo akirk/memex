@@ -5,8 +5,11 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
+const {execFileSync} = require('node:child_process');
 const {chromium} = require('playwright');
 const asset = name => fs.readFileSync(path.join(__dirname, '..', 'assets', name));
+
+const generatedWorker = execFileSync('php', [path.join(__dirname, 'offline-worker-fixture.php')], {encoding: 'utf8'});
 
 async function fixture(t) {
     let account = 7;
@@ -16,9 +19,14 @@ async function fixture(t) {
     const server = http.createServer(async (req, res) => {
         const origin = `http://127.0.0.1:${server.address().port}`;
         const config = {ajaxUrl: origin + '/ajax', scope: origin + '/memex/', workerUrl: origin + '/memex/offline-worker', captureUrl: origin + '/memex/capture', userId: 7, timezone: 'Pacific/Kiritimati'};
+        config.requiredUrls = [config.captureUrl, origin + '/assets/memex-offline.js', origin + '/assets/wp-app-outbox.js'];
         if (req.url === '/memex/offline-worker') {
             res.setHeader('Content-Type', 'application/javascript');
-            return res.end('self.memexWorker = ' + JSON.stringify({cacheName: 'memex-capture-test', captureUrl: config.captureUrl, assets: [origin + '/assets/memex-offline.js']}) + ';\n' + asset('memex-worker.js'));
+            return res.end(generatedWorker.replaceAll('http://placeholder', origin));
+        }
+        if (req.url === '/assets/wp-app-outbox.js') {
+            res.setHeader('Content-Type', 'application/javascript');
+            return res.end(fs.readFileSync(path.join(__dirname, '../vendor/akirk/wp-app/assets/wp-app-outbox.js')));
         }
         if (req.url === '/assets/memex-offline.js') {
             res.setHeader('Content-Type', 'application/javascript');
@@ -46,7 +54,7 @@ async function fixture(t) {
             <details data-memex-offline-panel open><span data-offline-ready></span><span data-offline-count></span><span data-offline-connection></span>
             <span data-offline-pending></span><span data-offline-last></span><p data-offline-status></p><a data-offline-login hidden>Login</a><a data-offline-saved hidden></a>
             <button data-offline-sync>Sync now</button><ul data-offline-entries></ul></details>
-            <script>window.memexOffline=${JSON.stringify(config)};</script><script src="/assets/memex-offline.js"></script>`);
+            <script>window.memexOffline=${JSON.stringify(config)};</script><script src="/assets/wp-app-outbox.js"></script><script src="/assets/memex-offline.js"></script>`);
     });
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     const browser = await chromium.launch({headless: true});
