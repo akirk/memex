@@ -36,7 +36,7 @@ async function fixture(t) {
             const entry=JSON.parse(params.get('capture')); sent.push(entry);
             if (receipts.has(entry.id)) return success(receipts.get(entry.id));
             if (entry.kind==='note') {
-                const id=String(records.size+1), note={...records.get('1'),id,postId:Number(id),title:entry.title,content:entry.content,html:'<p>'+entry.content+'</p>',version:'v1',status:'draft'};records.set(id,note);
+                const id=String(records.size+1), note={...records.get('1'),id,postId:Number(id),slug:entry.daily?'daily-'+entry.daily:'note-'+id,daily:entry.daily||'',title:entry.title,content:entry.content,html:'<p>'+entry.content+'</p>',version:'v1',status:entry.publish?'publish':'draft'};records.set(id,note);
                 const receipt={id:entry.id,postId:Number(id),note};receipts.set(entry.id,receipt);return success(receipt);
             }
             const prior=receipts.get(entry.baseOperation), target=String(Number(entry.noteId)||prior&&prior.postId), note=records.get(target);
@@ -62,7 +62,7 @@ async function fixture(t) {
     return {page,context,records,sent,account(value){account=value;},async go(route){await page.goto(new URL('/memex/'+route,page.url()).href);}};
 }
 async function edit(f,title,content) {
-    await f.page.locator('input[name=title]').fill(title);
+    await f.page.locator('[data-shell-view] input[name=title]').fill(title);
     await f.page.locator('.overtype-input').fill(content);
     await f.page.getByRole('button',{name:'Save note',exact:true}).click();
     await f.page.waitForFunction(()=>!document.querySelector('[data-shell-editor]'));
@@ -101,7 +101,7 @@ test('offline drafts restore and a changed signed-in account cannot open another
 
 
 test('a new offline note can be edited again before its server ID exists',async t=>{
-    const f=await fixture(t);await f.context.setOffline(true);await f.go('new');await f.page.locator('input[name=title]').fill('Local creation');await f.page.locator('.overtype-input').fill('Initial local content');await f.page.getByRole('button',{name:'Save draft',exact:true}).click();await f.page.getByRole('link',{name:'Edit note',exact:true}).click();await edit(f,'Local creation','Updated before upload');
+    const f=await fixture(t);await f.context.setOffline(true);await f.go('new');await f.page.locator('[data-shell-view] input[name=title]').fill('Local creation');await f.page.locator('.overtype-input').fill('Initial local content');await f.page.getByRole('button',{name:'Save draft',exact:true}).click();await f.page.getByRole('link',{name:'Edit note',exact:true}).click();await edit(f,'Local creation','Updated before upload');
     await f.context.setOffline(false);await f.page.getByRole('button',{name:'Sync now'}).click();await f.page.waitForFunction(()=>document.querySelector('[data-shell-pending]').textContent==='');assert.equal(f.records.get('2').content,'Updated before upload');assert.equal(f.records.size,2);assert.equal(new URL(f.page.url()).pathname,'/memex/note/2');
 });
 
@@ -130,22 +130,6 @@ test('failed local draft writes keep the editor open when navigating within the 
     assert.equal(new URL(f.page.url()).pathname,'/memex/edit/1');assert.equal(await f.page.locator('.overtype-input').inputValue(),'Keep this unsaved text');
 });
 
-test('quick capture is accessible from navigation and retains a queued daily entry offline', async t => {
-    const f = await fixture(t);
-    await f.context.setOffline(true);
-    await f.page.getByRole('link', {name:'Quick capture', exact:true}).click();
-    await f.page.getByRole('heading', {name:'Quick capture', exact:true}).waitFor();
-    const area = f.page.getByRole('textbox', {name:'Daily entry', exact:true});
-    await area.fill('Remember this');
-    await f.page.locator('[data-shell-view]').getByRole('button', {name:'Toggle checkbox at start of entry'}).click();
-    await f.page.getByRole('button', {name:'Append to daily note', exact:true}).click();
-    await f.page.locator('[data-shell-view] pre').filter({hasText:'- [ ] Remember this'}).waitFor();
-    await f.page.reload();
-    await f.page.getByRole('heading', {name:'Quick capture', exact:true}).waitFor();
-    await f.page.locator('[data-shell-view] pre').filter({hasText:'- [ ] Remember this'}).waitFor();
-    assert.equal(f.sent.length, 0);
-});
-
 test('sidebar lists only folders and collapses nested branches', {timeout:15000}, async t => {
     const f = await fixture(t);
     const base = f.records.get('1');
@@ -160,21 +144,103 @@ test('sidebar lists only folders and collapses nested branches', {timeout:15000}
 });
 
 
-test('sidebar quick capture remains above navigation and saves offline without leaving the note', async t => {
-    const f = await fixture(t);
+test('capture matches main: sidebar textarea, clock, plain task marker, then inline input on today', {timeout:20000}, async t => {
+    const f=await fixture(t);
     await f.context.setOffline(true);
-    const input = f.page.getByRole('textbox', {name:'Quick capture text',exact:true});
-    await input.fill('Sidebar reminder');
-    await f.page.getByRole('link', {name:'Quick capture',exact:true}).click();
-    assert.equal(await input.inputValue(), 'Sidebar reminder');
-    await f.page.reload();
+    const sidebar=f.page.locator('[data-shell-quick-capture]');
+    const area=sidebar.locator('textarea[name=content]');
+    await area.fill('Remember this');
+    assert.equal(await area.getAttribute('rows'),'2');
+    await sidebar.getByRole('button',{name:'Toggle checkbox at start of entry'}).click();
+    assert.equal(await area.inputValue(),'[ ] Remember this');
+    assert.match(await sidebar.locator('time').textContent(),/^\d{2}:\d{2}$/);
+    await f.page.getByRole('link',{name:'Today',exact:true}).click();
+    const input=f.page.locator('#selected-note-content input[name=content]');
     await input.waitFor();
-    await f.page.waitForFunction(() => document.querySelector('[data-shell-quick-capture] input').value === 'Sidebar reminder');
-    const before = f.page.url();
-    await f.page.locator('[data-shell-quick-capture]').getByRole('button', {name:'Capture',exact:true}).click();
-    await f.page.locator('[data-shell-view] pre').filter({hasText:'Sidebar reminder'}).waitFor();
-    assert.equal(f.page.url(), before);
-    assert.equal(await input.inputValue(), '');
-    assert.equal(await f.page.locator('.memex-sidebar-body').evaluate(el => el.firstElementChild.hasAttribute('data-shell-quick-capture')), true);
-    assert.equal(f.sent.length, 0);
+    assert.equal(await input.inputValue(),'[ ] Remember this');
+    assert.equal(await sidebar.locator('form').count(),0);
+    await f.page.reload();
+    await f.page.waitForFunction(()=>document.querySelector('#selected-note-content input[name=content]')?.value==='[ ] Remember this');
+    await f.page.getByRole('button',{name:'Capture',exact:true}).click();
+    await f.page.locator('#selected-note-content p').filter({hasText:'[ ] Remember this'}).waitFor();
+    assert.equal(f.sent.length,0);
+    await f.page.getByRole('link',{name:'All notes',exact:true}).click();
+    await sidebar.locator('textarea').waitFor();
+    assert.equal(await sidebar.locator('textarea').inputValue(),'');
+});
+
+test('daily notes retain calendar, existing-day links, backfill drafts, and no future links', {timeout:20000}, async t => {
+    const f=await fixture(t),today=new Date().toISOString().slice(0,10),month=today.slice(0,7),past=month+'-01';
+    f.records.set('2',{...f.records.get('1'),id:'2',postId:2,slug:'daily-'+today,title:today,daily:today,content:'Existing daily entry',html:'<p>Existing daily entry</p>'});
+    await f.page.reload();await f.page.getByRole('link',{name:'Today',exact:true}).click();
+    await f.page.locator('#selected-note-content').filter({hasText:'Existing daily entry'}).waitFor();
+    assert.match(new URL(f.page.url()).pathname,/note\/daily-/);
+    await f.page.locator('#selected-note-content input[name=content]').waitFor();
+    const calendar=f.page.getByRole('region',{name:'Daily notes calendar'});
+    await calendar.getByRole('link',{name:'Open daily note for '+today,exact:true}).waitFor();
+    assert.equal(await calendar.locator('[aria-label="Next month"]').getAttribute('aria-disabled'),'true');
+    await calendar.getByRole('link',{name:'Write a draft daily note for '+past,exact:true}).click();
+    await f.page.getByText('Unsaved daily draft. Save to keep it unpublished, or publish when ready.',{exact:true}).waitFor();
+    assert.equal(await f.page.locator('[data-shell-view] input[name=title]').inputValue(),past);
+    assert.equal(f.records.size,2);assert.equal(f.sent.length,0);
+    await f.page.getByRole('button',{name:'Publish',exact:true}).waitFor();
+    await f.context.setOffline(true);
+    await f.page.locator('.overtype-input').fill('Backfilled daily');
+    await f.page.getByRole('button',{name:'Save draft',exact:true}).click();
+    await f.page.waitForFunction(()=>!document.querySelector('[data-shell-editor]'));
+    await f.context.setOffline(false);
+    await f.page.waitForFunction(()=>document.querySelector('[data-shell-pending]').textContent==='');
+    assert.equal(f.sent[0].daily,past);assert.equal(f.sent[0].publish,false);
+});
+
+test('Orphans retains the shared navigation and includes notes with outgoing but no incoming links', {timeout:20000}, async t => {
+    const f=await fixture(t),base=f.records.get('1');
+    f.records.set('1',{...base,links:[2]});f.records.set('2',{...base,id:'2',postId:2,slug:'target',title:'Target',links:[]});
+    await f.page.reload();
+    const before=await f.page.locator('.memex-nav a').allTextContents();
+    assert.deepEqual(before,['All notes','Today','Reminders','Search','Graph','Tags','Orphans','Broken links','Import','Export']);
+    await f.page.getByRole('link',{name:'Orphans',exact:true}).click();
+    await f.page.getByRole('heading',{name:'Orphan notes',exact:true}).waitFor();
+    await f.page.locator('[data-shell-view]').getByRole('link',{name:'Project',exact:true}).waitFor();
+    assert.equal(await f.page.locator('[data-shell-view]').getByRole('link',{name:'Target',exact:true}).count(),0);
+    assert.deepEqual(await f.page.locator('.memex-nav a').allTextContents(),before);
+});
+
+test('graph preserves main linked-note filtering, counts, and unlinked list', {timeout:20000}, async t => {
+    const f=await fixture(t),base=f.records.get('1');
+    f.records.set('1',{...base,links:[1,2,2,999]});f.records.set('2',{...base,id:'2',postId:2,title:'Beta',links:[]});f.records.set('3',{...base,id:'3',postId:3,title:'Lonely',links:[]});
+    await f.go('graph');
+    await f.page.getByText('2 linked notes, 1 links; 1 notes without links are not shown.',{exact:true}).waitFor();
+    const graph=JSON.parse(await f.page.locator('[data-graph]').getAttribute('data-graph'));
+    assert.deepEqual(graph.nodes.map(note=>note.id),['1','2']);assert.deepEqual(graph.edges,[{from:'1',to:'2'}]);
+    await f.page.locator('.memex-graph-unlinked').getByRole('link',{name:'Lonely',exact:true}).waitFor();
+    f.records.delete('2');await f.page.reload();
+    await f.page.getByText('0 linked notes, 0 links; 2 notes without links are not shown.',{exact:true}).waitFor();
+    assert.equal(await f.page.locator('[data-graph]').count(),0);
+    await f.page.getByRole('link',{name:'by tag',exact:true}).waitFor();
+});
+
+test('graph shows the latest ten unlinked notes and its original empty state', {timeout:20000}, async t => {
+    const f=await fixture(t),base=f.records.get('1');f.records.clear();
+    for(let i=1;i<=12;i++)f.records.set(String(i),{...base,id:String(i),postId:i,title:'Note '+i,links:[],created:'2026-01-'+String(i).padStart(2,'0')+' 12:00:00'});
+    await f.go('graph');await f.page.getByRole('heading',{name:'Latest 10 of 12 notes without links',exact:true}).waitFor();
+    assert.equal(await f.page.locator('.memex-graph-unlinked li').count(),10);
+    assert.equal(await f.page.locator('.memex-graph-unlinked li').first().textContent(),'Note 12');
+    assert.equal(await f.page.locator('.memex-graph-unlinked').getByRole('link',{name:'Note 2',exact:true}).count(),0);
+    f.records.clear();await f.page.reload();await f.page.getByText('No notes to graph yet.',{exact:true}).waitFor();
+});
+
+test('older dailies retain sidebar capture and the calendar follows leap years and month selection', {timeout:20000}, async t => {
+    const f=await fixture(t),base=f.records.get('1');
+    f.records.set('2',{...base,id:'2',postId:2,slug:'daily-2024-02-29',daily:'2024-02-29',title:'February day'});
+    await f.go('note/2?month=2024-02');await f.page.getByRole('heading',{name:'February day daily',exact:true}).waitFor();
+    const calendar=f.page.locator('[data-daily-calendar]');
+    await calendar.getByRole('link',{name:'Open daily note for 2024-02-29',exact:true}).waitFor();
+    assert.equal(await calendar.locator('[data-calendar-date="2024-02-30"]').count(),0);
+    await f.page.locator('[data-shell-quick-capture] textarea').waitFor();
+    assert.equal(await f.page.locator('#selected-note-content form').count(),0);
+    await calendar.getByRole('link',{name:'Previous month',exact:true}).click();
+    assert.equal(await calendar.getAttribute('data-month'),'2024-01');
+    await calendar.getByRole('link',{name:'Next month',exact:true}).click();
+    assert.equal(await calendar.getAttribute('data-month'),'2024-02');
 });

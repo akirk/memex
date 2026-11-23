@@ -18,9 +18,9 @@ class OfflineCapture {
 				array( 'src' => plugins_url( 'assets/icon-192.png', dirname( __DIR__ ) . '/memex.php' ), 'sizes' => '192x192', 'type' => 'image/png' ),
 				array( 'src' => plugins_url( 'assets/icon-512.png', dirname( __DIR__ ) . '/memex.php' ), 'sizes' => '512x512', 'type' => 'image/png' ),
 			),
-			// Keep a minimal fallback, and explicitly allow authenticated visited pages.
-			'register_service_worker' => defined( 'WpApp\\Pwa::APP_SHELL_SUPPORTED' ),
-			'service_worker_path' => defined( 'WpApp\\Pwa::OFFLINE_PAGES_SUPPORTED' ) ? 'offline-worker' : 'offline-update-required',
+			// Cache the shared app shell; note data is stored separately.
+			'register_service_worker' => true,
+			'service_worker_path' => 'offline-worker',
 			'cache_policy' => 'shell',
 			'outbox' => true,
 			'visited_pages' => false,
@@ -47,7 +47,7 @@ class OfflineCapture {
 	/** Shared asset/cache version keeps enqueued URLs identical to worker precache URLs. */
 	public static function asset_version(): string {
 		$root = dirname( __DIR__ );
-		$files = array( 'assets/memex-shell.js', 'templates/_shell-content.php', 'assets/vendor/overtype/overtype.min.js', 'assets/memex.css' );
+		$files = array( 'assets/memex-shell.js', 'templates/_shell-content.php', 'templates/_navigation.php', 'assets/vendor/overtype/overtype.min.js', 'assets/memex.css' );
 		$hashes = array_map( static function ( $file ) use ( $root ) { return hash_file( 'sha256', $root . '/' . $file ); }, $files );
 		return md5( implode( '', $hashes ) );
 	}
@@ -61,20 +61,6 @@ class OfflineCapture {
 			add_query_arg( 'ver', $version, $base . 'assets/memex-shell.js' ),
 			add_query_arg( 'ver', $version, $base . 'assets/vendor/overtype/overtype.min.js' ),
 			$base . 'assets/icon.svg',
-		);
-	}
-
-	public static function client_config(): array {
-		return array(
-			'workerSupported' => defined( 'WpApp\\Pwa::OFFLINE_PAGES_SUPPORTED' ),
-			'requiredUrls' => \WpApp\Pwa::get_config( 'memex' )['precache'] ?? self::required_urls(),
-			'ajaxUrl' => admin_url( 'admin-ajax.php' ),
-			'userId' => get_current_user_id(),
-			'workerUrl' => home_url( '/memex/offline-worker/' ),
-			'scope' => home_url( '/memex/' ),
-			'captureUrl' => home_url( '/memex/capture/' ),
-			'loginUrl' => wp_login_url( home_url( '/memex/capture/' ) ),
-			'timezone' => wp_timezone()->getName(),
 		);
 	}
 
@@ -116,6 +102,11 @@ class OfflineCapture {
 		if ( 'daily' === $kind && ( ! is_string( $date ) || ! DailyNote::is_valid_date( $date ) || $date > DailyNote::today() || ! is_string( $clock ) || ! preg_match( '/\A(?:[01][0-9]|2[0-3]):[0-5][0-9]\z/', $clock ) ) ) {
 			return new \WP_Error( 'capture_date', __( 'Invalid daily capture date or time.', 'memex' ) );
 		}
+		$daily = $input['daily'] ?? '';
+		if ( 'note' === $kind && ( ! is_string( $daily ) || ( '' !== $daily && ( ! DailyNote::is_valid_date( $daily ) || $daily > DailyNote::today() ) ) ) ) {
+			return new \WP_Error( 'capture_date', __( 'Invalid daily note date.', 'memex' ) );
+		}
+		if ( ! empty( $input['publish'] ) && ! current_user_can( 'publish_posts' ) ) { return new \WP_Error( 'capture_permission', __( 'You cannot publish notes.', 'memex' ) ); }
 		if ( 'note' === $kind && ! Shell::valid_parent( (int) ( $input['parent'] ?? 0 ) ) ) { return new \WP_Error( 'capture_parent', 'Invalid parent note.' ); }
 		// Serialize captures across tabs/devices, including appends to the same daily.
 		$lock = 'memex-capture-' . md5( $wpdb->prefix . DB_NAME );
@@ -147,6 +138,13 @@ class OfflineCapture {
 					'ID' => $note->ID,
 					'post_content' => trim( $note->post_content ) . "\n\n" . Content::plain_text_to_blocks( trim( $content ), $clock ) . "\n" . $marker,
 				) ), true );
+			} elseif ( ! $post_id && '' !== $daily ) {
+				$existing = DailyNote::find( $daily );
+				if ( $existing ) {
+					return new \WP_Error( 'conflict', __( 'This daily note was created elsewhere. Review it before saving.', 'memex' ), current_user_can( 'read_post', $existing->ID ) ? array( 'note' => Shell::note( $existing ) ) : array() );
+				}
+				$note = DailyNote::save_new( $daily, sanitize_text_field( $title ), Content::markdown_to_html( $content ) . "\n" . $marker, ! empty( $input['publish'] ) );
+				$post_id = is_wp_error( $note ) ? $note : $note->ID;
 			} elseif ( ! $post_id ) {
 				$post_id = wp_insert_post( wp_slash( array(
 					'post_type' => CPT::POST_TYPE,

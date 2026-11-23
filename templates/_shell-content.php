@@ -8,32 +8,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 <div class="memex-brand"><a data-route="" href="<?php echo esc_url( home_url( '/memex/' ) ); ?>">Memex</a><button type="button" class="memex-sidebar-toggle" data-shell-menu aria-expanded="false" aria-label="Menu"><span class="memex-sidebar-toggle-icon" aria-hidden="true"></span></button></div>
 <div class="memex-sidebar-body">
 <div data-shell-quick-capture></div>
-    <nav class="memex-nav" aria-label="<?php esc_attr_e( 'Memex sections', 'memex' ); ?>">
-    <?php
-    foreach ( [
-		''        => 'All notes',
-		'daily'   => 'Today',
-		'quick-capture' => 'Quick capture',
-		'new'     => 'New note',
-		'search'  => 'Search',
-		'tags'    => 'Tags',
-		'graph'   => 'Graph',
-		'orphans' => 'Unlinked notes',
-	] as $memex_path => $label ) :
-		?>
-    <a data-route="<?php echo esc_attr( $memex_path ); ?>" href="<?php echo esc_url( home_url( '/memex/' . $memex_path ) ); ?>"><?php echo esc_html( $label ); ?></a>
-    <?php endforeach; ?>
-    <?php
-    foreach ( [
-		'reminders' => 'Reminders',
-		'import'    => 'Import',
-		'export'    => 'Export',
-	] as $memex_path => $label ) :
-		?>
-    <a href="<?php echo esc_url( home_url( '/memex/' . $memex_path ) ); ?>"><?php echo esc_html( $label ); ?></a>
-    <?php endforeach; ?>
-    </nav>
+    <?php include __DIR__ . '/_navigation.php'; ?>
     <nav class="memex-folders" data-shell-folders aria-label="<?php esc_attr_e( 'Notes and folders', 'memex' ); ?>"></nav>
+<form class="memex-create" data-shell-create aria-label="<?php esc_attr_e( 'Create note', 'memex' ); ?>">
+    <input type="text" name="title" aria-label="<?php esc_attr_e( 'New note title', 'memex' ); ?>" placeholder="<?php esc_attr_e( 'New note title…', 'memex' ); ?>" autocomplete="off" required>
+    <button type="submit"><?php esc_html_e( 'Create', 'memex' ); ?></button><p role="status"></p>
+</form>
 </div>
 </aside>
 <main id="memex-main" class="memex-main">

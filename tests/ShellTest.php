@@ -167,4 +167,10 @@ class ShellTest extends WP_UnitTestCase {
 		$this->expectException( WPDieException::class );
 		\WpApp\Pwa::maybe_handle_app_request( 'memex', 'capture' );
 	}
+    public function test_note_excerpt_decodes_html_entities_for_text_rendering(): void {
+        $post = get_post( self::factory()->post->create( array( 'post_type' => CPT::POST_TYPE, 'post_title' => 'Daily preview', 'post_content' => '<p><strong>04:53</strong> &middot; Login &amp; sharing</p>', 'post_status' => 'draft' ) ) );
+        $note = \Memex\Shell::note( $post, false );
+        $this->assertSame( '04:53 · Login & sharing', $note['excerpt'] );
+    }
+
 }

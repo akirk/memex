@@ -26,7 +26,7 @@ Notes are private by default: the note post type is registered as non-public and
 - **Wiki-style links.** Type `[[` in the Memex editor to link notes. Matching note titles are suggested inline, and missing targets become stub notes.
 - **Automatic backlinks.** Every note has a backlinks panel showing what links to it. Forward links are tracked too.
 - **Daily notes.** `/memex/daily` opens today's note with a wide capture field below its entries; if no note exists yet, the first capture creates it. Daily notes are automatically tagged `daily`; click the daily badge to browse them. Each daily note shows a monthly calendar linking to other daily notes. Quick-capture appends a timestamped paragraph from anywhere in the app.
-- **Offline capture.** Install Memex as a PWA and save notes or daily entries without a connection. Local drafts and pending entries survive closing the app; entries sync when Memex is open and online again. The Offline & sync panel shows readiness, pending text, errors and the last successful sync.
+- **Offline notes.** Install Memex as a PWA and save notes or daily entries without a connection. Local drafts and pending entries survive closing the app; entries sync when Memex is open and online again. The Offline & sync panel shows readiness, pending text, errors and the last successful sync.
 - **Tags.** A note tag taxonomy with a per-tag listing at `/memex/tag/{slug}`.
 - **Reminders.** Create reminders at `/memex/reminders`; the plugin schedules a 5-minute cron and emails you when one is due.
 - **Graph, orphans, broken links.** Built-in views for navigating the link structure of your notes.
@@ -55,15 +55,15 @@ Notes are private by default: the note post type is registered as non-public and
 | `/memex/capture`                   | Offline-capable new notes and daily entries       |
 | `/memex/quick-capture`             | One-line append to today's daily note             |
 
-### Offline capture
+### Offline notes
 
-Open `/memex/capture` online once and wait for **Offline & sync → Offline capture** to say **Ready**. You can then install Memex using your browser's install or Add to Home Screen action and reopen the capture screen without a connection. HTTPS (or localhost) and service worker support are required.
+Open Memex online and wait for **Offline & sync** to report **App shell is available offline**. Install it through your browser's install or Add to Home Screen action. HTTPS (or localhost) and service worker support are required.
 
-Choose **Daily entry** to append text with its original capture date and time in the site's timezone, or **New note** to save Markdown as a draft. Existing quick-capture fields also use the durable queue. The regular note editor still requires a connection.
+Opened notes can be read and edited offline in the regular interface. Quick capture appends to today's daily note with the original capture date and site time; new notes and backfilled daily drafts also use the durable queue. The daily calendar keeps its existing-note links and opens an unsaved editor for missing past days. Import, export, and reminders require a connection.
 
-Drafts and pending entries live in IndexedDB, separated by site and account. The queue removes an entry only after the server acknowledges its unique ID. Retries do not duplicate entries, and expired sessions or a different signed-in account leave the queue intact. Keep Memex open to sync; returning to the app, reconnecting, and **Sync now** retry pending entries. Sync while the app is closed is not guaranteed.
+Drafts and pending operations live in IndexedDB, separated by site and account. Operations leave the queue only after server acknowledgment. Retries do not duplicate entries; expired sessions or another signed-in account leave the queue intact. Conflicting edits require explicit review. Keep Memex open to sync; reconnecting, returning to the app, and **Sync now** retry pending work.
 
-Only the empty capture screen and its assets are cached, rather than private note pages. The panel lets you inspect pending text and open the last synced note. Browser storage can be cleared or evicted; do not clear site data while entries are pending.
+wp-app caches an empty app shell and its assets. Notes are stored separately as local data; **Available offline** lists downloaded notes. Images and embeds are not automatically downloaded. Browser storage can be cleared or evicted, so do not clear site data while changes are pending. Memex requires wp-app 2.3; there is no older-framework UI fallback.
 
 ### Storage model
 
@@ -82,7 +82,7 @@ No custom database tables are created. Removing the plugin leaves a plain WordPr
 
 - Memex boots on `init:5` so post types and routes register before WordPress's `init:10` and the text domain is available (WP 6.7+).
 - Routes, the masterbar menu and access control are provided by [`akirk/wp-app`](https://github.com/akirk/wp-app). The JavaScript note shell uses wp-app 2.3 or newer for bootstrap, local storage, and acknowledged sync. Opening a note saves its content and editor data locally; the Offline & sync panel lists available notes. Offline edits and drafts persist on this device, and conflicting server edits require review before saving. See its [README](https://github.com/akirk/wp-app/blob/main/README.md) for routing and template details.
-- Server tests: `composer test`. Browser integration tests: install Playwright and its Chromium browser, then run `node --test tests/OfflineCaptureTest.cjs tests/AppShellTest.cjs`. Run the shell API authorization tests with `vendor/bin/phpunit --group ajax`.
+- Server tests: `composer test`. Browser integration tests: install Playwright and its Chromium browser, then run `node --test tests/AppShellTest.cjs`. Run the shell API authorization tests with `vendor/bin/phpunit --group ajax`.
 - The main note routes render `templates/shell.php` through wp-app. `assets/memex-shell.js` owns local note views, navigation, drafts, and conflict review; `src/Shell.php` owns the note API and optimistic server writes. Import, export, and reminders retain their existing server workflows. Images and embeds are not automatically downloaded. Atomic edit replay requires InnoDB WordPress posts, postmeta, and options tables.
 - Templates live in `templates/`; assets (CSS/JS, including the in-app `[[` autocomplete) live in `assets/`.
 

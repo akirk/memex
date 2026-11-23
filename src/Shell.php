@@ -9,12 +9,26 @@ class Shell {
 	}
 
 	public static function offline_config(): array {
+		global $wp_locale;
 		return [
-			'userId'   => get_current_user_id(),
-			'scope'    => home_url( '/memex/' ),
-			'ajaxUrl'  => admin_url( 'admin-ajax.php' ),
-			'timezone' => wp_timezone()->getName(),
-			'loginUrl' => wp_login_url( home_url( '/memex/' ) ),
+			'userId'       => get_current_user_id(),
+			'scope'        => home_url( '/memex/' ),
+			'ajaxUrl'      => admin_url( 'admin-ajax.php' ),
+			'timezone'     => wp_timezone()->getName(),
+			'timeFormat'   => get_option( 'time_format' ),
+			'startOfWeek'  => (int) get_option( 'start_of_week', 0 ),
+			'monthNames'   => $wp_locale ? array_map(
+                static function ( $month ) use ( $wp_locale ) {
+					return $wp_locale->get_month( $month ); },
+                range( 1, 12 )
+            ) : null,
+			'weekdayNames' => $wp_locale ? array_map(
+                static function ( $day ) use ( $wp_locale ) {
+					return $wp_locale->get_weekday( $day ); },
+                range( 0, 6 )
+            ) : null,
+			'settingsUrl'  => admin_url( 'options-general.php' ),
+			'loginUrl'     => wp_login_url( home_url( '/memex/' ) ),
 		];
 	}
 
@@ -22,7 +36,7 @@ class Shell {
 		nocache_headers();
 		if ( ! current_user_can( 'edit_posts' ) ) {
 			wp_send_json( [ 'message' => 'Sign in to Memex.' ], 403 ); }
-		wp_send_json( self::offline_config() );
+		wp_send_json( array_merge( self::offline_config(), [ 'serverTime' => time() ] ) );
 	}
 
 	public static function version( \WP_Post $post ): string {
@@ -40,6 +54,7 @@ class Shell {
 			'status'   => $post->post_status,
 			'version'  => self::version( $post ),
 			'modified' => $post->post_modified_gmt,
+			'created'  => $post->post_date_gmt,
 			'daily'    => (string) get_post_meta( $post->ID, CPT::META_DAILY, true ),
 			'tags'     => is_array( $terms ) ? array_values(
                 array_map(
@@ -54,7 +69,7 @@ class Shell {
 			'links'    => array_map( 'intval', get_post_meta( $post->ID, CPT::META_LINKS_TO, false ) ),
 			'stub'     => (bool) get_post_meta( $post->ID, CPT::META_STUB, true ),
 			'editable' => current_user_can( 'edit_post', $post->ID ),
-			'excerpt'  => wp_trim_words( wp_strip_all_tags( $post->post_content ), 30 ),
+			'excerpt'  => wp_trim_words( html_entity_decode( wp_strip_all_tags( $post->post_content ), ENT_QUOTES | ENT_HTML5, get_bloginfo( 'charset' ) ?: 'UTF-8' ), 30 ),
 		];
 		if ( $body ) {
 			$data['revisions'] = [];

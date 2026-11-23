@@ -130,4 +130,32 @@ class OfflineCaptureTest extends WP_UnitTestCase {
 		$this->assertSame( OfflineCapture::required_urls(), $config['precache'] );
 	}
 
+    public function test_backfill_saves_a_daily_draft_and_retries_without_duplication(): void {
+        $entry = $this->entry( array( 'kind' => 'note', 'daily' => '2024-02-19', 'title' => 'Backfilled day', 'content' => 'Written later' ) );
+        $result = OfflineCapture::save( $entry );
+        $this->assertIsArray( $result );
+        $this->assertSame( 'draft', get_post_status( $result['postId'] ) );
+        $this->assertSame( '2024-02-19', get_post_meta( $result['postId'], CPT::META_DAILY, true ) );
+        $this->assertSame( $result, OfflineCapture::save( $entry ) );
+        $this->assertSame( $result['postId'], DailyNote::find( '2024-02-19' )->ID );
+    }
+
+    public function test_backfill_can_publish_but_cannot_replace_an_existing_daily(): void {
+        $entry = $this->entry( array( 'kind' => 'note', 'daily' => '2024-02-18', 'title' => 'Published day', 'publish' => true ) );
+        $result = OfflineCapture::save( $entry );
+        $this->assertSame( 'publish', get_post_status( $result['postId'] ) );
+        $entry['id'] = wp_generate_uuid4();
+        $entry['content'] = 'Do not overwrite';
+        $conflict = OfflineCapture::save( $entry );
+        $this->assertWPError( $conflict );
+        $this->assertSame( 'conflict', $conflict->get_error_code() );
+        $this->assertStringNotContainsString( 'Do not overwrite', get_post( $result['postId'] )->post_content );
+    }
+
+    public function test_backfill_rejects_invalid_or_future_dates(): void {
+        foreach ( array( '2024-02-30', '2999-01-01', array() ) as $date ) {
+            $this->assertWPError( OfflineCapture::save( $this->entry( array( 'kind' => 'note', 'title' => 'Invalid daily', 'daily' => $date ) ) ) );
+        }
+    }
+
 }

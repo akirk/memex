@@ -27,45 +27,21 @@ class DailyNoteTest extends WP_UnitTestCase {
 		$this->assertTrue( has_term( 'work', CPT::TAXONOMY, $note->ID ) );
 	}
 
-	public function test_calendar_only_links_existing_notes_in_selected_month(): void {
+	public function test_calendar_data_only_links_readable_notes_in_selected_month(): void {
 		$note = DailyNote::get_or_create( '2024-02-29' );
-		$other = DailyNote::get_or_create( '2024-03-01' );
-		update_option( 'start_of_week', 1 );
-		ob_start();
-		DailyNote::render_calendar( '2024-02', '2024-02-29' );
-		$html = ob_get_clean();
-		$this->assertStringContainsString( esc_url( CPT::url( $note ) ), $html );
-		$this->assertStringNotContainsString( esc_url( CPT::url( $other ) ), $html );
-		$this->assertStringContainsString( 'aria-current="date"', $html );
-		$this->assertStringContainsString( 'data-calendar-month="2024-01"', $html );
-		$this->assertStringContainsString( 'data-calendar-month="2024-03"', $html );
-		$this->assertStringContainsString( '>29</a>', $html );
-		$this->assertStringNotContainsString( '>30</span>', $html );
+		DailyNote::get_or_create( '2024-03-01' );
+		$data = DailyNote::calendar_data( '2024-02' );
+		$this->assertSame( array( '2024-02-29' => CPT::url( $note ) ), $data['days'] );
 	}
 
-	public function test_future_month_is_clamped_and_future_notes_are_not_linked(): void {
-		$today  = new DateTimeImmutable( DailyNote::today(), wp_timezone() );
-		$future = DailyNote::get_or_create( $today->modify( '+1 day' )->format( 'Y-m-d' ) );
-		ob_start();
-		DailyNote::render_calendar( $today->modify( '+1 month' )->format( 'Y-m' ) );
-		$html = ob_get_clean();
-		$this->assertStringContainsString( 'data-month="' . $today->format( 'Y-m' ) . '"', $html );
-		$this->assertStringContainsString( 'aria-disabled="true"', $html );
-		$this->assertStringNotContainsString( esc_url( CPT::url( $future ) ), $html );
-		$this->assertStringContainsString( 'data-refresh-after="' . $today->modify( '+1 day' )->getTimestamp() . '"', $html );
-	}
-
-	public function test_opening_backfill_editor_does_not_create_a_post(): void {
-		$_GET['daily'] = '2024-02-20';
-		$before = wp_count_posts( CPT::POST_TYPE );
-		ob_start();
-		include dirname( __DIR__ ) . '/templates/new.php';
-		$html = ob_get_clean();
-		unset( $_GET['daily'] );
-		$this->assertEquals( $before, wp_count_posts( CPT::POST_TYPE ) );
-		$this->assertNull( DailyNote::find( '2024-02-20' ) );
-		$this->assertStringContainsString( 'Save draft', $html );
-		$this->assertStringContainsString( 'name="daily" value="2024-02-20"', $html );
+	public function test_calendar_data_clamps_future_month_and_omits_future_notes(): void {
+		$today = new DateTimeImmutable( DailyNote::today(), wp_timezone() );
+		$future = $today->modify( '+1 day' )->format( 'Y-m-d' );
+		DailyNote::get_or_create( $future );
+		$data = DailyNote::calendar_data( $today->modify( '+1 month' )->format( 'Y-m' ) );
+		$this->assertSame( $today->format( 'Y-m' ), $data['month'] );
+		$this->assertArrayNotHasKey( $future, $data['days'] );
+		$this->assertSame( $today->modify( '+1 day' )->getTimestamp(), $data['refreshAfter'] );
 	}
 
 	public function test_saved_backfill_is_a_tagged_draft_and_does_not_overwrite_existing_daily(): void {
