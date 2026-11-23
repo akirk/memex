@@ -48,6 +48,12 @@ jobs:
         working-directory: build/${{ github.event.repository.name }}
         run: composer install --no-dev --optimize-autoloader --no-interaction
 
+      # Plugin Check uses only the development environment. Avoid starting
+      # wp-env's unused test database, whose health check can fail independently.
+      - name: Disable unused wp-env test environment
+        run: |
+          echo '{"testsEnvironment": false}' > .wp-env.override.json
+
       - name: Run Plugin Check
         uses: wordpress/plugin-check-action@v1
         with:
