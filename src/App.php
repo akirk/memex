@@ -51,7 +51,7 @@ class App extends BaseApp {
 
 	protected function setup_routes(): void {
 		foreach ( array( '', 'note/{slug}', 'edit/{slug}', 'new', 'search', 'daily', 'daily/{date}', 'graph', 'backlinks/{slug}', 'tags', 'tag/{slug}', 'orphans', 'broken', 'quick-capture', 'capture' ) as $path ) {
-			$this->app->route( $path, 'shell.php' );
+			$this->app->route( $path, 'index.php' );
 		}
 		// Existing server-driven import, export, and reminder workflows remain available.
 		foreach ( array( 'import', 'export', 'reminders' ) as $path ) { $this->app->route( $path ); }
@@ -165,7 +165,7 @@ class App extends BaseApp {
 		$base     = plugin_dir_url( dirname( __DIR__ ) . '/memex.php' );
 		$css_ver  = OfflineCapture::asset_version();
 		$js_ver   = hash_file( 'sha256', dirname( __DIR__ ) . '/assets/memex.js' );
-		if ( in_array( basename( $template_path ), array( 'shell.php', 'wp-app-shell.php' ), true ) ) {
+		if ( in_array( basename( $template_path ), array( 'index.php', 'wp-app-shell.php' ), true ) ) {
 			$scope = $this->get_url_path();
 			wp_app_enqueue_style( 'memex', $base . 'assets/memex.css?ver=' . $css_ver, array(), false, $scope );
 			wp_app_enqueue_script( 'memex-overtype', $base . 'assets/vendor/overtype/overtype.min.js?ver=' . $css_ver, array(), false, true, $scope );

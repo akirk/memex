@@ -95,15 +95,15 @@ class OfflineCaptureTest extends WP_UnitTestCase {
 		}
 	}
 
-	public function test_capture_shell_has_no_private_note_tree_or_contents(): void {
+	public function test_app_shell_has_no_private_note_tree_or_contents(): void {
 		self::factory()->post->create( array( 'post_type' => CPT::POST_TYPE, 'post_title' => 'Private title', 'post_content' => 'Private body' ) );
 		global $wp_app_route;
 		$previous_route = $wp_app_route;
 		$wp_app_route = array( 'app_path' => 'memex' );
 		\WpApp\Pwa::register( 'memex', OfflineCapture::pwa_config() );
-		\Memex\memex_app()->enqueue_assets( dirname( __DIR__ ) . '/templates/shell.php' );
+		\Memex\memex_app()->enqueue_assets( dirname( __DIR__ ) . '/templates/index.php' );
 		ob_start();
-		include dirname( __DIR__ ) . '/templates/shell.php';
+		include dirname( __DIR__ ) . '/templates/index.php';
 		$html = ob_get_clean();
 		$wp_app_route = $previous_route;
 		$this->assertStringNotContainsString( 'Private title', $html );
@@ -155,6 +155,17 @@ class OfflineCaptureTest extends WP_UnitTestCase {
     public function test_backfill_rejects_invalid_or_future_dates(): void {
         foreach ( array( '2024-02-30', '2999-01-01', array() ) as $date ) {
             $this->assertWPError( OfflineCapture::save( $this->entry( array( 'kind' => 'note', 'title' => 'Invalid daily', 'daily' => $date ) ) ) );
+        }
+    }
+
+    public function test_registered_routes_resolve_existing_templates_after_framework_initialization(): void {
+        $app = \Memex\memex_app();
+        $property = new ReflectionProperty( $app, 'app' );
+        $property->setAccessible( true );
+        $routes = $property->getValue( $app )->get_router()->get_routes();
+        $this->assertSame( 'index.php', $routes['']['template'] );
+        foreach ( $routes as $route ) {
+            $this->assertFileExists( dirname( __DIR__ ) . '/templates/' . $route['template'] );
         }
     }
 
