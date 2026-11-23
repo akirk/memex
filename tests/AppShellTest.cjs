@@ -415,3 +415,17 @@ test('sidebar capture is visible before app JavaScript starts and is enhanced wi
     assert.equal(after.same,true);assert.equal(after.disabled,false);
     assert.equal(after.navTop,initial.navTop);assert.equal(after.height,initial.height);
 });
+
+
+test('a new ordinary note can be published directly from its editor', async t => {
+    const f = await fixture(t);
+    await f.go('new');
+    await f.page.locator('[data-shell-view] input[name=title]').fill('Published from new');
+    await f.page.locator('.overtype-input').fill('Ready to share');
+    const synced = f.page.waitForResponse(response => response.request().method() === 'POST' && response.request().postData().includes('action=memex_capture_sync'));
+    await f.page.getByRole('button', {name:'Publish', exact:true}).click();
+    assert.equal((await (await synced).json()).success, true);
+    assert.equal(f.sent.length, 1);
+    assert.equal(f.sent[0].publish, true);
+    assert.equal(Array.from(f.records.values()).find(note => note.title === 'Published from new').status, 'publish');
+});

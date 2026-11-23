@@ -64,6 +64,22 @@ class OfflineCaptureTest extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'C:\\notes\\today', $post->post_content );
 	}
 
+	public function test_new_note_can_be_published_and_retried_safely(): void {
+		$entry = $this->entry( array( 'kind' => 'note', 'title' => 'Published offline', 'publish' => true ) );
+		$result = OfflineCapture::save( $entry );
+		$this->assertIsArray( $result );
+		$this->assertSame( 'publish', get_post_status( $result['postId'] ) );
+		$this->assertSame( 'publish', $result['note']['status'] );
+		$this->assertSame( $result, OfflineCapture::save( $entry ) );
+	}
+
+	public function test_contributor_cannot_publish_a_new_note(): void {
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'contributor' ) ) );
+		$result = OfflineCapture::save( $this->entry( array( 'kind' => 'note', 'title' => 'Unpermitted publication', 'publish' => true ) ) );
+		$this->assertWPError( $result );
+		$this->assertSame( 'capture_permission', $result->get_error_code() );
+	}
+
 	public function test_rejects_wrong_account_and_read_only_users(): void {
 		$entry = $this->entry();
 		wp_set_current_user( self::factory()->user->create( array( 'role' => 'administrator' ) ) );

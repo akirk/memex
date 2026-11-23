@@ -286,7 +286,7 @@
         textarea.value = draft ? draft.content : note ? note.content : ''; form.append(editorHost, textarea);
         var notice = node('p', draft ? 'Restored your draft from this device.' : '', {role: 'status'}); form.append(notice);
         var save = node('button', note && !(note.daily && note.status === 'draft') ? 'Save note' : 'Save draft', {type: 'submit', class: 'memex-button memex-button-primary'}); form.append(save);
-        if (daily || (note && note.status === 'draft')) form.append(node('button', 'Publish', {type: 'submit', name: 'publish', value: '1', class: 'memex-button'}));
+        if (!note || note.status === 'draft') form.append(node('button', 'Publish', {type: 'submit', name: 'publish', value: '1', class: 'memex-button'}));
         form.append(document.createTextNode(' '), link('Cancel', note ? 'note/' + encodeURIComponent(routeId(note)) : ''));
         view.append(form);
         var editor, changed = false, saving = false;

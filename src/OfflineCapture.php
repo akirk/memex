@@ -152,7 +152,7 @@ class OfflineCapture {
 					'post_content' => Content::markdown_to_html( $content ) . "\n" . $marker,
 					'post_author' => get_current_user_id(),
 					'post_parent' => (int) ( $input['parent'] ?? 0 ),
-					'post_status' => 'draft',
+					'post_status' => ! empty( $input['publish'] ) ? 'publish' : 'draft',
 				) ), true );
 			}
 			if ( is_wp_error( $post_id ) || ! $post_id ) {
