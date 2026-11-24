@@ -106,8 +106,26 @@ class OfflineCaptureTest extends WP_UnitTestCase {
 	}
 
 	public function test_invalid_payloads_do_not_create_notes(): void {
-		foreach ( array( array( 'date' => '2024-02-30' ), array( 'clock' => '25:12' ), array( 'id' => '../../bad' ), array( 'content' => array() ), array( 'kind' => 'delete' ) ) as $change ) {
-			$this->assertWPError( OfflineCapture::save( $this->entry( $change ) ) );
+		$existing = self::factory()->post->create( array(
+			'post_type' => CPT::POST_TYPE,
+			'post_status' => 'draft',
+			'post_content' => '<p>Existing note</p>',
+		) );
+		$query = array( 'post_type' => CPT::POST_TYPE, 'post_status' => 'any', 'posts_per_page' => -1, 'fields' => 'ids' );
+		$before = get_posts( $query );
+		$invalid = array(
+			'invalid date' => array( array( 'date' => '2024-02-30' ), 'capture_date' ),
+			'invalid clock' => array( array( 'clock' => '25:12' ), 'capture_date' ),
+			'invalid capture id' => array( array( 'id' => '../../bad' ), 'capture_invalid' ),
+			'non-string content' => array( array( 'content' => array() ), 'capture_invalid' ),
+			'unsupported operation' => array( array( 'kind' => 'delete' ), 'capture_invalid' ),
+		);
+		foreach ( $invalid as $case => list( $change, $code ) ) {
+			$result = OfflineCapture::save( $this->entry( $change ) );
+			$this->assertWPError( $result, $case );
+			$this->assertSame( $code, $result->get_error_code(), $case );
+			$this->assertSame( $before, get_posts( $query ), $case . ' must not create notes' );
+			$this->assertSame( '<p>Existing note</p>', get_post( $existing )->post_content, $case . ' must not modify existing notes' );
 		}
 	}
 

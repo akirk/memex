@@ -4,9 +4,9 @@ use Memex\AI;
 
 class AIAbilitySchemaTest extends WP_UnitTestCase {
 	public function test_save_note_schema_describes_content_as_markdown_like_editor_text(): void {
-		$method = new ReflectionMethod( AI::class, 'save_note_input_schema' );
-		$method->setAccessible( true );
-		$schema = $method->invoke( null );
+		$ability = wp_get_ability( 'memex/save-note' );
+		$this->assertInstanceOf( WP_Ability::class, $ability );
+		$schema = $ability->get_input_schema();
 
 		$this->assertArrayHasKey( 'content', $schema['properties'] );
 		$this->assertSame(
