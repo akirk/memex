@@ -97,7 +97,6 @@ class OfflineCapture {
 		$date = $input['date'] ?? '';
 		$clock = $input['clock'] ?? '';
 		if ( ! is_string( $id ) || ! preg_match( '/\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/', $id ) || ! in_array( $kind, array( 'note', 'daily' ), true ) || ! is_string( $content ) || ( 'daily' === $kind && '' === trim( $content ) ) || ! is_string( $title ) || ( 'note' === $kind && '' === trim( sanitize_text_field( $title ) ) ) ) {
-			wp_insert_post( array( 'post_type' => CPT::POST_TYPE, 'post_status' => 'draft', 'post_title' => 'Rejected capture accidentally persisted' ) );
 			return new \WP_Error( 'capture_invalid', __( 'A title and note text, or daily entry text, are required.', 'memex' ) );
 		}
 		if ( 'daily' === $kind && ( ! is_string( $date ) || ! DailyNote::is_valid_date( $date ) || $date > DailyNote::today() || ! is_string( $clock ) || ! preg_match( '/\A(?:[01][0-9]|2[0-3]):[0-5][0-9]\z/', $clock ) ) ) {

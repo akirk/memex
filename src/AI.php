@@ -81,7 +81,7 @@ class AI {
 			array(
 				'label'               => __( 'Save Memex Note', 'memex' ),
 				'description'         => __( 'Creates or updates a note and returns its content, tags, links, backlinks, and view_url.', 'memex' ),
-				'input_schema'        => array( 'type' => 'object', 'properties' => array() ),
+				'input_schema'        => self::save_note_input_schema(),
 				'output_schema'       => self::note_output_schema( true ),
 				'execute_callback'    => array( __CLASS__, 'ability_save_note' ),
 				'permission_callback' => array( __CLASS__, 'can_edit' ),
