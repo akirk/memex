@@ -558,6 +558,15 @@ body.memex {
 
 /* Note view */
 
+.memex-note-save-status {
+	display: inline-block;
+	width: 7rem;
+	margin-inline-start: 0.75rem;
+	color: var(--wp-app-color-muted);
+	font-size: 0.8rem;
+	white-space: nowrap;
+}
+
 .memex-breadcrumb {
 	margin-bottom: 0.5rem;
 	font-size: 0.88rem;

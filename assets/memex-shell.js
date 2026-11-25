@@ -243,10 +243,11 @@
         title(note.title);
         if(note.daily){view.classList.add('memex-note-with-calendar');view.prepend(calendar(note.daily));var badge=link('daily','tag/daily');badge.className='memex-badge memex-badge-daily';view.querySelector('h1').append(document.createTextNode(' '),badge);}
         var actions = node('p'); if (note.editable) actions.append(link('Edit note', 'edit/' + encodeURIComponent(routeId(note)))); actions.append(document.createTextNode(' · '), link('Backlinks', 'backlinks/' + encodeURIComponent(routeId(note)))); if(note.postId)actions.append(document.createTextNode(' · '),link('New nested note','new?parent='+note.postId)); view.append(actions);
-        if (note.pending) {
-            view.append(node('p', 'Local changes — waiting for server confirmation.', {role: 'status'}));
-            if (outbox.status().error) view.append(node('p', outbox.status().error, {role:'alert'}));
-        }
+        actions.append(node('span', note.pending ? (navigator.onLine ? 'Saving…' : 'Saved locally') : '', {
+            class:'memex-note-save-status', role:'status',
+            title:note.pending ? 'Saved on this device; waiting for server confirmation.' : ''
+        }));
+        if (note.pending && outbox.status().error) view.append(node('p', outbox.status().error, {role:'alert'}));
         var article = node('article', null, {class: 'memex-note-body', id:'selected-note-content', 'data-ai-assistant-important':''}); article.append(safeHTML(note.pending ? preview(note.content) : note.html)); view.append(article);
         var tasks = taskMarkers(note.content);
         article.querySelectorAll('input[type="checkbox"]').forEach(function (checkbox, taskIndex) {

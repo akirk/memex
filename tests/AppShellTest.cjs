@@ -438,7 +438,7 @@ test('task clicks stay interactive and formatted while offline, then sync immedi
     await f.page.locator('#selected-note-content input[type=checkbox]').nth(1).waitFor();
     await f.context.setOffline(true);
     await f.page.locator('#selected-note-content input[type=checkbox]').nth(1).click();
-    await f.page.getByText('Local changes — waiting for server confirmation.', {exact:true}).waitFor();
+    await f.page.getByRole('status').filter({hasText:'Saved locally'}).waitFor();
     const tasks = f.page.locator('#selected-note-content input[type=checkbox]');
     assert.equal(await tasks.count(), 2);
     assert.equal(await tasks.nth(1).isChecked(), true);
