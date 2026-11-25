@@ -455,3 +455,27 @@ test('task clicks stay interactive and formatted while offline, then sync immedi
     await f.page.waitForFunction(()=>document.querySelector('[data-shell-pending]').textContent==='');
     assert.equal(f.records.get('1').content, '## Things to try\n\n- [ ] Open a note\n- [x] Tick a checkbox here');
 });
+
+
+test('standalone and daily task markers become live checkboxes after saving', {timeout:15000}, async t => {
+    const f = await fixture(t);
+    await f.go('note/1');
+    await f.page.getByRole('link',{name:'Edit note',exact:true}).click();
+    await f.context.setOffline(true);
+    const content = '```\n[ ] Code sample\n```\n\n[ ] Buy milk\n[x] Call back\n\n**06:16** · [ ] Launch Shared Workers\n\n- [ ] List task\n\n`[ ] Literal`\n\n\\[ ] Escaped';
+    await edit(f, 'Tasks', content);
+    const tasks = f.page.locator('#selected-note-content input[type=checkbox]');
+    assert.equal(await tasks.count(), 4);
+    assert.equal(await tasks.nth(1).isChecked(), true);
+    await tasks.nth(0).click();
+    await f.page.waitForFunction(()=>document.querySelector('[data-shell-pending]').textContent==='(2)');
+    await tasks.nth(2).click();
+    await f.page.waitForFunction(()=>document.querySelector('[data-shell-pending]').textContent==='(3)');
+    await f.page.reload();
+    await tasks.nth(3).waitFor();
+    assert.equal(await tasks.nth(0).isChecked(), true);
+    assert.equal(await tasks.nth(2).isChecked(), true);
+    assert.equal(await f.page.locator('#selected-note-content pre').textContent(), '[ ] Code sample\n');
+    await f.page.getByRole('link',{name:'Edit note',exact:true}).click();
+    assert.equal(await f.page.locator('.overtype-input').inputValue(), content.replace('[ ] Buy milk','[x] Buy milk').replace('· [ ]','· [x]'));
+});

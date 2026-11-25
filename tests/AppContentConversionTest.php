@@ -82,6 +82,16 @@ class AppContentConversionTest extends WP_UnitTestCase {
 		$this->assertStringNotContainsString( '[[', $html );
 	}
 
+	public function test_standalone_tasks_render_and_round_trip_without_a_list_marker(): void {
+		$markdown = "[ ] Buy milk\n[x] Call back\n\n**06:16** · [ ] Launch Shared Workers\n\n`[ ] Literal`\n\n```\n[ ] Code sample\n```";
+		$html = Content::markdown_to_html( $markdown );
+		$this->assertSame( 3, substr_count( $html, 'type="checkbox"' ) );
+		$this->assertStringContainsString( '<input type="checkbox" class="memex-task-checkbox"> Buy milk', $html );
+		$this->assertStringContainsString( '<input type="checkbox" class="memex-task-checkbox" checked> Call back', $html );
+		$this->assertSame( $markdown, Content::editor_text_from_html( $html ) );
+		$this->assertStringNotContainsString( 'checkbox', Content::markdown_to_html( '\\[ ] Literal' ) );
+	}
+
 	public function test_markdown_to_html_renders_task_list_items_as_checkboxes(): void {
 		$html = Content::markdown_to_html( "- [ ] Buy milk\n- [x] Call back\n- plain item" );
 
