@@ -126,7 +126,7 @@
         }
         group('sections','Sidebar sections',sections);
         group('navigation','Navigation links',navigation);
-        var reset=node('button','Restore defaults',{type:'button',class:'memex-button-secondary'});
+        var reset=node('button','Restore defaults',{type:'button',class:'memex-button'});
         reset.addEventListener('click',function(){settings=normalize({});form.querySelectorAll('fieldset').forEach(fieldset=>fieldset.redraw());changed();});
         var actions=node('p',null,{class:'memex-settings-actions'});actions.append(reset,message);form.append(actions);host.append(form);
         form.addEventListener('submit',event=>event.preventDefault());
