@@ -9,6 +9,23 @@
     var offline = false;
     var draftWrites = Promise.resolve(), pendingDraftWrites = 0, draftFailure = false, lastPath = location.href, lastMessage = '';
     var view = root.querySelector('[data-shell-view]');
+    var markdownParser = window.marked && new window.marked.Marked({gfm:true, renderer:{
+        text: function (token) {
+            // Keep escaped opening brackets distinguishable until task parsing.
+            if (token.type === 'escape' && token.text === '[') return '&#91;';
+            return false;
+        },
+        checkbox: function (token) {
+            return '<input type="checkbox" class="memex-task-checkbox"' + (token.checked ? ' checked' : '') + '>';
+        },
+        paragraph: function (token) {
+            var html = this.parser.parseInline(token.tokens);
+            html = html.replace(/(^|\n|<br\s*\/?>)([ \t]*(?:<strong>\d{2}:\d{2}<\/strong>[ \t]*[·][ \t]*)?)\[([ xX])\](?=\s|<|$)[ \t]*/g, function (_, prefix, timestamp, checked) {
+                return (prefix === '\n' ? '<br>' : prefix) + timestamp + '<input type="checkbox" class="memex-task-checkbox"' + (checked === ' ' ? '' : ' checked') + '> ';
+            });
+            return '<p>' + html + '</p>\n';
+        }
+    }});
     function node(tag, text, attrs) {
         var el = document.createElement(tag);
         if (text !== undefined && text !== null) el.textContent = text;
@@ -194,8 +211,19 @@
             var match = findNote(target.split('#')[0]);
             return '[' + (label || target).replace(/\]/g, '\\]') + '](' + url(match ? 'note/' + encodeURIComponent(match.id) : 'new?title=' + encodeURIComponent(target)) + ')';
         });
-        if (window.marked) return window.marked.parse(markdown, {gfm:true});
+        if (markdownParser) return markdownParser.parse(markdown);
         var pre = node('pre', text); return pre.outerHTML;
+    }
+    function taskMarkers(content) {
+        var source = content, offset = 0;
+        // Code examples can contain task syntax but do not produce inputs.
+        if (window.marked) window.marked.lexer(content).forEach(function (token) {
+            var start = content.indexOf(token.raw, offset);
+            if (start < 0) return;
+            offset = start + token.raw.length;
+            if (token.type === 'code') source = source.slice(0,start) + token.raw.replace(/[^\n]/g,' ') + source.slice(offset);
+        });
+        return Array.from(source.matchAll(/^([ \t]*(?:(?:[-*+]|\d+[.)])[ \t]+|\*\*\d{2}:\d{2}\*\*[ \t]*·[ \t]*)?\[)([ xX])(\])(?=\s|$)/gm));
     }
     function title(text) { view.append(node('h1', text)); document.title = text + ' — Memex'; }
     function list(items) {
@@ -220,7 +248,7 @@
             if (outbox.status().error) view.append(node('p', outbox.status().error, {role:'alert'}));
         }
         var article = node('article', null, {class: 'memex-note-body', id:'selected-note-content', 'data-ai-assistant-important':''}); article.append(safeHTML(note.pending ? preview(note.content) : note.html)); view.append(article);
-        var tasks = Array.from(note.content.matchAll(/^(\s*(?:[-*+] |\d+[.)] )\[)([ xX])(\])/gm));
+        var tasks = taskMarkers(note.content);
         article.querySelectorAll('input[type="checkbox"]').forEach(function (checkbox, taskIndex) {
             if (!tasks[taskIndex] || !note.editable) return;
             checkbox.disabled = false;

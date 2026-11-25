@@ -25,7 +25,7 @@ class Content {
 			}
 			$out[] = "<!-- wp:paragraph -->\n<p>" . $inner . "</p>\n<!-- /wp:paragraph -->";
 		}
-		return self::render_daily_tasks( implode( "\n\n", $out ) );
+		return self::render_paragraph_tasks( implode( "\n\n", $out ) );
 	}
 
 	public static function markdown_to_html( string $markdown ): string {
@@ -52,7 +52,7 @@ class Content {
 		}
 		$html = $parser->text( $markdown );
 		$html = self::render_task_list_items( $html );
-		$html = self::render_daily_tasks( $html );
+		$html = self::render_paragraph_tasks( $html );
 		// Tokens may sit back to back, so the payload match must be lazy:
 		// "END…TOKENMEMEX…TOKEN" is itself valid base64 alphabet.
 		$html = preg_replace_callback(
@@ -115,15 +115,16 @@ class Content {
 	}
 
 	/**
-	 * Daily capture prefixes tasks with a timestamp rather than a list marker.
-	 * Recognize that format both during capture and when saving editor text.
+	 * Standalone tasks and timestamped daily tasks do not need a list marker.
+	 * Keep code samples literal and recognize tasks on each paragraph line.
 	 */
-	private static function render_daily_tasks( string $html ): string {
+	private static function render_paragraph_tasks( string $html ): string {
 		return (string) preg_replace_callback(
-			'/(<(?:p|br)\b[^>]*>\s*<strong>\d{2}:\d{2}<\/strong>\s*(?:&middot;|·)\s*)\[([ xX])\](?=\s|<|$)\s*/',
+			'~<pre\b[^>]*>.*?</pre>(*SKIP)(*F)|<code\b[^>]*>.*?</code>(*SKIP)(*F)|(<p\b[^>]*>|<br\s*/?>|\n)([ \t]*(?:<strong>\d{2}:\d{2}</strong>[ \t]*(?:&middot;|·)[ \t]*)?)\[([ xX])\](?=\s|<|$)[ \t]*~is',
 			static function ( $m ) {
-				$checked = ' ' !== $m[2] ? ' checked' : '';
-				return $m[1] . '<input type="checkbox" class="' . self::TASK_CHECKBOX_CLASS . '"' . $checked . '> ';
+				$checked = ' ' !== $m[3] ? ' checked' : '';
+				$prefix = "\n" === $m[1] ? '<br>' : $m[1];
+				return $prefix . $m[2] . '<input type="checkbox" class="' . self::TASK_CHECKBOX_CLASS . '"' . $checked . '> ';
 			},
 			$html
 		);
