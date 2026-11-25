@@ -228,7 +228,8 @@ body.memex {
 }
 
 .memex-quick-capture textarea,
-.memex-create input {
+.memex-create input,
+.memex-sidebar-search input {
 	width: 100%;
 	background: var(--wp-app-color-surface);
 	border: 1px solid var(--wp-app-color-border);
@@ -241,12 +242,14 @@ body.memex {
 }
 
 .memex-quick-capture textarea::placeholder,
-.memex-create input::placeholder {
+.memex-create input::placeholder,
+.memex-sidebar-search input::placeholder {
 	color: var(--wp-app-color-muted);
 }
 
 .memex-quick-capture button,
-.memex-create button {
+.memex-create button,
+.memex-sidebar-search button {
 	align-self: flex-end;
 	background: var(--wp-app-color-primary, var(--wp-app-color-secondary));
 	color: var(--wp-app-color-on-primary, #fff);
@@ -258,7 +261,8 @@ body.memex {
 }
 
 .memex-quick-capture button:hover,
-.memex-create button:hover {
+.memex-create button:hover,
+.memex-sidebar-search button:hover {
 	background: var(--wp-app-color-primary-hover, var(--wp-app-color-secondary-hover));
 	color: var(--wp-app-color-on-primary, #fff);
 }
@@ -343,6 +347,7 @@ body.memex {
 .memex-quick-capture-inline input[type="text"]:focus,
 .memex-edit-form input[type="text"]:focus,
 .memex-edit-form select:focus,
+.memex-sidebar-search input:focus,
 .memex [data-shell-view] input[type="search"]:focus {
 	outline: 1px solid var(--wp-app-color-border);
 	outline-offset: 0.25rem;
@@ -1569,9 +1574,9 @@ body.memex {
     flex-direction: column;
 }
 .memex-sidebar-body > .memex-sidebar-offline:not(.is-last-section) { margin-top: 1rem; }
-.memex-sidebar-search { display: flex; gap: .4rem; margin-bottom: 1rem; }
-.memex-sidebar-search input { min-width: 0; width: 100%; font: inherit; }
-.memex-sidebar-search button { font: inherit; }
+.memex-sidebar-search { display: flex; gap: .4rem; margin-bottom: 1rem; font-size: .92rem; }
+.memex-sidebar-search input { min-width: 0; flex: 1; appearance: none; }
+.memex-sidebar-search button { align-self: stretch; flex-shrink: 0; }
 .memex-note-list-item { cursor: pointer; }
 .memex-note-list-item p,
 .memex-note-list-item small { cursor: text; }
