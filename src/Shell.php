@@ -84,8 +84,17 @@ class Shell {
 				}
 			}
 			$data['content'] = App::content_to_editor_text( $post->post_content );
+			// Task inputs are absent from the default post allowlist. Keep only
+			// their display attributes; the client enables editable checkboxes.
+			$allowed = wp_kses_allowed_html( 'post' );
+			$allowed['input'] = array(
+				'type'     => true,
+				'class'    => true,
+				'checked'  => true,
+				'disabled' => true,
+			);
 			// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Render stored note HTML with the core content filters.
-			$data['html']    = wp_kses_post( apply_filters( 'the_content', $post->post_content ) );
+			$data['html']    = wp_kses( apply_filters( 'the_content', $post->post_content ), $allowed );
 		}
 		return $data;
 	}
