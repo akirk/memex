@@ -143,6 +143,15 @@ class ShellTest extends WP_UnitTestCase {
         );
 		$this->assertNotSame( $summary['version'], Shell::version( get_post( $post->ID ) ) );
 	}
+	public function test_note_html_preserves_task_checkboxes_without_unsafe_attributes(): void {
+		$post = $this->note();
+		$post->post_content = '<ul><li><input type="checkbox" class="memex-task-checkbox" checked onclick="alert(1)"> Done</li><li><input type="checkbox" class="memex-task-checkbox"> Open</li></ul>';
+		$note = Shell::note( $post );
+		$this->assertStringContainsString( '<input type="checkbox" class="memex-task-checkbox" checked', $note['html'] );
+		$this->assertStringContainsString( '<input type="checkbox" class="memex-task-checkbox"> Open', $note['html'] );
+		$this->assertStringNotContainsString( 'onclick', $note['html'] );
+		$this->assertSame( "- [x] Done\n- [ ] Open", $note['content'] );
+	}
 	public function test_retry_receipts_keep_the_original_baseline_after_later_server_changes(): void {
 		$post  = $this->note();
 		$first = $this->edit( $post );
