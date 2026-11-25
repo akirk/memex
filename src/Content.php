@@ -25,7 +25,7 @@ class Content {
 			}
 			$out[] = "<!-- wp:paragraph -->\n<p>" . $inner . "</p>\n<!-- /wp:paragraph -->";
 		}
-		return self::render_daily_tasks( implode( "\n\n", $out ) );
+		return self::render_paragraph_tasks( implode( "\n\n", $out ) );
 	}
 
 	public static function markdown_to_html( string $markdown ): string {
@@ -52,7 +52,7 @@ class Content {
 		}
 		$html = $parser->text( $markdown );
 		$html = self::render_task_list_items( $html );
-		$html = self::render_daily_tasks( $html );
+		$html = self::render_paragraph_tasks( $html );
 		// Tokens may sit back to back, so the payload match must be lazy:
 		// "END…TOKENMEMEX…TOKEN" is itself valid base64 alphabet.
 		$html = preg_replace_callback(
@@ -115,15 +115,16 @@ class Content {
 	}
 
 	/**
-	 * Daily capture prefixes tasks with a timestamp rather than a list marker.
-	 * Recognize that format both during capture and when saving editor text.
+	 * Standalone tasks and timestamped daily tasks do not need a list marker.
+	 * Keep code samples literal and recognize tasks on each paragraph line.
 	 */
-	private static function render_daily_tasks( string $html ): string {
+	private static function render_paragraph_tasks( string $html ): string {
 		return (string) preg_replace_callback(
-			'/(<(?:p|br)\b[^>]*>\s*<strong>\d{2}:\d{2}<\/strong>\s*(?:&middot;|·)\s*)\[([ xX])\](?=\s|<|$)\s*/',
+			'~<pre\b[^>]*>.*?</pre>(*SKIP)(*F)|<code\b[^>]*>.*?</code>(*SKIP)(*F)|(<p\b[^>]*>|<br\s*/?>|\n)([ \t]*(?:<strong>\d{2}:\d{2}</strong>[ \t]*(?:&middot;|·)[ \t]*)?)\[([ xX])\](?=\s|<|$)[ \t]*~is',
 			static function ( $m ) {
-				$checked = ' ' !== $m[2] ? ' checked' : '';
-				return $m[1] . '<input type="checkbox" class="' . self::TASK_CHECKBOX_CLASS . '"' . $checked . '> ';
+				$checked = ' ' !== $m[3] ? ' checked' : '';
+				$prefix = "\n" === $m[1] ? '<br>' : $m[1];
+				return $prefix . $m[2] . '<input type="checkbox" class="' . self::TASK_CHECKBOX_CLASS . '"' . $checked . '> ';
 			},
 			$html
 		);
@@ -175,9 +176,9 @@ class Content {
 	}
 
 	public static function editor_text_from_html( string $content ): string {
-		// Literal double brackets in stored text are not links; escape them
-		// so they stay text when the editor converts `[[…]]` back to anchors.
-		$content = str_replace( array( '[[', ']]' ), array( '&#91;&#91;', '&#93;&#93;' ), $content );
+		// Older notes store wiki links as raw [[…]] shorthand. Preserve it
+		// for editing; explicitly literal brackets are stored as entities and
+		// decode_for_editor() escapes those independently.
 		$content = Links::internal_anchors_to_shorthand( $content );
 		$markdown = self::html_to_editor_markdown( $content );
 		if ( '' !== $markdown ) {
@@ -297,7 +298,8 @@ class Content {
 			},
 			$html
 		);
-		$text = wp_strip_all_tags( $html, true );
+		// Preserve line breaks restored from <br>, including adjacent tasks.
+		$text = wp_strip_all_tags( $html );
 		$text = self::decode_for_editor( $text );
 		$text = preg_replace( "/[ \t]+\n/", "\n", $text );
 		return trim( $text );

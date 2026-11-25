@@ -51,10 +51,15 @@ class AppContentConversionTest extends WP_UnitTestCase {
 		);
 	}
 
+	public function test_legacy_wiki_links_remain_editable_without_added_escapes(): void {
+		$content = '<p>Linking to [[2026-04-24|the other note]]. Hello [[nannao|new note]].</p><p>[[Hello]] again.</p>';
+		$this->assertSame( "Linking to [[2026-04-24|the other note]]. Hello [[nannao|new note]].\n\n[[Hello]] again.", App::content_to_editor_text( $content ) );
+	}
+
 	public function test_literal_double_brackets_survive_an_editor_round_trip(): void {
-		// Stored text that merely looks like shorthand (imported wikitext, say)
-		// is shown escaped, and saving it back keeps it text, not a link.
-		$content = '<p>Use [[Main Page]] syntax; see &#91;&#91;Other&#93;&#93;.</p>';
+		// Explicitly literal brackets are entities in stored HTML and must
+		// remain escaped when editing and saving.
+		$content = '<p>Use &#91;&#91;Main Page&#93;&#93; syntax; see &#91;&#91;Other&#93;&#93;.</p>';
 		$text    = App::content_to_editor_text( $content );
 		$this->assertSame( 'Use \\[\\[Main Page\\]\\] syntax; see \\[\\[Other\\]\\].', $text );
 
@@ -75,6 +80,16 @@ class AppContentConversionTest extends WP_UnitTestCase {
 		$this->assertStringContainsString( '<li><a href="http://example.org/memex/note/the-martian">The Martian</a></li>', $html );
 		$this->assertStringContainsString( '<li><a href="http://example.org/memex/note/project-hail-mary">PHM</a></li>', $html );
 		$this->assertStringNotContainsString( '[[', $html );
+	}
+
+	public function test_standalone_tasks_render_and_round_trip_without_a_list_marker(): void {
+		$markdown = "[ ] Buy milk\n[x] Call back\n\n**06:16** · [ ] Launch Shared Workers\n\n`[ ] Literal`\n\n```\n[ ] Code sample\n```";
+		$html = Content::markdown_to_html( $markdown );
+		$this->assertSame( 3, substr_count( $html, 'type="checkbox"' ) );
+		$this->assertStringContainsString( '<input type="checkbox" class="memex-task-checkbox"> Buy milk', $html );
+		$this->assertStringContainsString( '<input type="checkbox" class="memex-task-checkbox" checked> Call back', $html );
+		$this->assertSame( $markdown, Content::editor_text_from_html( $html ) );
+		$this->assertStringNotContainsString( 'checkbox', Content::markdown_to_html( '\\[ ] Literal' ) );
 	}
 
 	public function test_markdown_to_html_renders_task_list_items_as_checkboxes(): void {

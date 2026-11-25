@@ -6,6 +6,7 @@ class Shell {
 	public static function register(): void {
 		add_action( 'wp_ajax_memex_shell_bootstrap', [ __CLASS__, 'bootstrap' ] );
 		add_action( 'wp_ajax_memex_shell_notes', [ __CLASS__, 'notes' ] );
+		add_action( 'wp_ajax_memex_sidebar_save', [ Sidebar::class, 'ajax_save' ] );
 	}
 
 	public static function offline_config(): array {
@@ -28,6 +29,7 @@ class Shell {
                 range( 0, 6 )
             ) : null,
 			'settingsUrl'  => admin_url( 'options-general.php' ),
+			'sidebar'      => Sidebar::get(),
 			'loginUrl'     => wp_login_url( home_url( '/memex/' ) ),
 		];
 	}
@@ -84,8 +86,17 @@ class Shell {
 				}
 			}
 			$data['content'] = App::content_to_editor_text( $post->post_content );
+			// Task inputs are absent from the default post allowlist. Keep only
+			// their display attributes; the client enables editable checkboxes.
+			$allowed = wp_kses_allowed_html( 'post' );
+			$allowed['input'] = array(
+				'type'     => true,
+				'class'    => true,
+				'checked'  => true,
+				'disabled' => true,
+			);
 			// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Render stored note HTML with the core content filters.
-			$data['html']    = wp_kses_post( apply_filters( 'the_content', $post->post_content ) );
+			$data['html']    = wp_kses( apply_filters( 'the_content', $post->post_content ), $allowed );
 		}
 		return $data;
 	}
@@ -172,7 +183,7 @@ class Shell {
 		}
 		$lock = 'memex-capture-' . md5( $wpdb->prefix . DB_NAME );
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Connection-scoped advisory locks require live, uncached database calls.
-		if ( '1' !== (string) $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, 10)', $lock ) ) ) {
+		if ( ! WriteLock::acquire( $lock ) ) {
 			return new \WP_Error( 'busy', 'Another save is running. Retry shortly.' );
 		}
 		$key         = 'memex_capture_' . get_current_user_id() . '_' . $id;
@@ -282,7 +293,7 @@ class Shell {
 				}
 			}
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Connection-scoped advisory locks require live, uncached database calls.
-			$wpdb->get_var( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock ) );
+			WriteLock::release( $lock );
 		}
 	}
 }

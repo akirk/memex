@@ -14,6 +14,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  browser:
+    name: Browser shell
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: composer:v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - run: npm install --no-save --package-lock=false playwright@1.62.1
+      - run: npx playwright install chromium
+      - run: node --test tests/AppShellTest.cjs
   phpunit:
     name: PHP ${{ matrix.php }}
     runs-on: ubuntu-latest
