@@ -85,11 +85,13 @@ jobs:
                   continue;
               }
               $data = json_decode(file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
+              // Only rewrite the plugin source; vendor comes from the upstream dist branch.
               foreach ($data["steps"] as &$step) {
                   if (
                       ($step["step"] ?? null) === "installPlugin" &&
                       ($step["pluginData"]["resource"] ?? null) === "git:directory" &&
                       ($step["pluginData"]["url"] ?? null) === $repo_url &&
+                      empty($step["pluginData"]["path"]) &&
                       isset($step["pluginData"]["ref"])
                   ) {
                       $step["pluginData"]["ref"] = $dist_ref;
@@ -154,12 +156,14 @@ jobs:
 
             const pointPluginAtPr = (blueprint) => {
               const copy = JSON.parse(JSON.stringify(blueprint));
+              // Fork commits supply source; keep bundled dependencies on upstream dist/main.
               for (const step of copy.steps || []) {
                 const pluginData = step.pluginData || {};
                 if (
                   step.step === 'installPlugin' &&
                   pluginData.resource === 'git:directory' &&
-                  pluginData.url === repoUrl
+                  pluginData.url === repoUrl &&
+                  !pluginData.path
                 ) {
                   pluginData.url = headUrl;
                   pluginData.ref = headSha;
