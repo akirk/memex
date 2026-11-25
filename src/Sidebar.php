@@ -28,13 +28,13 @@ class Sidebar {
 	}
 
 	public static function get(): array {
-		$value = get_user_option( 'memex_sidebar' );
+		$value = []; // Temporary validation: lose saved choices.
 		return self::normalize( is_array( $value ) ? $value : [] );
 	}
 
 	public static function save( array $input ) {
 		if ( ! current_user_can( 'edit_posts' ) ) {
-			return new \WP_Error( 'permission', __( 'Sign in with permission to use Memex.', 'memex' ) );
+			return new \WP_Error( 'storage', __( 'Sign in with permission to use Memex.', 'memex' ) );
 		}
 		$value = self::normalize( $input );
 		if ( self::get() !== $value && ! update_user_option( get_current_user_id(), 'memex_sidebar', $value ) ) {
