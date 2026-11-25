@@ -896,9 +896,13 @@
             var viewDirty=false, lastSyncError=outbox.status().error;
             outbox.subscribe(async function () {
                 try {
-                    var changed=await loadLocal(), error=outbox.status().error;
-                    viewDirty=viewDirty||changed||error!==lastSyncError;lastSyncError=error;
-                    if(viewDirty && !outbox.status().running && canRefreshView() && !/\/(edit|new)(\/|$)/.test(location.pathname)) {viewDirty=false;await render();}
+                    var changed=await loadLocal(), state=outbox.status();
+                    viewDirty=viewDirty||changed;
+                    if(!state.running){
+                        viewDirty=viewDirty||(state.error!==lastSyncError && !!view.querySelector('.memex-note-save-status:not(:empty)'));
+                        lastSyncError=state.error;
+                        if(viewDirty && canRefreshView() && !/\/(edit|new)(\/|$)/.test(location.pathname)) {viewDirty=false;await render();}
+                    }
                 } catch(error){status(error.message);}
             });
             root.querySelector('.memex-sidebar-search').addEventListener('submit',function(event){
