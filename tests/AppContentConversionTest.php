@@ -51,10 +51,15 @@ class AppContentConversionTest extends WP_UnitTestCase {
 		);
 	}
 
+	public function test_legacy_wiki_links_remain_editable_without_added_escapes(): void {
+		$content = '<p>Linking to [[2026-04-24|the other note]]. Hello [[nannao|new note]].</p><p>[[Hello]] again.</p>';
+		$this->assertSame( "Linking to [[2026-04-24|the other note]]. Hello [[nannao|new note]].\n\n[[Hello]] again.", App::content_to_editor_text( $content ) );
+	}
+
 	public function test_literal_double_brackets_survive_an_editor_round_trip(): void {
-		// Stored text that merely looks like shorthand (imported wikitext, say)
-		// is shown escaped, and saving it back keeps it text, not a link.
-		$content = '<p>Use [[Main Page]] syntax; see &#91;&#91;Other&#93;&#93;.</p>';
+		// Explicitly literal brackets are entities in stored HTML and must
+		// remain escaped when editing and saving.
+		$content = '<p>Use &#91;&#91;Main Page&#93;&#93; syntax; see &#91;&#91;Other&#93;&#93;.</p>';
 		$text    = App::content_to_editor_text( $content );
 		$this->assertSame( 'Use \\[\\[Main Page\\]\\] syntax; see \\[\\[Other\\]\\].', $text );
 
