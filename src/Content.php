@@ -298,7 +298,8 @@ class Content {
 			},
 			$html
 		);
-		$text = wp_strip_all_tags( $html, true );
+		// Preserve line breaks restored from <br>, including adjacent tasks.
+		$text = wp_strip_all_tags( $html );
 		$text = self::decode_for_editor( $text );
 		$text = preg_replace( "/[ \t]+\n/", "\n", $text );
 		return trim( $text );
