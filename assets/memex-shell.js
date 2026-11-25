@@ -91,6 +91,7 @@
     }
     async function loadLocal() {
         notes = await data.all('notes'); entries = await outbox.rows('entries');
+        entries.sort((a,b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
         // Recover the optimistic view even if the tab closed just after the queue committed.
         for (var entry of entries) {
             var key = entry.localId || entry.noteId;
@@ -193,7 +194,7 @@
             var match = findNote(target.split('#')[0]);
             return '[' + (label || target).replace(/\]/g, '\\]') + '](' + url(match ? 'note/' + encodeURIComponent(match.id) : 'new?title=' + encodeURIComponent(target)) + ')';
         });
-        if (window.OverType && window.OverType.MarkdownParser) return window.OverType.MarkdownParser.parse(markdown);
+        if (window.marked) return window.marked.parse(markdown, {gfm:true});
         var pre = node('pre', text); return pre.outerHTML;
     }
     function title(text) { view.append(node('h1', text)); document.title = text + ' — Memex'; }
@@ -214,7 +215,10 @@
         title(note.title);
         if(note.daily){view.classList.add('memex-note-with-calendar');view.prepend(calendar(note.daily));var badge=link('daily','tag/daily');badge.className='memex-badge memex-badge-daily';view.querySelector('h1').append(document.createTextNode(' '),badge);}
         var actions = node('p'); if (note.editable) actions.append(link('Edit note', 'edit/' + encodeURIComponent(routeId(note)))); actions.append(document.createTextNode(' · '), link('Backlinks', 'backlinks/' + encodeURIComponent(routeId(note)))); if(note.postId)actions.append(document.createTextNode(' · '),link('New nested note','new?parent='+note.postId)); view.append(actions);
-        if (note.pending) view.append(node('p', 'Local changes — waiting for server confirmation.', {role: 'status'}));
+        if (note.pending) {
+            view.append(node('p', 'Local changes — waiting for server confirmation.', {role: 'status'}));
+            if (outbox.status().error) view.append(node('p', outbox.status().error, {role:'alert'}));
+        }
         var article = node('article', null, {class: 'memex-note-body', id:'selected-note-content', 'data-ai-assistant-important':''}); article.append(safeHTML(note.pending ? preview(note.content) : note.html)); view.append(article);
         var tasks = Array.from(note.content.matchAll(/^(\s*(?:[-*+] |\d+[.)] )\[)([ xX])(\])/gm));
         article.querySelectorAll('input[type="checkbox"]').forEach(function (checkbox, taskIndex) {

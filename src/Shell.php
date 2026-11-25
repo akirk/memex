@@ -181,7 +181,7 @@ class Shell {
 		}
 		$lock = 'memex-capture-' . md5( $wpdb->prefix . DB_NAME );
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Connection-scoped advisory locks require live, uncached database calls.
-		if ( '1' !== (string) $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, 10)', $lock ) ) ) {
+		if ( ! WriteLock::acquire( $lock ) ) {
 			return new \WP_Error( 'busy', 'Another save is running. Retry shortly.' );
 		}
 		$key         = 'memex_capture_' . get_current_user_id() . '_' . $id;
@@ -291,7 +291,7 @@ class Shell {
 				}
 			}
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Connection-scoped advisory locks require live, uncached database calls.
-			$wpdb->get_var( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock ) );
+			WriteLock::release( $lock );
 		}
 	}
 }

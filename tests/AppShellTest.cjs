@@ -17,7 +17,7 @@ async function fixture(t, {beforeOpen} = {}) {
         if (address.pathname.startsWith('/assets/')) {
             res.setHeader('Content-Type',address.pathname.endsWith('.css')?'text/css':'application/javascript');
             const name = path.basename(address.pathname);
-            const file = ['memex-shell.js','memex.css'].includes(name) ? path.join(__dirname,'../assets',name) : name === 'overtype.js' ? path.join(__dirname,'../assets/vendor/overtype/overtype.min.js') : path.join(__dirname,'../vendor/akirk/wp-app/assets',address.pathname.slice('/assets/'.length));
+            const file = ['memex-shell.js','memex.css'].includes(name) ? path.join(__dirname,'../assets',name) : name === 'marked.js' ? path.join(__dirname,'../assets/vendor/marked/marked.umd.js') : name === 'overtype.js' ? path.join(__dirname,'../assets/vendor/overtype/overtype.min.js') : path.join(__dirname,'../vendor/akirk/wp-app/assets',address.pathname.slice('/assets/'.length));
             return res.end(fs.readFileSync(file));
         }
         if (address.pathname === '/bootstrap') { res.setHeader('Content-Type','application/json'); return res.end(JSON.stringify({...config,userId:account})); }
@@ -50,7 +50,7 @@ async function fixture(t, {beforeOpen} = {}) {
         Object.assign(settings.worker,{cacheMessageType:workerConfig.cacheMessageType,cacheStatusMessageType:workerConfig.cacheStatusMessageType,cacheName:workerConfig.cacheName,offlineUrl:workerConfig.offlineUrl,requiredUrls:workerConfig.precache});
         const runtimes=workerConfig.precache.filter(url=>url.includes('/assets/offline/'));
         res.setHeader('Content-Type','text/html');res.setHeader('X-Wp-App-Offline','7');
-        res.end(`<!doctype html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/assets/memex.css">${runtimes.map(url=>'<script src="'+url+'"></script>').join('')}</head><body class="memex"><div data-wp-app-bootstrap='${JSON.stringify(settings)}'>${shellContent.replaceAll('http://placeholder',origin).replace('data-shell-offline>', 'data-shell-offline open>')}</div><script src="/assets/overtype.js"></script><script src="/assets/memex-shell.js"></script></body>`);
+        res.end(`<!doctype html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/assets/memex.css">${runtimes.map(url=>'<script src="'+url+'"></script>').join('')}</head><body class="memex"><div data-wp-app-bootstrap='${JSON.stringify(settings)}'>${shellContent.replaceAll('http://placeholder',origin).replace('data-shell-offline>', 'data-shell-offline open>')}</div><script src="/assets/overtype.js"></script><script src="/assets/marked.js"></script><script src="/assets/memex-shell.js"></script></body>`);
     });
     await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
     const browser=await chromium.launch(), context=await browser.newContext(), page=await context.newPage();
@@ -428,4 +428,30 @@ test('a new ordinary note can be published directly from its editor', async t =>
     assert.equal(f.sent.length, 1);
     assert.equal(f.sent[0].publish, true);
     assert.equal(Array.from(f.records.values()).find(note => note.title === 'Published from new').status, 'publish');
+});
+
+
+test('task clicks stay interactive and formatted while offline, then sync immediately online', {timeout:15000}, async t => {
+    const f = await fixture(t);
+    f.records.set('1', {...f.records.get('1'), slug:'welcome-to-memex', content:'## Things to try\n\n- [x] Open a note\n- [ ] Tick a checkbox here', html:'<h2>Things to try</h2><ul><li><input type="checkbox" checked> Open a note</li><li><input type="checkbox"> Tick a checkbox here</li></ul>'});
+    await f.go('note/welcome-to-memex/');
+    await f.page.locator('#selected-note-content input[type=checkbox]').nth(1).waitFor();
+    await f.context.setOffline(true);
+    await f.page.locator('#selected-note-content input[type=checkbox]').nth(1).click();
+    await f.page.getByText('Local changes — waiting for server confirmation.', {exact:true}).waitFor();
+    const tasks = f.page.locator('#selected-note-content input[type=checkbox]');
+    assert.equal(await tasks.count(), 2);
+    assert.equal(await tasks.nth(1).isChecked(), true);
+    assert.equal(await f.page.locator('#selected-note-content .syntax-marker').count(), 0);
+    assert.equal(await f.page.locator('#selected-note-content h2').textContent(), 'Things to try');
+    await tasks.nth(0).click();
+    await f.page.waitForFunction(()=>document.querySelector('[data-shell-pending]').textContent==='(2)');
+    await f.page.reload();
+    await f.page.locator('#selected-note-content input[type=checkbox]').nth(1).waitFor();
+    assert.equal(await tasks.nth(0).isChecked(), false);
+    assert.equal(await tasks.nth(1).isChecked(), true);
+    await f.context.setOffline(false);
+    await f.page.getByRole('button',{name:'Sync now'}).click();
+    await f.page.waitForFunction(()=>document.querySelector('[data-shell-pending]').textContent==='');
+    assert.equal(f.records.get('1').content, '## Things to try\n\n- [ ] Open a note\n- [x] Tick a checkbox here');
 });

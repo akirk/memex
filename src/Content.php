@@ -175,9 +175,9 @@ class Content {
 	}
 
 	public static function editor_text_from_html( string $content ): string {
-		// Literal double brackets in stored text are not links; escape them
-		// so they stay text when the editor converts `[[…]]` back to anchors.
-		$content = str_replace( array( '[[', ']]' ), array( '&#91;&#91;', '&#93;&#93;' ), $content );
+		// Older notes store wiki links as raw [[…]] shorthand. Preserve it
+		// for editing; explicitly literal brackets are stored as entities and
+		// decode_for_editor() escapes those independently.
 		$content = Links::internal_anchors_to_shorthand( $content );
 		$markdown = self::html_to_editor_markdown( $content );
 		if ( '' !== $markdown ) {

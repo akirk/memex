@@ -169,7 +169,8 @@ class App extends BaseApp {
 			$scope = $this->get_url_path();
 			wp_app_enqueue_style( 'memex', $base . 'assets/memex.css?ver=' . $css_ver, array(), false, $scope );
 			wp_app_enqueue_script( 'memex-overtype', $base . 'assets/vendor/overtype/overtype.min.js?ver=' . $css_ver, array(), false, true, $scope );
-			wp_app_enqueue_script( 'memex-shell', $base . 'assets/memex-shell.js?ver=' . $css_ver, array( 'memex-overtype' ), false, true, $scope );
+			wp_app_enqueue_script( 'memex-marked', $base . 'assets/vendor/marked/marked.umd.js?ver=' . $css_ver, array(), false, true, $scope );
+			wp_app_enqueue_script( 'memex-shell', $base . 'assets/memex-shell.js?ver=' . $css_ver, array( 'memex-overtype', 'memex-marked' ), false, true, $scope );
 			if ( function_exists( 'wp_app_enqueue_block_styles' ) ) { wp_app_enqueue_block_styles(); }
 			return;
 		}

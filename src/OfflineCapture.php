@@ -47,7 +47,7 @@ class OfflineCapture {
 	/** Shared asset/cache version keeps enqueued URLs identical to worker precache URLs. */
 	public static function asset_version(): string {
 		$root = dirname( __DIR__ );
-		$files = array( 'assets/memex-shell.js', 'templates/_shell-content.php', 'templates/_navigation.php', 'assets/vendor/overtype/overtype.min.js', 'assets/memex.css' );
+		$files = array( 'assets/memex-shell.js', 'templates/_shell-content.php', 'templates/_navigation.php', 'assets/vendor/overtype/overtype.min.js', 'assets/vendor/marked/marked.umd.js', 'assets/memex.css' );
 		$hashes = array_map( static function ( $file ) use ( $root ) { return hash_file( 'sha256', $root . '/' . $file ); }, $files );
 		return md5( implode( '', $hashes ) );
 	}
@@ -60,6 +60,7 @@ class OfflineCapture {
 			add_query_arg( 'ver', $version, $base . 'assets/memex.css' ),
 			add_query_arg( 'ver', $version, $base . 'assets/memex-shell.js' ),
 			add_query_arg( 'ver', $version, $base . 'assets/vendor/overtype/overtype.min.js' ),
+			add_query_arg( 'ver', $version, $base . 'assets/vendor/marked/marked.umd.js' ),
 			$base . 'assets/icon.svg',
 		);
 	}
@@ -111,7 +112,7 @@ class OfflineCapture {
 		// Serialize captures across tabs/devices, including appends to the same daily.
 		$lock = 'memex-capture-' . md5( $wpdb->prefix . DB_NAME );
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Connection-scoped advisory locks require a live database call; cached lock results cannot serialize writes.
-		if ( '1' !== (string) $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, 10)', $lock ) ) ) {
+		if ( ! WriteLock::acquire( $lock ) ) {
 			return new \WP_Error( 'capture_busy', __( 'Another capture is syncing. Please retry.', 'memex' ) );
 		}
 		try {
@@ -163,7 +164,7 @@ class OfflineCapture {
 			return Shell::receipt( $receipt );
 		} finally {
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Release the advisory lock on this connection, which cannot be done through a cache or post API.
-			$wpdb->get_var( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock ) );
+			WriteLock::release( $lock );
 		}
 	}
 }
