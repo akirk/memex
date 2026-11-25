@@ -7,6 +7,20 @@ class Content {
 	const TASK_CHECKBOX_CLASS = 'memex-task-checkbox';
 	const CHECKBOX_PATTERN    = '/<input\b((?=[^>]*\btype\s*=\s*["\']?checkbox["\']?)[^>]*)>/i';
 
+	/** Keep task state in the plain-text metadata used for compact previews. */
+	public static function excerpt( string $html ): string {
+		$text = preg_replace_callback(
+			self::CHECKBOX_PATTERN,
+			static function ( $match ) {
+				return preg_match( '/\schecked\b/i', $match[1] ) ? ' ☑ ' : ' ☐ ';
+			},
+			$html
+		);
+		$text = preg_replace( '/<\/(?:p|li|h[1-6]|div|blockquote|pre|tr|td|th)>|<br\b[^>]*>/i', ' ', $text );
+		$text = html_entity_decode( wp_strip_all_tags( $text ), ENT_QUOTES | ENT_HTML5, get_bloginfo( 'charset' ) ?: 'UTF-8' );
+		return wp_trim_words( $text, 30, '…' );
+	}
+
 	public static function plain_text_to_blocks( string $text, string $timestamp = '' ): string {
 		$text  = str_replace( "\r\n", "\n", $text );
 		$paras = preg_split( '/\n\s*\n/', $text );

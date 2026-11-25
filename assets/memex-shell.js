@@ -282,9 +282,26 @@
         return Array.from(source.matchAll(/^([ \t]*(?:(?:[-*+]|\d+[.)])[ \t]+|\*\*\d{2}:\d{2}\*\*[ \t]*·[ \t]*)?\[)([ xX])(\])(?=\s|$)/gm));
     }
     function title(text) { view.append(node('h1', text)); document.title = text + ' — Memex'; }
+    function excerptNode(text) {
+        var summary=node('p',null,{class:'memex-note-preview'});
+        String(text).split(/([☐☑])/).forEach(function(part){
+            if(part!=='☐' && part!=='☑'){summary.append(document.createTextNode(part));return;}
+            var checkbox=node('input',null,{type:'checkbox',disabled:'','aria-label':part==='☑'?'Completed task':'Open task'});
+            checkbox.checked=part==='☑';summary.append(checkbox);
+        });
+        return summary;
+    }
+    function markdownExcerpt(content) {
+        var fragment=safeHTML(preview(content));
+        fragment.querySelectorAll('input[type="checkbox"]').forEach(input=>input.replaceWith(document.createTextNode(input.checked?' ☑ ':' ☐ ')));
+        fragment.querySelectorAll('br').forEach(element=>element.replaceWith(document.createTextNode(' ')));
+        fragment.querySelectorAll('p,li,h1,h2,h3,h4,h5,h6,div,blockquote,pre,tr,td,th').forEach(element=>element.append(document.createTextNode(' ')));
+        var words=fragment.textContent.trim().split(/\s+/);
+        return words.slice(0,30).join(' ')+(words.length>30?'…':'');
+    }
     function list(items) {
         var ul = node('ul', null, {class: 'memex-note-list'});
-        items.forEach(note => { var li = node('li', null, {class: 'memex-note-list-item'}); li.append(link(note.title, 'note/' + encodeURIComponent(routeId(note)))); if (note.pending) li.append(node('small', ' Saved locally')); if (note.excerpt) li.append(node('p', note.excerpt)); ul.append(li); });
+        items.forEach(note => { var li = node('li', null, {class: 'memex-note-list-item'}); li.append(link(note.title, 'note/' + encodeURIComponent(routeId(note)))); if (note.pending) li.append(node('small', ' Saved locally')); if (note.excerpt) li.append(excerptNode(note.excerpt)); ul.append(li); });
         view.append(ul); if (!items.length) view.append(node('p', 'No matching notes.'));
     }
     async function showNote(value) {
@@ -336,7 +353,7 @@
         var operation = Object.assign({}, values, {id: id, userId: config.userId, createdAt: new Date().toISOString(), kind: note ? 'edit' : 'note', title: values.title, content: values.content, parent: Number(values.parent || 0), publish: !!publish});
         if (note) { operation.noteId = note.postId ? String(note.postId) : key; operation.localId = key; operation.baseVersion = values.baseVersion || note.version || ''; if (previous) operation.baseOperation = previous.id; else if(values.baseOperation || (note.pending && note.lastOperation)) operation.baseOperation = values.baseOperation || note.lastOperation; }
         else operation.localId = key;
-        var updated = Object.assign({}, (note && localNote(note.id)) || note || {id: key, postId: 0, slug: '', tags: [], links: [], editable: true, status: 'draft'}, values, {id: key, pending: true, links: outgoingLinks(values.content), lastOperation: id, version: operation.baseVersion || '', excerpt: values.content.slice(0, 160)});
+        var updated = Object.assign({}, (note && localNote(note.id)) || note || {id: key, postId: 0, slug: '', tags: [], links: [], editable: true, status: 'draft'}, values, {id: key, pending: true, links: outgoingLinks(values.content), lastOperation: id, version: operation.baseVersion || '', excerpt: markdownExcerpt(values.content)});
         await draftWrites;
         await outbox.enqueue(operation, draftId, undefined, tx=>data.write(tx,'notes',noteRecord(updated)));
         await loadLocal();
