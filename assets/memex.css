@@ -1580,6 +1580,7 @@ body.memex {
 .memex-note-list-item { cursor: pointer; }
 .memex-note-list-item p,
 .memex-note-list-item small { cursor: text; }
+.memex-note-preview input[type="checkbox"] { margin: 0 .25em 0 0; vertical-align: middle; pointer-events: none; }
 .memex-sidebar-settings { max-width: 40rem; }
 .memex-sidebar-settings fieldset { border: 1px solid var(--wp-app-color-border); border-radius: 6px; margin: 1.25rem 0; padding: 1rem; }
 .memex-sidebar-settings legend { padding: 0 .4rem; font-weight: 600; }

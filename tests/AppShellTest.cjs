@@ -578,3 +578,28 @@ test('sidebar order saves after touch dragging and keyboard moves; cancelled dra
     assert.equal(await sections.locator('li').first().getAttribute('data-setting-id'),'quick-capture');
     assert.equal(await f.page.locator('.memex-sidebar-body > [data-sidebar-section]').first().getAttribute('data-sidebar-section'),'quick-capture');
 });
+
+test('note previews retain read-only checked and unchecked tasks, including offline edits', {timeout:15000}, async t => {
+    const f=await fixture(t);
+    f.records.set('1',{...f.records.get('1'),excerpt:'Tasks ☐ Open task ☑ Done & <unsafe>'});
+    await f.page.reload();
+    const row=f.page.locator('li.memex-note-list-item').filter({has:f.page.getByRole('link',{name:'Project',exact:true})});
+    const checks=row.locator('input[type=checkbox]');
+    await row.locator('p').waitFor();
+    assert.equal(await checks.count(),2);
+    assert.equal(await checks.nth(0).isChecked(),false);
+    assert.equal(await checks.nth(1).isChecked(),true);
+    assert.equal(await checks.nth(0).isDisabled(),true);
+    assert.equal(await checks.nth(1).isDisabled(),true);
+    assert.match(await row.locator('p').textContent(),/Done & <unsafe>/);
+    assert.equal(await row.locator('unsafe').count(),0);
+    await f.go('edit/1');
+    await f.page.locator('.overtype-input').waitFor();
+    await f.context.setOffline(true);
+    await edit(f,'Project','- [x] Open task\n- [ ] Done task');
+    await f.page.getByRole('link',{name:'All notes',exact:true}).click();
+    await checks.nth(1).waitFor();
+    assert.equal(await checks.nth(0).isChecked(),true);
+    assert.equal(await checks.nth(1).isChecked(),false);
+    assert.equal(await checks.nth(0).isDisabled(),true);
+});
