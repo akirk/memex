@@ -1579,9 +1579,23 @@ body.memex {
 .memex-sidebar-settings fieldset { border: 1px solid var(--wp-app-color-border); border-radius: 6px; margin: 1.25rem 0; padding: 1rem; }
 .memex-sidebar-settings legend { padding: 0 .4rem; font-weight: 600; }
 .memex-settings-list { list-style: none; padding: 0; margin: 0; }
-.memex-settings-list li { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .45rem 0; }
+.memex-settings-list li { display: flex; align-items: center; justify-content: flex-start; gap: .75rem; padding: .45rem 0; }
 .memex-settings-list label { display: flex; align-items: center; gap: .5rem; cursor: pointer; }
-.memex-settings-move { display: flex; gap: .35rem; }
-.memex-settings-move button { font: inherit; min-width: 2.25rem; padding: .2rem .5rem; cursor: pointer; }
-.memex-settings-move button:disabled { cursor: default; opacity: .4; }
+.memex-settings-list label { flex: 1; }
+.memex-settings-drag {
+    flex: 0 0 2rem;
+    height: 2.25rem;
+    font-size: 1.25rem;
+    line-height: 1;
+    color: var(--wp-app-color-muted);
+    background: transparent;
+    border: 1px solid var(--wp-app-color-border);
+    border-radius: 4px;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+}
+.memex-settings-drag:active { cursor: grabbing; }
+.memex-settings-list .is-dragging { opacity: .65; background: var(--wp-app-color-surface-alt); }
+.memex-settings-actions [role="status"] { align-self: center; font-size: .85rem; }
 .memex-settings-actions { display: flex; flex-wrap: wrap; gap: .75rem; }

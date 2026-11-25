@@ -51,32 +51,75 @@
         Object.entries(attributes||{}).forEach(([key,value])=>element.setAttribute(key,value));
         return element;
     }
-    function editor(host, value, save) {
-        var settings=normalize(value), form=node('form',null,{'data-sidebar-settings':'',class:'memex-sidebar-settings'});
-        var message=node('p',null,{role:'status','aria-live':'polite'}), saveButton=node('button','Save settings',{type:'submit',class:'memex-button'});
-        host.append(node('p','Choose what appears in your sidebar. Move items up or down to change their order. These settings are yours for this site.'));
+    function editor(host, value, save, preview) {
+        var settings=normalize(value), revision=0;
+        var form=node('form',null,{'data-sidebar-settings':'',class:'memex-sidebar-settings'});
+        var message=node('span','Changes save automatically.',{role:'status','aria-live':'polite',class:'memex-muted'});
+        host.append(node('p','Choose what appears in your sidebar. Changes apply and save automatically for your account on this site.'));
+        var instructions=node('p','Drag the handles to reorder items. With a handle focused, use the Up and Down arrow keys.',{id:'memex-sidebar-drag-help',class:'memex-muted'});
+        form.append(instructions);
+        function changed() {
+            var current=++revision;
+            message.textContent='Saving…';
+            Promise.resolve(save(normalize(settings))).then(function(text){
+                if(current===revision)message.textContent=text;
+            }).catch(function(error){if(current===revision)message.textContent='Could not save settings. '+error.message;});
+        }
         function group(name, title, labels) {
             var fieldset=node('fieldset'), list=node('ol',null,{class:'memex-settings-list'});
             fieldset.append(node('legend',title),list);
-            function draw(focusId, direction) {
+            function draw(focusId) {
                 list.replaceChildren();
-                settings[name].forEach(function(item,index){
+                settings[name].forEach(function(item){
                     var row=node('li',null,{'data-setting-id':item.id}), label=node('label'), checkbox=node('input',null,{type:'checkbox'});
                     checkbox.checked=item.visible;
-                    checkbox.addEventListener('change',()=>{item.visible=checkbox.checked;message.textContent='Unsaved changes.';});
-                    label.append(checkbox,document.createTextNode(' '+labels[item.id]));row.append(label);
-                    var controls=node('span',null,{class:'memex-settings-move'});
-                    [-1,1].forEach(function(delta){
-                        var word=delta<0?'up':'down',button=node('button',delta<0?'↑':'↓',{type:'button','aria-label':'Move '+labels[item.id]+' '+word});
-                        button.disabled=index+delta<0||index+delta>=settings[name].length;
-                        button.addEventListener('click',function(){
-                            settings[name].splice(index,1);settings[name].splice(index+delta,0,item);
-                            message.textContent='Unsaved changes.';draw(item.id,word);
-                        });
-                        controls.append(button);
-                        if(focusId===item.id && direction===word)requestAnimationFrame(()=>button.focus());
+                    checkbox.addEventListener('change',()=>{item.visible=checkbox.checked;changed();});
+                    label.append(checkbox,document.createTextNode(' '+labels[item.id]));
+                    var handle=node('button','⠿',{type:'button',class:'memex-settings-drag','aria-label':'Move '+labels[item.id],'aria-describedby':'memex-sidebar-drag-help'});
+                    var drag=null;
+                    function move(target) {
+                        var from=settings[name].findIndex(entry=>entry.id===item.id);
+                        if(from===target || target<0 || target>=settings[name].length)return false;
+                        settings[name].splice(from,1);settings[name].splice(target,0,item);
+                        list.insertBefore(row,list.children[from<target ? target+1 : target]||null);
+                        if(drag)handle.setPointerCapture(drag.pointerId);
+                        return true;
+                    }
+                    function finish(commit) {
+                        if(!drag)return;
+                        var active=drag;drag=null;row.classList.remove('is-dragging');
+                        if(handle.hasPointerCapture(active.pointerId))handle.releasePointerCapture(active.pointerId);
+                        if(!commit){settings[name]=active.original;if(preview)preview(null);draw(item.id);return;}
+                        if(active.changed)changed();
+                        handle.focus();
+                    }
+                    handle.addEventListener('pointerdown',function(event){
+                        if(event.button!==0 || drag)return;
+                        event.preventDefault();handle.focus();
+                        drag={pointerId:event.pointerId,original:settings[name].slice(),changed:false};
+                        handle.setPointerCapture(event.pointerId);row.classList.add('is-dragging');
                     });
-                    row.append(controls);list.append(row);
+                    handle.addEventListener('pointermove',function(event){
+                        if(!drag || drag.pointerId!==event.pointerId)return;
+                        if(event.clientY<48)window.scrollBy(0,-24);
+                        else if(event.clientY>window.innerHeight-48)window.scrollBy(0,24);
+                        var hit=document.elementFromPoint(event.clientX,event.clientY), target=hit && hit.closest('li[data-setting-id]');
+                        if(!target || target.parentElement!==list)return;
+                        var index=settings[name].findIndex(entry=>entry.id===target.dataset.settingId);
+                        if(move(index)){drag.changed=true;if(preview)preview(normalize(settings));}
+                    });
+                    handle.addEventListener('pointerup',event=>{if(drag && drag.pointerId===event.pointerId)finish(true);});
+                    handle.addEventListener('pointercancel',()=>finish(false));
+                    handle.addEventListener('lostpointercapture',()=>finish(false));
+                    handle.addEventListener('keydown',function(event){
+                        if(event.key==='Escape' && drag){event.preventDefault();finish(false);return;}
+                        if(event.key!=='ArrowUp' && event.key!=='ArrowDown')return;
+                        event.preventDefault();
+                        var index=settings[name].findIndex(entry=>entry.id===item.id);
+                        if(move(index+(event.key==='ArrowUp'?-1:1))){changed();handle.focus();}
+                    });
+                    row.append(handle,label);list.append(row);
+                    if(focusId===item.id)requestAnimationFrame(()=>handle.focus());
                 });
             }
             draw();fieldset.redraw=draw;form.append(fieldset);
@@ -84,15 +127,9 @@
         group('sections','Sidebar sections',sections);
         group('navigation','Navigation links',navigation);
         var reset=node('button','Restore defaults',{type:'button',class:'memex-button-secondary'});
-        reset.addEventListener('click',function(){settings=normalize({});form.querySelectorAll('fieldset').forEach(fieldset=>fieldset.redraw());message.textContent='Defaults restored. Save settings to apply them.';});
-        var actions=node('p',null,{class:'memex-settings-actions'});actions.append(saveButton,reset);form.append(actions,message);host.append(form);
-        form.addEventListener('submit',async function(event){
-            event.preventDefault();saveButton.disabled=true;reset.disabled=true;
-            form.querySelectorAll('fieldset').forEach(fieldset=>fieldset.disabled=true);
-            try{message.textContent=await save(normalize(settings));}
-            catch(error){message.textContent=error.message;}
-            finally{saveButton.disabled=false;reset.disabled=false;form.querySelectorAll('fieldset').forEach(fieldset=>fieldset.disabled=false);}
-        });
+        reset.addEventListener('click',function(){settings=normalize({});form.querySelectorAll('fieldset').forEach(fieldset=>fieldset.redraw());changed();});
+        var actions=node('p',null,{class:'memex-settings-actions'});actions.append(reset,message);form.append(actions);host.append(form);
+        form.addEventListener('submit',event=>event.preventDefault());
     }
     window.MemexSidebar={normalize:normalize,apply:apply,editor:editor};
     document.querySelectorAll('[data-memex-sidebar-settings]').forEach(function(sidebar){

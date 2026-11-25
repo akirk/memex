@@ -7,7 +7,7 @@ const {execFileSync} = require('node:child_process');
 const {chromium} = require('playwright');
 const worker = execFileSync('php', [path.join(__dirname, 'offline-worker-fixture.php')], {encoding: 'utf8', env: {...process.env, TEST_APP_SHELL: '1'}});
 const shellContent=execFileSync('php',[path.join(__dirname,'shell-content-fixture.php')],{encoding:'utf8'});
-async function fixture(t, {beforeOpen} = {}) {
+async function fixture(t, {beforeOpen, sidebarSaveDelay=0, contextOptions={}} = {}) {
     const records = new Map([['1', {id:'1', postId:1, slug:'project', title:'Project', content:'Original note', html:'<p>Original note</p>', parent:0, status:'publish', version:'v1', modified:'2026-01-01', tags:[], links:[], editable:true}]]);
     let account = 7, sidebar = null; const receipts = new Map(), sent = [];
     const server = http.createServer(async (req, res) => {
@@ -33,7 +33,7 @@ async function fixture(t, {beforeOpen} = {}) {
                 if (id) { const note=records.get(id)||Array.from(records.values()).find(n=>n.slug===id); if(note) return success({userId:account,note}); res.statusCode=404; return res.end(JSON.stringify({success:false,data:{message:'Not found'}})); }
                 return success({userId:account,notes:Array.from(records.values()).map(({content,html,...note})=>note),next:null});
             }
-            if(action==='memex_sidebar_save'){sidebar=JSON.parse(params.get('sidebar'));return success({userId:account,sidebar});}
+            if(action==='memex_sidebar_save'){if(sidebarSaveDelay)await new Promise(resolve=>setTimeout(resolve,sidebarSaveDelay));sidebar=JSON.parse(params.get('sidebar'));return success({userId:account,sidebar});}
             const entry=JSON.parse(params.get('capture')); sent.push(entry);
             if (receipts.has(entry.id)) return success(receipts.get(entry.id));
             if (entry.kind==='note') {
@@ -54,7 +54,7 @@ async function fixture(t, {beforeOpen} = {}) {
         res.end(`<!doctype html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/assets/memex.css">${runtimes.map(url=>'<script src="'+url+'"></script>').join('')}</head><body class="memex"><div data-wp-app-bootstrap='${JSON.stringify(settings)}'>${shellContent.replaceAll('http://placeholder',origin).replace('data-shell-offline>', 'data-shell-offline open>')}</div><script src="/assets/overtype.js"></script><script src="/assets/marked.js"></script><script src="/assets/memex-sidebar.js"></script><script src="/assets/memex-shell.js"></script></body>`);
     });
     await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
-    const browser=await chromium.launch(), context=await browser.newContext(), page=await context.newPage();
+    const browser=await chromium.launch(), context=await browser.newContext(contextOptions), page=await context.newPage();
     t.after(async()=>{await browser.close();await new Promise(resolve=>server.close(resolve));});
     if(beforeOpen)await beforeOpen(page);
     await page.goto(`http://127.0.0.1:${server.address().port}/memex/`);
@@ -482,15 +482,22 @@ test('standalone and daily task markers become live checkboxes after saving', {t
 });
 
 test('sidebar settings save a search-only layout, order links, and remain available offline', {timeout:15000}, async t => {
-    const f=await fixture(t);
+    const f=await fixture(t,{sidebarSaveDelay:120});
     await f.go('settings');
     const form=f.page.locator('[data-sidebar-settings]');
     await form.getByLabel('Search form',{exact:true}).check();
+    assert.equal(await f.page.locator('.memex-sidebar-search').isVisible(),true);
+    assert.equal(await form.getByRole('button',{name:'Save settings',exact:true}).count(),0);
     for(const label of ['Quick capture','Navigation','Folders','New note','Offline & sync'])await form.getByLabel(label,{exact:true}).uncheck();
-    await form.getByRole('button',{name:'Move Search form up',exact:true}).click();
-    await form.getByRole('button',{name:'Move Today up',exact:true}).click();
+    const handle=await form.getByRole('button',{name:'Move Search form',exact:true}).boundingBox();
+    const target=await form.locator('fieldset').first().locator('li').first().boundingBox();
+    await f.page.mouse.move(handle.x+handle.width/2,handle.y+handle.height/2);
+    await f.page.mouse.down();
+    await f.page.mouse.move(target.x+target.width/2,target.y+target.height/2,{steps:8});
+    assert.equal(await f.page.locator('.memex-sidebar-body > [data-sidebar-section]').first().getAttribute('data-sidebar-section'),'search');
+    await f.page.mouse.up();
+    await form.getByRole('button',{name:'Move Today',exact:true}).dragTo(form.locator('fieldset').nth(1).locator('li').first());
     await form.getByLabel('Graph',{exact:true}).uncheck();
-    await form.getByRole('button',{name:'Save settings',exact:true}).click();
     await form.getByText('Settings saved.',{exact:true}).waitFor();
     assert.deepEqual(await f.page.locator('.memex-sidebar-body > [data-sidebar-section]:visible').evaluateAll(items=>items.map(item=>item.dataset.sidebarSection)),['search']);
     assert.deepEqual(f.sidebar().navigation[0],{id:'daily',visible:true});
@@ -509,14 +516,11 @@ test('sidebar settings save a search-only layout, order links, and remain availa
     await form.getByLabel('Search form',{exact:true}).waitFor();
     assert.equal(await form.getByLabel('Quick capture',{exact:true}).isChecked(),false);
     assert.equal(await form.getByLabel('Search form',{exact:true}).isChecked(),true);
-    await form.getByRole('button',{name:'Save settings',exact:true}).click();
-    await form.getByText('Settings saved.',{exact:true}).waitFor();
     await f.context.setOffline(true);
     await f.page.reload();
     await form.getByLabel('Search form',{exact:true}).waitFor();
     assert.equal(await form.getByLabel('Search form',{exact:true}).isChecked(),true);
     await form.getByRole('button',{name:'Restore defaults',exact:true}).click();
-    await form.getByRole('button',{name:'Save settings',exact:true}).click();
     await form.getByText('Saved on this device. Your settings will sync when you are online.',{exact:true}).waitFor();
     assert.equal(await f.page.locator('[data-shell-quick-capture]').isVisible(),true);
     assert.equal(await search.isVisible(),false);
@@ -549,4 +553,28 @@ test('idle sync preserves list nodes and text selection while row backgrounds op
     const bounds=await row.boundingBox();
     await row.click({position:{x:bounds.width-8,y:8}});
     await f.page.locator('[data-shell-view]').getByRole('heading',{name:'Project',exact:true}).waitFor();
+});
+
+test('sidebar order saves after touch dragging and keyboard moves; cancelled drags restore the layout', {timeout:15000}, async t => {
+    const f=await fixture(t,{contextOptions:{hasTouch:true,isMobile:true,viewport:{width:390,height:844}}});
+    await f.go('settings');
+    const form=f.page.locator('[data-sidebar-settings]'), sections=form.locator('fieldset').first();
+    const touch=await f.context.newCDPSession(f.page);
+    async function drag(from, to, cancel=false) {
+        await from.scrollIntoViewIfNeeded();
+        const start=await from.boundingBox(), end=await to.boundingBox();
+        const x=start.x+start.width/2,y=start.y+start.height/2,tx=end.x+end.width/2,ty=end.y+end.height/2;
+        await touch.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y}]});
+        for(let i=1;i<=6;i++)await touch.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:x+(tx-x)*i/6,y:y+(ty-y)*i/6}]});
+        await touch.send('Input.dispatchTouchEvent',{type:cancel?'touchCancel':'touchEnd',touchPoints:[]});
+    }
+    await drag(form.getByRole('button',{name:'Move Search form',exact:true}),sections.locator('li').first());
+    await form.getByText('Settings saved.',{exact:true}).waitFor();
+    assert.equal(f.sidebar().sections[0].id,'search');
+    await form.getByRole('button',{name:'Move Quick capture',exact:true}).press('ArrowUp');
+    await form.getByText('Settings saved.',{exact:true}).waitFor();
+    assert.equal(f.sidebar().sections[0].id,'quick-capture');
+    await drag(form.getByRole('button',{name:'Move Quick capture',exact:true}),sections.locator('li').nth(1),true);
+    assert.equal(await sections.locator('li').first().getAttribute('data-setting-id'),'quick-capture');
+    assert.equal(await f.page.locator('.memex-sidebar-body > [data-sidebar-section]').first().getAttribute('data-sidebar-section'),'quick-capture');
 });

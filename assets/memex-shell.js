@@ -7,7 +7,7 @@
     window.addEventListener('wp-app:offline-status', function(event){var message=root.querySelector('[data-shell-cache-status]');if(message)message.textContent=event.detail.ready?'App shell is available offline.':'Offline app is not ready yet. Open Memex online to prepare it.';});
     var config, outbox, data, notes = [], entries = [], activeEditor, generation = 0;
     var offline = false;
-    var sidebarSettings, sidebarDirty=false, sidebarSyncing, chromeSignature='', localDataSignature='';
+    var sidebarSettings, sidebarPreview, sidebarDirty=false, sidebarSyncing, sidebarWrites=Promise.resolve(), chromeSignature='', localDataSignature='';
     var draftWrites = Promise.resolve(), pendingDraftWrites = 0, draftFailure = false, lastPath = location.href, lastMessage = '';
     var view = root.querySelector('[data-shell-view]');
     var markdownParser = window.marked && new window.marked.Marked({gfm:true, renderer:{
@@ -171,7 +171,7 @@
         applySidebar();
     }
     function applySidebar() {
-        if(sidebarSettings)window.MemexSidebar.apply(root.querySelector('.memex-sidebar'),sidebarSettings);
+        if(sidebarSettings)window.MemexSidebar.apply(root.querySelector('.memex-sidebar'),sidebarPreview||sidebarSettings);
     }
     async function storeSidebar(value, dirty) {
         await outbox.transaction(['meta'],'readwrite',tx=>tx.objectStore('meta').put({id:'sidebar-settings',value:value,dirty:dirty}));
@@ -180,9 +180,11 @@
         var saved=(await outbox.rows('meta')).find(item=>item.id==='sidebar-settings');
         sidebarSettings=window.MemexSidebar.normalize(saved && (saved.dirty || offline) ? saved.value : config.sidebar || (saved && saved.value));
         sidebarDirty=!!(saved && saved.dirty);
+        if(!sidebarDirty && !offline)await storeSidebar(sidebarSettings,false);
         applySidebar();
     }
     async function syncSidebar() {
+        await sidebarWrites;
         if(sidebarSyncing){await sidebarSyncing;return syncSidebar();}
         if(!sidebarDirty || !navigator.onLine)return;
         var value=sidebarSettings;
@@ -193,7 +195,8 @@
             if(!response.ok || !result.success)throw new Error(result.data && result.data.message || 'Could not sync sidebar settings. Your choices are saved on this device.');
             if(Number(result.data.userId)!==Number(config.userId))throw new Error('The signed-in account changed. Reopen Memex with the same account.');
             if(sidebarSettings===value){
-                await storeSidebar(value,false);sidebarDirty=false;
+                await storeSidebar(value,false);
+                if(sidebarSettings===value)sidebarDirty=false;
             }
         })();
         try{await sidebarSyncing;}finally{sidebarSyncing=null;}
@@ -201,11 +204,13 @@
     function showSettings() {
         title('Settings');view.append(node('h2','Sidebar'));
         window.MemexSidebar.editor(view,sidebarSettings,async function(value){
-            await storeSidebar(value,true);sidebarSettings=value;sidebarDirty=true;applySidebar();
+            sidebarSettings=value;sidebarPreview=null;sidebarDirty=true;applySidebar();
+            sidebarWrites=sidebarWrites.catch(function(){}).then(()=>storeSidebar(value,true));
+            await sidebarWrites;
             if(!navigator.onLine)return 'Saved on this device. Your settings will sync when you are online.';
             try{await syncSidebar();return 'Settings saved.';}
             catch(error){return /Failed to fetch|NetworkError|Load failed/.test(error.message) ? 'Saved on this device. Your settings will sync when you are online.' : 'Saved on this device. '+error.message;}
-        });
+        },function(value){sidebarPreview=value;applySidebar();});
     }
     async function refreshMetadata() {
         var page = 1, fresh = [];
@@ -812,6 +817,7 @@
 	}
 
     async function render() {
+        if(sidebarPreview){sidebarPreview=null;applySidebar();}
         var token = ++generation; await draftWrites.catch(() => {}); activeEditor = null; view.replaceChildren();view.classList.remove('memex-note-with-calendar'); status(lastMessage || (!offline && navigator.onLine ? '' : 'Offline — using notes saved on this device.'));
         chrome();
         var path = decodeURIComponent(location.pathname.slice(new URL(config.scope).pathname.length)).replace(/\/$/, ''), parts = path.split('/'), kind = parts[0], id = parts.slice(1).join('/');
