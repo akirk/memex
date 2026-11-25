@@ -59,7 +59,7 @@ if ( ! headers_sent() ) { header( 'X-Wp-App-Offline: ' . get_current_user_id() )
 	<?php wp_app_body_open(); ?>
 
 	<div class="memex-layout">
-		<aside class="memex-sidebar" aria-labelledby="memex-sidebar-heading">
+		<aside class="memex-sidebar" data-memex-sidebar-settings="<?php echo esc_attr( wp_json_encode( \Memex\Sidebar::get() ) ); ?>" aria-labelledby="memex-sidebar-heading">
 			<div class="memex-brand">
 				<a id="memex-sidebar-heading" href="<?php echo esc_url( home_url( '/memex/' ) ); ?>">Memex</a>
 				<button type="button" class="memex-sidebar-toggle" aria-controls="memex-sidebar-body" aria-expanded="false" data-memex-sidebar-toggle>
@@ -69,16 +69,17 @@ if ( ! headers_sent() ) { header( 'X-Wp-App-Offline: ' . get_current_user_id() )
 			</div>
 			<div class="memex-sidebar-body" id="memex-sidebar-body">
 				<?php if ( empty( $memex_inline_capture ) ) : ?>
-					<?php include __DIR__ . '/_quick-capture-form.php'; ?>
+					<div data-sidebar-section="quick-capture"><?php include __DIR__ . '/_quick-capture-form.php'; ?></div>
 				<?php endif; ?>
 				<?php include __DIR__ . '/_navigation.php'; ?>
+				<?php include __DIR__ . '/_sidebar-search.php'; ?>
 				<?php if ( $memex_folder_tree ) : ?>
-					<nav class="memex-folders" aria-labelledby="memex-folders-heading">
+					<nav class="memex-folders" data-sidebar-section="folders" aria-labelledby="memex-folders-heading">
 						<h2 id="memex-folders-heading"><?php esc_html_e( 'Folders', 'memex' ); ?></h2>
 						<?php memex_render_folder_tree( $memex_folder_tree, $memex_open_ids, $memex_current_id ); ?>
 					</nav>
 				<?php endif; ?>
-				<form class="memex-create" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" aria-label="<?php esc_attr_e( 'Create note', 'memex' ); ?>">
+				<form class="memex-create" data-sidebar-section="create" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" aria-label="<?php esc_attr_e( 'Create note', 'memex' ); ?>">
 					<input type="hidden" name="action" value="memex_create_note">
 					<?php wp_nonce_field( 'memex_create_note' ); ?>
 					<input type="text" name="title" aria-label="<?php esc_attr_e( 'New note title', 'memex' ); ?>" placeholder="<?php esc_attr_e( 'New note title…', 'memex' ); ?>" autocomplete="off" required>

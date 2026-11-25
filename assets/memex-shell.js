@@ -7,6 +7,7 @@
     window.addEventListener('wp-app:offline-status', function(event){var message=root.querySelector('[data-shell-cache-status]');if(message)message.textContent=event.detail.ready?'App shell is available offline.':'Offline app is not ready yet. Open Memex online to prepare it.';});
     var config, outbox, data, notes = [], entries = [], activeEditor, generation = 0;
     var offline = false;
+    var sidebarSettings, sidebarDirty=false, sidebarSyncing, chromeSignature='', localDataSignature='';
     var draftWrites = Promise.resolve(), pendingDraftWrites = 0, draftFailure = false, lastPath = location.href, lastMessage = '';
     var view = root.querySelector('[data-shell-view]');
     var markdownParser = window.marked && new window.marked.Marked({gfm:true, renderer:{
@@ -35,6 +36,7 @@
     function status(text) { root.querySelector('[data-shell-status]').textContent = text || ''; }
     function uuid() { return crypto.randomUUID ? crypto.randomUUID() : '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, digit => (digit ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> digit / 4).toString(16)); }
     function canRefreshView() {
+        if (view.querySelector('[data-sidebar-settings]')) return false;
         if (view.contains(document.activeElement) && document.activeElement.closest('[data-memex-capture]')) return false;
         return !activeEditor || (activeEditor.clean && activeEditor.clean());
     }
@@ -107,6 +109,7 @@
         return result.data;
     }
     async function loadLocal() {
+        var previous=localDataSignature;
         notes = await data.all('notes'); entries = await outbox.rows('entries');
         entries.sort((a,b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
         // Recover the optimistic view even if the tab closed just after the queue committed.
@@ -119,13 +122,23 @@
                 notes = notes.filter(note => note.id !== overlay.id); notes.push(noteRecord(overlay));
             }
         }
+        // Versions and operation IDs identify body changes without repeatedly
+        // serializing every downloaded note's Markdown and rendered HTML.
+        localDataSignature=JSON.stringify([
+            notes.map(function(note){var metadata=Object.assign({},note);delete metadata.body;return [metadata,!!note.body,note.body && note.body.version];}),
+            entries.map(entry=>[entry.id,entry.state,entry.error,entry.conflict && entry.conflict.note && entry.conflict.note.version])
+        ]);
         chrome();
+        return previous!==localDataSignature;
     }
     function chrome() {
         var state = outbox.status();
         root.querySelector('[data-shell-pending]').textContent = entries.length ? '(' + entries.length + ')' : '';
         var syncError = state.error && /Failed to fetch|NetworkError|Load failed/.test(state.error) ? 'Waiting for a connection. Your changes remain on this device.' : state.error;
         root.querySelector('[data-shell-sync-status]').textContent = syncError || (state.running ? 'Syncing…' : entries.length ? entries.length + ' changes saved on this device.' : 'All changes synced.') + (!offline && navigator.onLine ? '' : ' Offline.');
+        var signature=localDataSignature+'|'+location.pathname;
+        if(signature===chromeSignature)return;
+        chromeSignature=signature;
         var available = root.querySelector('[data-shell-available]'); available.replaceChildren();
         var downloaded = allNotes().filter(note => note.body);
         downloaded.sort((a, b) => a.title.localeCompare(b.title)).forEach(note => { var li = node('li'); li.append(link(note.title, 'note/' + encodeURIComponent(routeId(note)))); available.append(li); });
@@ -155,6 +168,44 @@
         }
         folders.hidden = !sorted.length;
         if (sorted.length) folders.append(node('h2', 'Folders'), branch(0, new Set()));
+        applySidebar();
+    }
+    function applySidebar() {
+        if(sidebarSettings)window.MemexSidebar.apply(root.querySelector('.memex-sidebar'),sidebarSettings);
+    }
+    async function storeSidebar(value, dirty) {
+        await outbox.transaction(['meta'],'readwrite',tx=>tx.objectStore('meta').put({id:'sidebar-settings',value:value,dirty:dirty}));
+    }
+    async function loadSidebar() {
+        var saved=(await outbox.rows('meta')).find(item=>item.id==='sidebar-settings');
+        sidebarSettings=window.MemexSidebar.normalize(saved && (saved.dirty || offline) ? saved.value : config.sidebar || (saved && saved.value));
+        sidebarDirty=!!(saved && saved.dirty);
+        applySidebar();
+    }
+    async function syncSidebar() {
+        if(sidebarSyncing){await sidebarSyncing;return syncSidebar();}
+        if(!sidebarDirty || !navigator.onLine)return;
+        var value=sidebarSettings;
+        sidebarSyncing=(async function(){
+            var session=await request('memex_capture_session');
+            var response=await fetch(config.ajaxUrl,{method:'POST',credentials:'same-origin',body:new URLSearchParams({action:'memex_sidebar_save',nonce:session.nonce,sidebar:JSON.stringify(value)})});
+            var result=await response.json();
+            if(!response.ok || !result.success)throw new Error(result.data && result.data.message || 'Could not sync sidebar settings. Your choices are saved on this device.');
+            if(Number(result.data.userId)!==Number(config.userId))throw new Error('The signed-in account changed. Reopen Memex with the same account.');
+            if(sidebarSettings===value){
+                await storeSidebar(value,false);sidebarDirty=false;
+            }
+        })();
+        try{await sidebarSyncing;}finally{sidebarSyncing=null;}
+    }
+    function showSettings() {
+        title('Settings');view.append(node('h2','Sidebar'));
+        window.MemexSidebar.editor(view,sidebarSettings,async function(value){
+            await storeSidebar(value,true);sidebarSettings=value;sidebarDirty=true;applySidebar();
+            if(!navigator.onLine)return 'Saved on this device. Your settings will sync when you are online.';
+            try{await syncSidebar();return 'Settings saved.';}
+            catch(error){return /Failed to fetch|NetworkError|Load failed/.test(error.message) ? 'Saved on this device. Your settings will sync when you are online.' : 'Saved on this device. '+error.message;}
+        });
     }
     async function refreshMetadata() {
         var page = 1, fresh = [];
@@ -762,11 +813,13 @@
 
     async function render() {
         var token = ++generation; await draftWrites.catch(() => {}); activeEditor = null; view.replaceChildren();view.classList.remove('memex-note-with-calendar'); status(lastMessage || (!offline && navigator.onLine ? '' : 'Offline — using notes saved on this device.'));
+        chrome();
         var path = decodeURIComponent(location.pathname.slice(new URL(config.scope).pathname.length)).replace(/\/$/, ''), parts = path.split('/'), kind = parts[0], id = parts.slice(1).join('/');
         if (['import','export','reminders'].includes(kind)) { title(kind.charAt(0).toUpperCase() + kind.slice(1)); view.append(node('p', 'This tool needs a connection. Your saved notes and editor remain available offline.')); return; }
         if (kind === 'note') return showNote(id);
         if (kind === 'edit') return editNote(id);
         if (kind === 'new') return editNote(undefined,new URL(location.href).searchParams.get('daily')||undefined);
+        if (kind === 'settings') { showSettings();return; }
         if (kind === 'capture' || kind === 'quick-capture') { showQuickCapture(); return; }
         if (kind === 'daily') {
             var date=id||dailyDate();if(!validDate(date)){title('Invalid date');view.append(node('p','Daily notes use YYYY-MM-DD.'));return;}
@@ -778,6 +831,7 @@
         }
         if (kind === 'search') {
             title('Search'); var input = node('input', null, {type: 'search', 'aria-label': 'Search your notes', placeholder: 'Search notes…'}), results = node('section'); view.append(input, results);
+            input.value=new URL(location.href).searchParams.get('q')||'';
             function filter() { var query = input.value.toLowerCase(); results.replaceChildren(); allNotes().filter(note => (note.title + ' ' + (note.content || note.excerpt || '')).toLowerCase().includes(query)).forEach(note => { var p = node('p'); p.append(link(note.title, 'note/' + encodeURIComponent(routeId(note)))); results.append(p); }); }
             input.addEventListener('input', filter); filter(); input.focus(); return;
         }
@@ -828,6 +882,7 @@
             }));
             data = new window.WpAppLocalData(outbox);
             await consolidateNotes();
+            await loadSidebar();
             setupCapture();
             window.setInterval(updateClocks,1000);
             await loadLocal();
@@ -838,16 +893,35 @@
                 oldDrafts.forEach(draft => { var details = node('details'); details.append(node('summary', draft.title || 'Daily capture draft'), node('pre', draft.content)); oldList.append(details); });
             }
             await render();
-            outbox.subscribe(async function () { try { await loadLocal(); if (!outbox.status().running && canRefreshView() && !/\/(edit|new)(\/|$)/.test(location.pathname)) await render(); } catch(error){status(error.message);} });
+            var viewDirty=false, lastSyncError=outbox.status().error;
+            outbox.subscribe(async function () {
+                try {
+                    var changed=await loadLocal(), error=outbox.status().error;
+                    viewDirty=viewDirty||changed||error!==lastSyncError;lastSyncError=error;
+                    if(viewDirty && !outbox.status().running && canRefreshView() && !/\/(edit|new)(\/|$)/.test(location.pathname)) {viewDirty=false;await render();}
+                } catch(error){status(error.message);}
+            });
+            root.querySelector('.memex-sidebar-search').addEventListener('submit',function(event){
+                event.preventDefault();navigate('search?q='+encodeURIComponent(this.elements.q.value)).catch(error=>status(error.message));
+            });
             root.querySelector('[data-shell-create]').addEventListener('submit',async function(event){
                 event.preventDefault();var form=this,input=form.elements.title,button=form.querySelector('button'),message=form.querySelector('[role=status]');
                 if(!input.value.trim()||button.disabled)return;button.disabled=true;input.disabled=true;
                 try{var key=await queueNote(undefined,{title:input.value.trim(),content:'',parent:0});input.value='';await navigate('edit/'+encodeURIComponent(key));}
                 catch(error){message.textContent=error.message;}finally{button.disabled=false;input.disabled=false;}
             });
-            root.querySelector('[data-shell-sync]').addEventListener('click', async () => { await outbox.sync(); if (navigator.onLine) await refreshMetadata().catch(error => status(error.message)); if (canRefreshView()) await render(); });
+            root.querySelector('[data-shell-sync]').addEventListener('click', async () => { await outbox.sync(); await syncSidebar().catch(error=>status(error.message));if (navigator.onLine) await refreshMetadata().catch(error => status(error.message)); if (canRefreshView()) await render(); });
             root.querySelector('[data-shell-menu]').addEventListener('click', function () { var sidebar = root.querySelector('.memex-sidebar'), opened = sidebar.classList.toggle('is-open'); this.setAttribute('aria-expanded', String(opened)); });
             document.addEventListener('click', function (event) {
+                var row=event.target.closest('li.memex-note-list-item');
+                if(row && event.button===0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey && !event.target.closest('a,button,input,textarea,select,label') && !window.getSelection().toString()){
+                    var textHit=false,walker=document.createTreeWalker(row,NodeFilter.SHOW_TEXT),text;
+                    while((text=walker.nextNode())){
+                        var range=document.createRange();range.selectNodeContents(text);
+                        if(Array.from(range.getClientRects()).some(rect=>event.clientX>=rect.left && event.clientX<=rect.right && event.clientY>=rect.top && event.clientY<=rect.bottom)){textHit=true;break;}
+                    }
+                    if(!textHit){var destination=row.querySelector('a[href]');if(destination){destination.click();return;}}
+                }
                 var anchor = event.target.closest('a[href]'); if (!anchor || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || anchor.getAttribute('target') || anchor.hasAttribute('download')) return;
                 var address = new URL(anchor.getAttribute('href'),location.href); if (address.origin !== location.origin || !address.pathname.startsWith(new URL(config.scope).pathname)) return;
                 var path = address.pathname.slice(new URL(config.scope).pathname.length); if (['import','export','reminders'].includes(path.replace(/\/$/,''))) return;
@@ -857,8 +931,8 @@
             window.addEventListener('popstate', async function(){try{await draftWrites;await render();lastPath=location.href;}catch(error){history.pushState(null,'',lastPath);status('Could not save your draft. Keep this page open and copy your text.');}});
             window.addEventListener('beforeunload',function(event){if(pendingDraftWrites||draftFailure){event.preventDefault();event.returnValue='';}});
             window.addEventListener('offline', () => { offline = true; status('Offline — your drafts and changes are saved on this device.'); chrome(); });
-            window.addEventListener('online', async () => { await outbox.sync(); await refreshMetadata().catch(error => status(error.message)); if (canRefreshView()) await render(); });
-            if (navigator.onLine) { try { await refreshMetadata(); if (canRefreshView()) await render(); } catch (error) { status('Using local notes. ' + error.message); } outbox.sync(); }
+            window.addEventListener('online', async () => { await outbox.sync();await syncSidebar().catch(error=>status(error.message)); await refreshMetadata().catch(error => status(error.message)); if (canRefreshView()) await render(); });
+            if (navigator.onLine) { try { await refreshMetadata(); if (canRefreshView()) await render(); } catch (error) { status('Using local notes. ' + error.message); } outbox.sync();syncSidebar().catch(error=>status(error.message)); }
 
         } catch (error) { status(error.message); view.replaceChildren(node('p', 'The app could not open its local data or verify the session. Your saved work has not been cleared. Reopen Memex online with the same account.')); }
     }

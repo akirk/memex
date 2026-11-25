@@ -50,7 +50,7 @@ class App extends BaseApp {
 	}
 
 	protected function setup_routes(): void {
-		foreach ( array( '', 'note/{slug}', 'edit/{slug}', 'new', 'search', 'daily', 'daily/{date}', 'graph', 'backlinks/{slug}', 'tags', 'tag/{slug}', 'orphans', 'broken', 'quick-capture', 'capture' ) as $path ) {
+		foreach ( array( '', 'note/{slug}', 'edit/{slug}', 'new', 'search', 'settings', 'daily', 'daily/{date}', 'graph', 'backlinks/{slug}', 'tags', 'tag/{slug}', 'orphans', 'broken', 'quick-capture', 'capture' ) as $path ) {
 			$this->app->route( $path, 'index.php' );
 		}
 		// Existing server-driven import, export, and reminder workflows remain available.
@@ -68,6 +68,7 @@ class App extends BaseApp {
 		$this->app->add_menu_item( 'broken', __( 'Broken Links', 'memex' ), home_url( '/memex/broken' ) );
 		$this->app->add_menu_item( 'import', __( 'Import', 'memex' ), home_url( '/memex/import' ) );
 		$this->app->add_menu_item( 'export', __( 'Export', 'memex' ), home_url( '/memex/export' ) );
+		$this->app->add_menu_item( 'settings', __( 'Settings', 'memex' ), home_url( '/memex/settings' ) );
 	}
 
 	public function register_app() {
@@ -170,7 +171,8 @@ class App extends BaseApp {
 			wp_app_enqueue_style( 'memex', $base . 'assets/memex.css?ver=' . $css_ver, array(), false, $scope );
 			wp_app_enqueue_script( 'memex-overtype', $base . 'assets/vendor/overtype/overtype.min.js?ver=' . $css_ver, array(), false, true, $scope );
 			wp_app_enqueue_script( 'memex-marked', $base . 'assets/vendor/marked/marked.umd.js?ver=' . $css_ver, array(), false, true, $scope );
-			wp_app_enqueue_script( 'memex-shell', $base . 'assets/memex-shell.js?ver=' . $css_ver, array( 'memex-overtype', 'memex-marked' ), false, true, $scope );
+			wp_app_enqueue_script( 'memex-sidebar', $base . 'assets/memex-sidebar.js?ver=' . $css_ver, array(), false, true, $scope );
+			wp_app_enqueue_script( 'memex-shell', $base . 'assets/memex-shell.js?ver=' . $css_ver, array( 'memex-overtype', 'memex-marked', 'memex-sidebar' ), false, true, $scope );
 			if ( function_exists( 'wp_app_enqueue_block_styles' ) ) { wp_app_enqueue_block_styles(); }
 			return;
 		}
@@ -184,7 +186,8 @@ class App extends BaseApp {
 		$scope = $this->get_url_path();
 		wp_app_enqueue_style( 'memex', $base . 'assets/memex.css?ver=' . $css_ver, array(), false, $scope );
 		wp_app_add_inline_script( 'memex-config', $inline, false, $scope );
-		wp_app_enqueue_script( 'memex', $base . 'assets/memex.js?ver=' . $js_ver, array(), false, true, $scope );
+		wp_app_enqueue_script( 'memex-sidebar', $base . 'assets/memex-sidebar.js?ver=' . $css_ver, array(), false, true, $scope );
+		wp_app_enqueue_script( 'memex', $base . 'assets/memex.js?ver=' . $js_ver, array( 'memex-sidebar' ), false, true, $scope );
 	}
 
 	public function activate(): void {

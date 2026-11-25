@@ -47,7 +47,7 @@ class OfflineCapture {
 	/** Shared asset/cache version keeps enqueued URLs identical to worker precache URLs. */
 	public static function asset_version(): string {
 		$root = dirname( __DIR__ );
-		$files = array( 'assets/memex-shell.js', 'templates/_shell-content.php', 'templates/_navigation.php', 'assets/vendor/overtype/overtype.min.js', 'assets/vendor/marked/marked.umd.js', 'assets/memex.css' );
+		$files = array( 'assets/memex-shell.js', 'assets/memex-sidebar.js', 'templates/_sidebar-search.php', 'templates/_shell-content.php', 'templates/_navigation.php', 'assets/vendor/overtype/overtype.min.js', 'assets/vendor/marked/marked.umd.js', 'assets/memex.css' );
 		$hashes = array_map( static function ( $file ) use ( $root ) { return hash_file( 'sha256', $root . '/' . $file ); }, $files );
 		return md5( implode( '', $hashes ) );
 	}
@@ -59,6 +59,7 @@ class OfflineCapture {
 			home_url( '/memex/capture/' ),
 			add_query_arg( 'ver', $version, $base . 'assets/memex.css' ),
 			add_query_arg( 'ver', $version, $base . 'assets/memex-shell.js' ),
+			add_query_arg( 'ver', $version, $base . 'assets/memex-sidebar.js' ),
 			add_query_arg( 'ver', $version, $base . 'assets/vendor/overtype/overtype.min.js' ),
 			add_query_arg( 'ver', $version, $base . 'assets/vendor/marked/marked.umd.js' ),
 			$base . 'assets/icon.svg',

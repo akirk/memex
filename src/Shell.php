@@ -6,6 +6,7 @@ class Shell {
 	public static function register(): void {
 		add_action( 'wp_ajax_memex_shell_bootstrap', [ __CLASS__, 'bootstrap' ] );
 		add_action( 'wp_ajax_memex_shell_notes', [ __CLASS__, 'notes' ] );
+		add_action( 'wp_ajax_memex_sidebar_save', [ Sidebar::class, 'ajax_save' ] );
 	}
 
 	public static function offline_config(): array {
@@ -28,6 +29,7 @@ class Shell {
                 range( 0, 6 )
             ) : null,
 			'settingsUrl'  => admin_url( 'options-general.php' ),
+			'sidebar'      => Sidebar::get(),
 			'loginUrl'     => wp_login_url( home_url( '/memex/' ) ),
 		];
 	}

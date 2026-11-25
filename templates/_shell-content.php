@@ -7,7 +7,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 <aside class="memex-sidebar">
 <div class="memex-brand"><a data-route="" href="<?php echo esc_url( home_url( '/memex/' ) ); ?>">Memex</a><button type="button" class="memex-sidebar-toggle" data-shell-menu aria-expanded="false" aria-label="Menu"><span class="memex-sidebar-toggle-icon" aria-hidden="true"></span></button></div>
 <div class="memex-sidebar-body">
-<div data-shell-quick-capture>
+<div data-shell-quick-capture data-sidebar-section="quick-capture">
 <form class="memex-quick-capture" data-memex-capture="daily" aria-label="<?php esc_attr_e( 'Quick capture', 'memex' ); ?>" aria-busy="true">
     <textarea name="content" rows="2" aria-label="<?php esc_attr_e( 'Quick capture text', 'memex' ); ?>" placeholder="<?php esc_attr_e( 'Quick capture — appends to today', 'memex' ); ?>" disabled></textarea>
     <div class="memex-quick-capture-actions">
@@ -21,14 +21,15 @@ if ( ! defined( 'ABSPATH' ) ) {
 </form>
 </div>
     <?php include __DIR__ . '/_navigation.php'; ?>
-    <nav class="memex-folders" data-shell-folders aria-label="<?php esc_attr_e( 'Notes and folders', 'memex' ); ?>"></nav>
-<form class="memex-create" data-shell-create aria-label="<?php esc_attr_e( 'Create note', 'memex' ); ?>">
+    <?php include __DIR__ . '/_sidebar-search.php'; ?>
+    <nav class="memex-folders" data-shell-folders data-sidebar-section="folders" aria-label="<?php esc_attr_e( 'Notes and folders', 'memex' ); ?>"></nav>
+<form class="memex-create" data-shell-create data-sidebar-section="create" aria-label="<?php esc_attr_e( 'Create note', 'memex' ); ?>">
     <input type="text" name="title" aria-label="<?php esc_attr_e( 'New note title', 'memex' ); ?>" placeholder="<?php esc_attr_e( 'New note title…', 'memex' ); ?>" autocomplete="off" required>
     <button type="submit"><?php esc_html_e( 'Create', 'memex' ); ?></button><p role="status"></p>
 </form>
 
 </div>
-<footer class="memex-sidebar-offline">
+<footer class="memex-sidebar-offline" data-sidebar-section="sync">
     <details id="memex-offline-sync" data-shell-offline><summary><?php esc_html_e( 'Offline & sync', 'memex' ); ?> <span data-shell-pending></span></summary>
     <p data-shell-cache-status role="status"><?php esc_html_e( 'Preparing offline app…', 'memex' ); ?></p>
     <p data-shell-sync-status role="status" aria-live="polite"></p>
